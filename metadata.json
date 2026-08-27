@@ -1,0 +1,10 @@
+{
+  "name": "Kaarigar Saathi - Voice-First Worker Assistant",
+  "description": "Voice-first AI assistant for blue-collar workers to build structured profiles, manage jobs, track kamai earnings, and generate verified Digital Kaarigar Passports.",
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
