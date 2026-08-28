@@ -35,6 +35,8 @@ import {
   sfx,
   isSpeechRecognitionSupported,
 } from '../utils/speech';
+import { uuidv7 } from '../utils/uuid';
+import { todayIso } from '../utils/date';
 
 interface VoiceAssistantModalProps {
   isOpen: boolean;
@@ -312,14 +314,19 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
       });
     } else if (context === 'add_job') {
       const newJob: JobItem = {
-        id: `job-${Date.now()}`,
+        id: uuidv7(),
+        kaarigarId: workerProfile.id,
         title: draftJob?.title || 'Fan Installation',
         customerName: draftJob?.customerName || 'Neha Sharma',
         location: draftJob?.location || 'Sector 35, Chandigarh',
         amount: draftJob?.amount || 1100,
         paymentMethod: (draftJob?.paymentMethod as any) || 'cash',
-        status: 'completed',
-        date: new Date().toISOString().split('T')[0],
+        status: 'COMPLETED',
+        stateHistory: [
+          { state: 'COMPLETED', at: new Date().toISOString(), by: workerProfile.userId },
+        ],
+        syncState: 'pending',
+        date: todayIso(),
         time: new Date().toLocaleTimeString([], {
           hour: '2-digit',
           minute: '2-digit',
@@ -334,16 +341,22 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
       const entries: KamaiEntry[] =
         draftKamai?.entries && draftKamai.entries.length > 0
           ? draftKamai.entries.map((e, idx) => ({
-              id: `km-${Date.now()}-${idx}`,
-              date: new Date().toISOString().split('T')[0],
+              id: uuidv7(),
+              profileId: workerProfile.id,
+              direction: 'in' as const,
+              syncState: 'pending' as const,
+              date: todayIso(),
               amount: e.amount,
               description: e.desc,
               paymentType: 'cash' as const,
             }))
           : [
               {
-                id: `km-${Date.now()}`,
-                date: new Date().toISOString().split('T')[0],
+                id: uuidv7(),
+                profileId: workerProfile.id,
+                direction: 'in' as const,
+                syncState: 'pending' as const,
+                date: todayIso(),
                 amount: draftKamai?.total || 2700,
                 description: "Today's work",
                 paymentType: 'cash' as const,

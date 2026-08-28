@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { Navbar } from './components/Navbar';
 import { HomeDashboard } from './components/HomeDashboard';
 import { DigitalPassport } from './components/DigitalPassport';
@@ -25,10 +26,16 @@ import {
   INITIAL_JOBS,
   INITIAL_KAMAI,
 } from './data/initialData';
+import { uuidv7 } from './utils/uuid';
 
 export default function App() {
-  // State: Active Tab
-  const [activeTab, setActiveTab] = useState<string>('home');
+  const navigate = useNavigate();
+
+  /**
+   * Tab ids are route paths now. Kept as a helper so child components can go on
+   * passing 'passport' / 'kamai' rather than each learning the URL scheme.
+   */
+  const goToTab = (tab: string) => navigate(tab === 'home' ? '/' : `/${tab}`);
 
   // State: Language (Default Hindi)
   const [currentLanguage, setCurrentLanguage] = useState<SupportedLanguage>(
@@ -41,10 +48,18 @@ export default function App() {
     }
   );
 
+  /**
+   * localStorage keys carry a _v2 suffix because the types.ts freeze added
+   * required fields and changed JobItem.status casing. Data written by an
+   * earlier build would deserialise into an object that type-checks at compile
+   * time and renders wrong at runtime - the worst failure shape. Bumping the
+   * key retires it instead of migrating it; nothing here is a system of record
+   * yet, and Mongo takes over on Day 3.
+   */
   // State: Worker Profile
   const [profile, setProfile] = useState<WorkerProfile>(() => {
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('kaarigar_profile');
+      const saved = localStorage.getItem('kaarigar_profile_v2');
       if (saved) {
         try {
           return JSON.parse(saved);
@@ -59,7 +74,7 @@ export default function App() {
   // State: Jobs List
   const [jobs, setJobs] = useState<JobItem[]>(() => {
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('kaarigar_jobs');
+      const saved = localStorage.getItem('kaarigar_jobs_v2');
       if (saved) {
         try {
           return JSON.parse(saved);
@@ -74,7 +89,7 @@ export default function App() {
   // State: Kamai List
   const [kamaiList, setKamaiList] = useState<KamaiEntry[]>(() => {
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('kaarigar_kamai');
+      const saved = localStorage.getItem('kaarigar_kamai_v2');
       if (saved) {
         try {
           return JSON.parse(saved);
@@ -98,15 +113,15 @@ export default function App() {
   }, [currentLanguage]);
 
   useEffect(() => {
-    localStorage.setItem('kaarigar_profile', JSON.stringify(profile));
+    localStorage.setItem('kaarigar_profile_v2', JSON.stringify(profile));
   }, [profile]);
 
   useEffect(() => {
-    localStorage.setItem('kaarigar_jobs', JSON.stringify(jobs));
+    localStorage.setItem('kaarigar_jobs_v2', JSON.stringify(jobs));
   }, [jobs]);
 
   useEffect(() => {
-    localStorage.setItem('kaarigar_kamai', JSON.stringify(kamaiList));
+    localStorage.setItem('kaarigar_kamai_v2', JSON.stringify(kamaiList));
   }, [kamaiList]);
 
   // Handlers for Voice Assistant
@@ -126,7 +141,10 @@ export default function App() {
 
     // Also automatically create corresponding Kamai entry as required by prompt!
     const newKamai: KamaiEntry = {
-      id: `km-${Date.now()}`,
+      id: uuidv7(),
+      profileId: profile.id,
+      direction: 'in',
+      syncState: 'pending',
       date: newJob.date,
       amount: newJob.amount,
       description: `${newJob.title} (Customer: ${newJob.customerName})`,
@@ -145,8 +163,6 @@ export default function App() {
     <div className="min-h-screen bg-[#F3F4F6] text-gray-900 flex flex-col font-sans antialiased selection:bg-orange-200">
       {/* Navbar & Top Bar */}
       <Navbar
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
         currentLanguage={currentLanguage}
         onChangeLanguage={() => setIsLangModalOpen(true)}
         onOpenVoiceAssistant={() => handleOpenVoiceAssistant('onboarding')}
@@ -154,52 +170,67 @@ export default function App() {
 
       {/* Main App Content View Area */}
       <main className="flex-1 px-4 pt-4 pb-24 max-w-3xl w-full mx-auto">
-        {activeTab === 'home' && (
-          <HomeDashboard
-            profile={profile}
-            jobs={jobs}
-            kamaiList={kamaiList}
-            currentLanguage={currentLanguage}
-            onChangeLanguage={() => setIsLangModalOpen(true)}
-            onOpenVoiceAssistant={handleOpenVoiceAssistant}
-            onNavigateTab={setActiveTab}
-          />
-        )}
-
-        {activeTab === 'passport' && (
-          <DigitalPassport
-            profile={profile}
-            currentLanguage={currentLanguage}
-            onAddWorkVoice={() => handleOpenVoiceAssistant('add_job')}
-          />
-        )}
-
-        {activeTab === 'jobs' && (
-          <JobsView
-            jobs={jobs}
-            currentLanguage={currentLanguage}
-            onAddJobVoice={() => handleOpenVoiceAssistant('add_job')}
-          />
-        )}
-
-        {activeTab === 'kamai' && (
-          <KamaiView
-            kamaiList={kamaiList}
-            currentLanguage={currentLanguage}
-            onAddKamaiVoice={() => handleOpenVoiceAssistant('add_kamai')}
-          />
-        )}
-
-        {activeTab === 'profile' && (
-          <ProfileView
-            profile={profile}
-            currentLanguage={currentLanguage}
-            onUpdateProfileVoice={() =>
-              handleOpenVoiceAssistant('update_profile')
+        <Routes>
+          <Route
+            path="/"
+            element={
+              <HomeDashboard
+                profile={profile}
+                jobs={jobs}
+                kamaiList={kamaiList}
+                currentLanguage={currentLanguage}
+                onChangeLanguage={() => setIsLangModalOpen(true)}
+                onOpenVoiceAssistant={handleOpenVoiceAssistant}
+                onNavigateTab={goToTab}
+              />
             }
-            onSaveProfile={handleSaveProfile}
           />
-        )}
+          <Route
+            path="/passport"
+            element={
+              <DigitalPassport
+                profile={profile}
+                currentLanguage={currentLanguage}
+                onAddWorkVoice={() => handleOpenVoiceAssistant('add_job')}
+              />
+            }
+          />
+          <Route
+            path="/jobs"
+            element={
+              <JobsView
+                jobs={jobs}
+                currentLanguage={currentLanguage}
+                onAddJobVoice={() => handleOpenVoiceAssistant('add_job')}
+              />
+            }
+          />
+          <Route
+            path="/kamai"
+            element={
+              <KamaiView
+                kamaiList={kamaiList}
+                currentLanguage={currentLanguage}
+                onAddKamaiVoice={() => handleOpenVoiceAssistant('add_kamai')}
+              />
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              <ProfileView
+                profile={profile}
+                currentLanguage={currentLanguage}
+                onUpdateProfileVoice={() => handleOpenVoiceAssistant('update_profile')}
+                onSaveProfile={handleSaveProfile}
+              />
+            }
+          />
+          {/* An unknown in-app path lands on the dashboard rather than a blank
+              screen. Public SSR routes (/p/:handle, /r/:token) never reach the
+              client router - Express answers them first. */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
       </main>
 
       {/* Voice-First AI Assistant Modal */}
@@ -213,7 +244,7 @@ export default function App() {
         onSaveProfile={handleSaveProfile}
         onSaveJob={handleSaveJob}
         onSaveKamai={handleSaveKamai}
-        onOpenPassport={() => setActiveTab('passport')}
+        onOpenPassport={() => goToTab('passport')}
       />
 
       {/* Language Selector Modal */}

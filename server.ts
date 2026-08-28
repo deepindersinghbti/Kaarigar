@@ -19,7 +19,8 @@ import { registerRoutes } from './src/server/routes';
  */
 
 const app = express();
-const PORT = 3000;
+// PaaS targets (Render, Railway, Fly) inject the port; a hardcoded 3000 fails there.
+const PORT = Number(process.env.PORT) || 3000;
 
 app.use(express.json());
 

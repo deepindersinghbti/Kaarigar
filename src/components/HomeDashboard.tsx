@@ -25,6 +25,7 @@ import {
   AssistantContext,
 } from '../types';
 import { TRANSLATIONS } from '../data/translations';
+import { todayIso } from '../utils/date';
 
 interface HomeDashboardProps {
   profile: WorkerProfile;
@@ -47,7 +48,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
 }) => {
   const t = TRANSLATIONS[currentLanguage];
 
-  const todayStr = '2026-08-27';
+  const todayStr = todayIso();
   const todayKamai = kamaiList
     .filter((k) => k.date === todayStr)
     .reduce((sum, k) => sum + k.amount, 0);
