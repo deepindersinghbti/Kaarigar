@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { GoogleGenAI } from '@google/genai';
+import type { AssistantFallbackReason } from '../../types';
 
 /**
  * assistant - voice input processing (Architecture Amendment 2).
@@ -17,15 +18,9 @@ export const assistantRouter = Router();
 
 /**
  * Why a request was served by the local keyword matcher instead of Gemini.
- * Kept server-side for now: adding `source`/`fallbackReason` to the shared
- * assistant response type is a `types.ts` change, and that file is the frozen
- * cross-track contract.
+ * Defined once, in the frozen contract, because Track B reads this field.
  */
-type FallbackReason =
-  | 'no_api_key'      // getGenAI() returned null — GEMINI_API_KEY missing
-  | 'empty_response'  // Gemini replied with no text
-  | 'invalid_json'    // Gemini replied, but the body would not parse
-  | 'api_error';      // the call threw — quota, auth, network, bad model id
+type FallbackReason = AssistantFallbackReason;
 
 let aiClient: GoogleGenAI | null = null;
 function getGenAI(): GoogleGenAI | null {

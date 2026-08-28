@@ -33,17 +33,19 @@ export interface LanguageOption {
 // ---------------------------------------------------------------------------
 
 /**
- * All six roles are defined; only 'kaarigar' is implemented in the locked
- * scope. Defining the full set costs nothing and means requireRole('admin')
- * reads as deliberate rather than aspirational.
+ * Two roles only. Architecture section 3 defines six, but the locked scope
+ * authenticates exactly two actors: the worker, and the customer who opens a
+ * signed review link. Naming roles we neither build nor test would put
+ * aspirational values in a frozen contract.
+ *
+ * Adding a role later is an additive change to this union and does not break
+ * existing code - which is what makes starting narrow safe here.
+ *
+ * THE ONLY DEFINITION. The server imports this rather than declaring its own;
+ * two Role types that disagree means RBAC enforces something different from
+ * what the contract promises.
  */
-export type Role =
-  | 'kaarigar'
-  | 'customer'
-  | 'contractor'
-  | 'verifier'
-  | 'institution'
-  | 'platform_ops';
+export type Role = 'kaarigar' | 'customer';
 
 export interface User {
   id: string;                       // client-generated UUIDv7

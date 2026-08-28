@@ -32,11 +32,13 @@ Today `status` is `'completed' | 'in_progress' | 'scheduled'` and three componen
 
 **This one is Track B's call to live with**, since B owns the components.
 
-### D3 — Six roles, or only the two we build?
+### D3 — Six roles, or only the two we build? — **DECIDED: two**
 
-Architecture §3 defines six: Kaarigar, Customer, Contractor/Team Lead, Verifier, Institution/Admin, Platform Ops. The locked scope only ever authenticates a worker and, via the signed review link, an unauthenticated customer.
+Architecture §3 defines six: Kaarigar, Customer, Contractor/Team Lead, Verifier, Institution/Admin, Platform Ops. The locked scope only ever authenticates a worker and, via the signed review link, a customer.
 
-*Proposed: define all six in the type, implement only `kaarigar`.* The enum costs nothing, and `requireRole('admin')` reads as deliberate rather than aspirational. Shipping two now means widening the contract later, which is the thing we are trying to avoid.
+**Resolved: `'kaarigar' | 'customer'` only.** Naming four roles we neither build nor test would put aspirational values in a frozen contract, and `requireRole('verifier')` would compile while guarding nothing.
+
+Widening a union later is an additive change that breaks no existing code, so starting narrow is the reversible direction. That is what makes this safe — it would not be if the change ran the other way.
 
 ### D4 — Does `KamaiEntry` become `LedgerEntry`?
 

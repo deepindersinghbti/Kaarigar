@@ -1,0 +1,72 @@
+# Render deployment for Kaarigar.
+#
+# HANDOFF ARTIFACT: prepared by Track A, owned and executed by Track C.
+# Nothing here deploys on its own - C connects the repo in the Render dashboard,
+# Render reads this file, and C sets the secret values (see envVars below).
+#
+# Deploying satisfies a dependency of three later days:
+#   - Day 2: the QR must encode a reachable /p/:handle URL, not localhost
+#   - Day 2: Firebase authorized-domains needs this origin to exist
+#   - Day 6: the second-phone scan test cannot run against a local dev server
+#
+# Day 9's "deploy" then becomes a REDEPLOY of a target live since Day 1, which
+# is the far safer shape - the first deploy of a project should never happen the
+# day before a freeze.
+
+services:
+  - type: web
+    name: kaarigar
+    runtime: node
+    plan: free
+
+    # Singapore is Render's closest free region to the Atlas cluster in Mumbai
+    # (ap-south-1). On Oregon every database query crosses two oceans:
+    # India -> US -> Mumbai and back, on every request, during a live demo.
+    region: singapore
+
+    # --include=dev is REQUIRED and is not a style choice. Render sets
+    # NODE_ENV=production, under which plain `npm ci` omits devDependencies -
+    # and esbuild, tailwindcss and typescript all live there while being needed
+    # at build time. Without this flag the build fails with a confusing
+    # "esbuild: not found" that looks like a broken lockfile.
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+
+    # The server binds 0.0.0.0 and reads process.env.PORT, which Render injects.
+    healthCheckPath: /api/health
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      # Pin the major version. Without this Render picks its own default, which
+      # can move under you between deploys.
+      - key: NODE_VERSION
+        value: "22"
+
+      # sync: false means "prompt me, do not store in the repo". Set these in
+      # the Render dashboard under Environment. They are the same values from
+      # .env - see .env.example for what each one is.
+      #
+      # JWT_SECRET MUST BE BYTE-IDENTICAL to the local one. If it is not,
+      # tokens issued locally fail verification here and vice versa, and the
+      # symptom is a 401 that reads as a bug in requireAuth. Copy it; do not
+      # regenerate it here.
+      - key: JWT_SECRET
+        sync: false
+      - key: MONGODB_URI
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+
+      # Firebase web config. Not secret - these ship in the browser bundle by
+      # design - but Vite inlines them at BUILD time, so they must be present
+      # here for the client to see them, not just at runtime.
+      - key: VITE_FIREBASE_API_KEY
+        sync: false
+      - key: VITE_FIREBASE_AUTH_DOMAIN
+        sync: false
+      - key: VITE_FIREBASE_PROJECT_ID
+        sync: false
+      - key: VITE_FIREBASE_APP_ID
+        sync: false

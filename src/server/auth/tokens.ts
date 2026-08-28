@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+import type { Role, AuthUser } from '../../types';
 import { randomUUID, createHmac, timingSafeEqual } from 'crypto';
 
 /**
@@ -17,18 +18,14 @@ export const REFRESH_TTL_SECONDS = 30 * 24 * 60 * 60;
 export const OTP_TTL_SECONDS = 5 * 60;
 export const OTP_MAX_ATTEMPTS = 5;
 
-export type Role = 'kaarigar' | 'customer' | 'contractor' | 'verifier' | 'admin';
-
 /**
- * Server-internal for now. `User`, `role` and friends belong in the frozen
- * cross-track contract in src/types.ts, and that file changes only by agreement
- * of all three tracks in the Day 1 session. Raise it there, not here.
+ * Role and AuthUser come from the frozen contract and are re-exported so that
+ * server modules already importing from here keep working. They are NOT
+ * redeclared: a second definition drifted from the first within hours of being
+ * written, and RBAC enforcing something other than what the contract promises
+ * is the exact failure the freeze exists to prevent.
  */
-export interface AuthUser {
-  uid: string;
-  phone: string;
-  roles: Role[];
-}
+export type { Role, AuthUser } from '../../types';
 
 interface AccessClaims {
   sub: string;
