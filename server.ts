@@ -3,8 +3,21 @@ import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
+import { connectDb, isDbConnected, getDbError, closeDb } from './src/server/db';
 
 dotenv.config();
+
+/**
+ * Why a request was served by the local keyword matcher instead of Gemini.
+ * Kept server-side for now: adding `source`/`fallbackReason` to the shared
+ * assistant response type is a `types.ts` change, and that file is the frozen
+ * cross-track contract.
+ */
+type FallbackReason =
+  | 'no_api_key'      // getGenAI() returned null — GEMINI_API_KEY missing
+  | 'empty_response'  // Gemini replied with no text
+  | 'invalid_json'    // Gemini replied, but the body would not parse
+  | 'api_error';      // the call threw — quota, auth, network, bad model id
 
 let aiClient: GoogleGenAI | null = null;
 function getGenAI(): GoogleGenAI | null {
@@ -31,6 +44,10 @@ app.get('/api/health', (_req: Request, res: Response) => {
   res.json({
     status: 'ok',
     hasGeminiKey: !!process.env.GEMINI_API_KEY,
+    db: {
+      connected: isDbConnected(),
+      error: getDbError(),
+    },
     appName: 'Kaarigar Saathi',
   });
 });
@@ -46,10 +63,20 @@ app.post('/api/assistant/process', async (req: Request, res: Response) => {
     pendingData = {},
   } = req.body;
 
+  // P1 discriminator. There are four distinct ways to end up on the local
+  // fallback and, before this, all four returned a well-formed 200 that was
+  // indistinguishable from a real Gemini extraction. `source` says which path
+  // ran; `fallbackReason` says why, so a failure can be diagnosed from the
+  // response instead of guessed at.
+  let fallbackReason: FallbackReason | null = null;
+  let fallbackDetail: string | null = null;
+
   try {
     const ai = getGenAI();
 
-    if (ai) {
+    if (!ai) {
+      fallbackReason = 'no_api_key';
+    } else {
       const systemInstruction = `
 You are "Kaarigar Saathi", an empathetic, respectful, and voice-first AI assistant for blue-collar skilled workers in India (electricians, plumbers, carpenters, mechanics, etc.).
 The user speaks to you in conversational ${language === 'hi' ? 'Hindi / Hinglish' : language === 'pa' ? 'Punjabi' : language === 'kn' ? 'Kannada' : language === 'mr' ? 'Marathi' : 'English'}.
@@ -113,18 +140,43 @@ Respond in valid JSON with:
         },
       });
 
-      if (response.text) {
-        const parsed = JSON.parse(response.text);
-        return res.json(parsed);
+      if (!response.text) {
+        // Gemini answered, but with nothing usable. Previously this fell
+        // through with no error raised at all — the quietest of the four paths.
+        fallbackReason = 'empty_response';
+      } else {
+        // Parsed in its own try so that malformed model output is reported as
+        // 'invalid_json' rather than being swallowed by the outer catch and
+        // mislabelled as an API error.
+        try {
+          const parsed = JSON.parse(response.text);
+          return res.json({ ...parsed, source: 'gemini' as const });
+        } catch (parseErr) {
+          fallbackReason = 'invalid_json';
+          fallbackDetail = parseErr instanceof Error ? parseErr.message : String(parseErr);
+        }
       }
     }
   } catch (err) {
-    console.warn('Gemini API call warning, falling back to local extractor:', err);
+    fallbackReason = 'api_error';
+    fallbackDetail = err instanceof Error ? err.message : String(err);
   }
+
+  console.warn(
+    `[assistant] serving local fallback — reason=${fallbackReason}` +
+    (fallbackDetail ? ` detail=${fallbackDetail}` : '')
+  );
 
   // Robust Rule-based Fallback & Demo Scenarios Processor
   const result = fallbackProcessVoiceInput(userInput, language, context, currentStep, workerName, pendingData);
-  return res.json(result);
+  return res.json({
+    ...result,
+    source: 'fallback' as const,
+    fallbackReason,
+    // Error text can carry request and key metadata, so it is withheld in
+    // production. The server log above always records it either way.
+    ...(process.env.NODE_ENV !== 'production' && fallbackDetail ? { fallbackDetail } : {}),
+  });
 });
 
 // Fallback rule-based conversational NLP extractor for seamless demo experience
@@ -367,6 +419,11 @@ function fallbackProcessVoiceInput(
 }
 
 async function startServer() {
+  // Connect to Atlas before serving. Non-fatal by design: until the Day 3
+  // migration the app is still served from localStorage, and the app must
+  // remain runnable on every day of the schedule.
+  await connectDb();
+
   // Vite middleware in dev mode
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
@@ -384,6 +441,13 @@ async function startServer() {
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`Kaarigar Saathi server running at http://0.0.0.0:${PORT}`);
+  });
+}
+
+for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+  process.on(signal, async () => {
+    await closeDb();
+    process.exit(0);
   });
 }
 
