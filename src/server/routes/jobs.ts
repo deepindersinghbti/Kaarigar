@@ -1,23 +1,209 @@
 import { Router } from 'express';
+import type { Request, Response } from 'express';
+import { getDb, isDbConnected } from '../db';
+import { requireAuth } from '../middleware/auth';
+import { uuidv7 } from '../../lib/ids';
+import { JOB_TRANSITIONS } from '../../types';
+import type { JobItem, JobState, JobStateTransition } from '../../types';
 
 /**
- * jobs-svc - job lifecycle state machine (8 states).
+ * jobs-svc - job lifecycle state machine.
  *
- * Architecture section 5 Tier 3 service boundary. Empty by design - the split
- * exists so that this file is the only place these routes are ever added, and
- * so that no track has to edit the bootstrap or another track's module.
+ * Owner: Track A. Mounted at /api/jobs.
  *
- * Owner: Track A
- * Lands: Day 3
- * Mounted at: /api/jobs
- *
- * Planned surface (Architecture section 8):
- *   GET  /
- *   POST /
- *   POST /:id/transition
- *
- * Reach the database only through getDb() from '../db'. No cross-module direct
- * database reads (section 5.2).
+ * Every query is scoped by kaarigarId = req.user.uid. Ownership is expressed as
+ * part of the filter rather than as a check after loading, so there is no path
+ * where a job is fetched and then found to belong to someone else.
  */
 
 export const jobsRouter = Router();
+
+const JOBS = 'jobs';
+
+let indexesReady = false;
+async function ensureIndexes() {
+  if (indexesReady) return;
+  const db = getDb();
+  await db.collection(JOBS).createIndex({ kaarigarId: 1, date: -1 });
+  await db.collection(JOBS).createIndex({ kaarigarId: 1, status: 1 });
+  indexesReady = true;
+}
+
+function dbGuard(res: Response): boolean {
+  if (isDbConnected()) return true;
+  res.status(503).json({
+    error: 'database_unavailable',
+    message: 'Check MONGODB_URI and the Atlas Network Access allowlist.',
+  });
+  return false;
+}
+
+const isJobState = (v: unknown): v is JobState =>
+  typeof v === 'string' && Object.prototype.hasOwnProperty.call(JOB_TRANSITIONS, v);
+
+/** GET /api/jobs - the caller's jobs, newest first. */
+jobsRouter.get('/', requireAuth, async (req: Request, res: Response) => {
+  if (!dbGuard(res)) return;
+
+  try {
+    await ensureIndexes();
+    const db = getDb();
+
+    const filter: Record<string, unknown> = { kaarigarId: req.user!.uid };
+    const status = req.query.status;
+    if (typeof status === 'string') {
+      if (!isJobState(status)) {
+        return res.status(400).json({
+          error: 'invalid_status',
+          message: `status must be one of: ${Object.keys(JOB_TRANSITIONS).join(', ')}.`,
+        });
+      }
+      filter.status = status;
+    }
+
+    const docs = await db.collection(JOBS).find(filter).sort({ date: -1, _id: -1 }).toArray();
+    return res.json({
+      jobs: docs.map(({ _id, ...j }) => ({ ...j, id: String(_id) })),
+    });
+  } catch (err) {
+    console.error('[jobs] GET / failed:', err);
+    return res.status(500).json({ error: 'jobs_read_failed', message: 'Could not load jobs.' });
+  }
+});
+
+/**
+ * POST /api/jobs
+ *
+ * Idempotent on the client-generated UUIDv7. The same id posted twice returns
+ * the existing job rather than creating a duplicate - the offline outbox
+ * replays on reconnect, and a flaky connection that half-uploads a batch must
+ * not produce two jobs.
+ */
+jobsRouter.post('/', requireAuth, async (req: Request, res: Response) => {
+  if (!dbGuard(res)) return;
+
+  const body = (req.body ?? {}) as Partial<JobItem>;
+  const uid = req.user!.uid;
+
+  const title = typeof body.title === 'string' ? body.title.trim() : '';
+  const amount = Number(body.amount);
+
+  if (!title) {
+    return res.status(400).json({ error: 'invalid_field', field: 'title', message: 'title is required.' });
+  }
+  if (!Number.isFinite(amount) || amount < 0) {
+    return res.status(400).json({ error: 'invalid_field', field: 'amount', message: 'amount must be a non-negative number.' });
+  }
+  if (body.status !== undefined && !isJobState(body.status)) {
+    return res.status(400).json({ error: 'invalid_status', message: 'status is not a known JobState.' });
+  }
+
+  const id = typeof body.id === 'string' && body.id ? body.id : uuidv7();
+  const now = new Date().toISOString();
+  const status: JobState = body.status ?? 'REQUESTED';
+
+  try {
+    await ensureIndexes();
+    const db = getDb();
+
+    const existing = await db.collection(JOBS).findOne({ _id: id as never, kaarigarId: uid });
+    if (existing) {
+      const { _id, ...j } = existing;
+      return res.status(200).json({ job: { ...j, id: String(_id) }, idempotentReplay: true });
+    }
+
+    const history: JobStateTransition[] = [{ state: status, at: now, by: uid }];
+    const job: Omit<JobItem, 'id'> = {
+      kaarigarId: uid,
+      title,
+      customerName: typeof body.customerName === 'string' ? body.customerName : '',
+      customerId: typeof body.customerId === 'string' ? body.customerId : undefined,
+      customerPhone: typeof body.customerPhone === 'string' ? body.customerPhone : undefined,
+      location: typeof body.location === 'string' ? body.location : '',
+      amount,
+      agreedPrice: Number.isFinite(Number(body.agreedPrice)) ? Number(body.agreedPrice) : undefined,
+      paymentMethod: body.paymentMethod === 'upi' || body.paymentMethod === 'cash' ? body.paymentMethod : 'pending',
+      status,
+      stateHistory: history,
+      // Server-held records are synced by definition. The pending/failed states
+      // describe the client's outbox, not this collection.
+      syncState: 'synced',
+      date: typeof body.date === 'string' ? body.date : now.slice(0, 10),
+      time: typeof body.time === 'string' ? body.time : undefined,
+      notes: typeof body.notes === 'string' ? body.notes : undefined,
+      skillsTagged: Array.isArray(body.skillsTagged) ? body.skillsTagged.filter((s) => typeof s === 'string') : undefined,
+    };
+
+    await db.collection(JOBS).insertOne({ _id: id as never, ...job });
+    return res.status(201).json({ job: { id, ...job } });
+  } catch (err) {
+    console.error('[jobs] POST / failed:', err);
+    return res.status(500).json({ error: 'job_create_failed', message: 'Could not create the job.' });
+  }
+});
+
+/**
+ * POST /api/jobs/:id/transition
+ *
+ * The state machine is enforced HERE, against JOB_TRANSITIONS, not in the
+ * client. An illegal jump is rejected rather than trusted - otherwise
+ * "COMPLETED" could be set directly and the portfolio evidence a passport
+ * rests on would be self-asserted.
+ *
+ * DISPUTED has no inbound edge in the locked scope, so this endpoint cannot
+ * reach it. That is the table doing its job, not an oversight.
+ */
+jobsRouter.post('/:id/transition', requireAuth, async (req: Request, res: Response) => {
+  if (!dbGuard(res)) return;
+
+  const next = (req.body ?? {}).state;
+  if (!isJobState(next)) {
+    return res.status(400).json({
+      error: 'invalid_state',
+      message: `state must be one of: ${Object.keys(JOB_TRANSITIONS).join(', ')}.`,
+    });
+  }
+
+  try {
+    const db = getDb();
+    const uid = req.user!.uid;
+    const job = await db.collection(JOBS).findOne({ _id: req.params.id as never, kaarigarId: uid });
+
+    if (!job) {
+      return res.status(404).json({ error: 'job_not_found', message: 'No such job for this user.' });
+    }
+
+    const current = job.status as JobState;
+    const allowed = JOB_TRANSITIONS[current];
+
+    if (!allowed.includes(next)) {
+      return res.status(409).json({
+        error: 'illegal_transition',
+        message: `Cannot move from ${current} to ${next}.`,
+        from: current,
+        attempted: next,
+        allowed,
+      });
+    }
+
+    const entry: JobStateTransition = { state: next, at: new Date().toISOString(), by: uid };
+    const updated = await db.collection(JOBS).findOneAndUpdate(
+      { _id: req.params.id as never, kaarigarId: uid, status: current },  // guards against a concurrent transition
+      { $set: { status: next }, $push: { stateHistory: entry as never } },
+      { returnDocument: 'after' }
+    );
+
+    if (!updated) {
+      return res.status(409).json({
+        error: 'concurrent_transition',
+        message: 'The job changed state during this request. Re-read and retry.',
+      });
+    }
+
+    const { _id, ...j } = updated;
+    return res.json({ job: { ...j, id: String(_id) } });
+  } catch (err) {
+    console.error('[jobs] POST /:id/transition failed:', err);
+    return res.status(500).json({ error: 'transition_failed', message: 'Could not transition the job.' });
+  }
+});
