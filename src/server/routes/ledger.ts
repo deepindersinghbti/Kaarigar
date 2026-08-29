@@ -5,6 +5,7 @@ import { requireAuth } from '../middleware/auth';
 import { getProfileIdForUser } from '../data/profiles';
 import { uuidv7 } from '../../lib/ids';
 import type { KamaiEntry, LedgerDirection } from '../../types';
+import { ENTRIES, createEntry, ensureLedgerIndexes } from '../data/ledger';
 
 /**
  * ledger-svc - append-only earnings, expenses and udhaar.
@@ -23,23 +24,6 @@ import type { KamaiEntry, LedgerDirection } from '../../types';
  */
 
 export const ledgerRouter = Router();
-
-const ENTRIES = 'ledger_entries';
-
-let indexesReady = false;
-async function ensureIndexes() {
-  if (indexesReady) return;
-  const db = getDb();
-  await db.collection(ENTRIES).createIndex({ profileId: 1, date: -1 });
-  await db.collection(ENTRIES).createIndex({ profileId: 1, direction: 1 });
-  // Enforces one reversal per entry at the storage layer, not just in the
-  // check below - two concurrent reverse calls would otherwise both pass.
-  await db.collection(ENTRIES).createIndex(
-    { reversesId: 1 },
-    { unique: true, partialFilterExpression: { reversesId: { $type: 'string' } } }
-  );
-  indexesReady = true;
-}
 
 function dbGuard(res: Response): boolean {
   if (isDbConnected()) return true;
@@ -63,8 +47,6 @@ async function requireProfile(req: Request, res: Response): Promise<string | nul
   return profileId;
 }
 
-const isDirection = (v: unknown): v is LedgerDirection => v === 'in' || v === 'out';
-
 /**
  * POST /api/ledger/entries
  *
@@ -75,61 +57,19 @@ const isDirection = (v: unknown): v is LedgerDirection => v === 'in' || v === 'o
 ledgerRouter.post('/entries', requireAuth, async (req: Request, res: Response) => {
   if (!dbGuard(res)) return;
 
-  const body = (req.body ?? {}) as Partial<KamaiEntry>;
-  const amount = Number(body.amount);
-
-  if (!isDirection(body.direction)) {
-    return res.status(400).json({ error: 'invalid_field', field: 'direction', message: "direction must be 'in' or 'out'." });
-  }
-  if (!Number.isFinite(amount) || amount <= 0) {
-    return res.status(400).json({
-      error: 'invalid_field',
-      field: 'amount',
-      message: 'amount must be a positive number. To correct an entry, reverse it.',
-    });
-  }
-  if (typeof body.description !== 'string' || !body.description.trim()) {
-    return res.status(400).json({ error: 'invalid_field', field: 'description', message: 'description is required.' });
-  }
-  if (body.paymentType !== 'cash' && body.paymentType !== 'upi') {
-    return res.status(400).json({ error: 'invalid_field', field: 'paymentType', message: "paymentType must be 'cash' or 'upi'." });
-  }
-  if (typeof body.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(body.date)) {
-    return res.status(400).json({ error: 'invalid_field', field: 'date', message: 'date must be YYYY-MM-DD.' });
-  }
-
   try {
-    await ensureIndexes();
     const profileId = await requireProfile(req, res);
     if (!profileId) return;
 
-    const db = getDb();
-    const id = typeof body.id === 'string' && body.id ? body.id : uuidv7();
+    const outcome = await createEntry(profileId, req.body);
 
-    const existing = await db.collection(ENTRIES).findOne({ _id: id as never, profileId });
-    if (existing) {
-      const { _id, ...e } = existing;
-      return res.status(200).json({ entry: { ...e, id: String(_id) }, idempotentReplay: true });
+    if (outcome.status === 'rejected') {
+      return res.status(400).json({ error: 'invalid_field', field: outcome.field, message: outcome.message });
     }
-
-    const entry: Omit<KamaiEntry, 'id'> = {
-      profileId,
-      direction: body.direction,
-      // Server-held rows are synced by definition; pending/failed describe the
-      // client's outbox, not this collection.
-      syncState: 'synced',
-      date: body.date,
-      amount,
-      description: body.description.trim(),
-      customerName: typeof body.customerName === 'string' ? body.customerName : undefined,
-      paymentType: body.paymentType,
-      jobId: typeof body.jobId === 'string' ? body.jobId : undefined,
-      category: typeof body.category === 'string' ? body.category : undefined,
-      createdAt: new Date().toISOString(),
-    };
-
-    await db.collection(ENTRIES).insertOne({ _id: id as never, ...entry });
-    return res.status(201).json({ entry: { id, ...entry } });
+    if (outcome.status === 'duplicate') {
+      return res.status(200).json({ entry: outcome.entry, idempotentReplay: true });
+    }
+    return res.status(201).json({ entry: outcome.entry });
   } catch (err) {
     console.error('[ledger] POST /entries failed:', err);
     return res.status(500).json({ error: 'entry_create_failed', message: 'Could not record the entry.' });
@@ -267,7 +207,7 @@ ledgerRouter.post('/entries/:id/reverse', requireAuth, async (req: Request, res:
   }
 
   try {
-    await ensureIndexes();
+    await ensureLedgerIndexes();
     const profileId = await requireProfile(req, res);
     if (!profileId) return;
 

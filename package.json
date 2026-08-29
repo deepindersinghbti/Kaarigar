@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "seed": "tsx scripts/seed.ts"
+    "seed": "tsx scripts/seed.ts",
+    "seed:rates": "tsx scripts/seedRateBands.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

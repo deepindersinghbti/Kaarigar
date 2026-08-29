@@ -2,9 +2,9 @@ import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { getDb, isDbConnected } from '../db';
 import { requireAuth } from '../middleware/auth';
-import { uuidv7 } from '../../lib/ids';
 import { JOB_TRANSITIONS } from '../../types';
-import type { JobItem, JobState, JobStateTransition } from '../../types';
+import type { JobState, JobStateTransition } from '../../types';
+import { JOBS, createJob, isJobState, ensureJobIndexes } from '../data/jobs';
 
 /**
  * jobs-svc - job lifecycle state machine.
@@ -18,17 +18,6 @@ import type { JobItem, JobState, JobStateTransition } from '../../types';
 
 export const jobsRouter = Router();
 
-const JOBS = 'jobs';
-
-let indexesReady = false;
-async function ensureIndexes() {
-  if (indexesReady) return;
-  const db = getDb();
-  await db.collection(JOBS).createIndex({ kaarigarId: 1, date: -1 });
-  await db.collection(JOBS).createIndex({ kaarigarId: 1, status: 1 });
-  indexesReady = true;
-}
-
 function dbGuard(res: Response): boolean {
   if (isDbConnected()) return true;
   res.status(503).json({
@@ -38,15 +27,12 @@ function dbGuard(res: Response): boolean {
   return false;
 }
 
-const isJobState = (v: unknown): v is JobState =>
-  typeof v === 'string' && Object.prototype.hasOwnProperty.call(JOB_TRANSITIONS, v);
-
 /** GET /api/jobs - the caller's jobs, newest first. */
 jobsRouter.get('/', requireAuth, async (req: Request, res: Response) => {
   if (!dbGuard(res)) return;
 
   try {
-    await ensureIndexes();
+    await ensureJobIndexes();
     const db = getDb();
 
     const filter: Record<string, unknown> = { kaarigarId: req.user!.uid };
@@ -82,60 +68,16 @@ jobsRouter.get('/', requireAuth, async (req: Request, res: Response) => {
 jobsRouter.post('/', requireAuth, async (req: Request, res: Response) => {
   if (!dbGuard(res)) return;
 
-  const body = (req.body ?? {}) as Partial<JobItem>;
-  const uid = req.user!.uid;
-
-  const title = typeof body.title === 'string' ? body.title.trim() : '';
-  const amount = Number(body.amount);
-
-  if (!title) {
-    return res.status(400).json({ error: 'invalid_field', field: 'title', message: 'title is required.' });
-  }
-  if (!Number.isFinite(amount) || amount < 0) {
-    return res.status(400).json({ error: 'invalid_field', field: 'amount', message: 'amount must be a non-negative number.' });
-  }
-  if (body.status !== undefined && !isJobState(body.status)) {
-    return res.status(400).json({ error: 'invalid_status', message: 'status is not a known JobState.' });
-  }
-
-  const id = typeof body.id === 'string' && body.id ? body.id : uuidv7();
-  const now = new Date().toISOString();
-  const status: JobState = body.status ?? 'REQUESTED';
-
   try {
-    await ensureIndexes();
-    const db = getDb();
+    const outcome = await createJob(req.user!.uid, req.body);
 
-    const existing = await db.collection(JOBS).findOne({ _id: id as never, kaarigarId: uid });
-    if (existing) {
-      const { _id, ...j } = existing;
-      return res.status(200).json({ job: { ...j, id: String(_id) }, idempotentReplay: true });
+    if (outcome.status === 'rejected') {
+      return res.status(400).json({ error: 'invalid_field', field: outcome.field, message: outcome.message });
     }
-
-    const history: JobStateTransition[] = [{ state: status, at: now, by: uid }];
-    const job: Omit<JobItem, 'id'> = {
-      kaarigarId: uid,
-      title,
-      customerName: typeof body.customerName === 'string' ? body.customerName : '',
-      customerId: typeof body.customerId === 'string' ? body.customerId : undefined,
-      customerPhone: typeof body.customerPhone === 'string' ? body.customerPhone : undefined,
-      location: typeof body.location === 'string' ? body.location : '',
-      amount,
-      agreedPrice: Number.isFinite(Number(body.agreedPrice)) ? Number(body.agreedPrice) : undefined,
-      paymentMethod: body.paymentMethod === 'upi' || body.paymentMethod === 'cash' ? body.paymentMethod : 'pending',
-      status,
-      stateHistory: history,
-      // Server-held records are synced by definition. The pending/failed states
-      // describe the client's outbox, not this collection.
-      syncState: 'synced',
-      date: typeof body.date === 'string' ? body.date : now.slice(0, 10),
-      time: typeof body.time === 'string' ? body.time : undefined,
-      notes: typeof body.notes === 'string' ? body.notes : undefined,
-      skillsTagged: Array.isArray(body.skillsTagged) ? body.skillsTagged.filter((s) => typeof s === 'string') : undefined,
-    };
-
-    await db.collection(JOBS).insertOne({ _id: id as never, ...job });
-    return res.status(201).json({ job: { id, ...job } });
+    if (outcome.status === 'duplicate') {
+      return res.status(200).json({ job: outcome.job, idempotentReplay: true });
+    }
+    return res.status(201).json({ job: outcome.job });
   } catch (err) {
     console.error('[jobs] POST / failed:', err);
     return res.status(500).json({ error: 'job_create_failed', message: 'Could not create the job.' });
