@@ -21,6 +21,7 @@ export const JOBS = 'jobs';
 export type CreateOutcome =
   | { status: 'created'; job: JobItem }
   | { status: 'duplicate'; job: JobItem }
+  | { status: 'conflict' }
   | { status: 'rejected'; field?: string; message: string };
 
 export const isJobState = (v: unknown): v is JobState =>
@@ -63,9 +64,22 @@ export async function createJob(kaarigarId: string, input: unknown): Promise<Cre
   const db = getDb();
   const id = typeof body.id === 'string' && body.id ? body.id : uuidv7();
 
-  const existing = await db.collection(JOBS).findOne({ _id: id as never, kaarigarId });
-  if (existing) {
-    const { _id, ...j } = existing;
+  /**
+   * The idempotency lookup is UNSCOPED, and ownership then picks the branch.
+   *
+   * Scoping the read by kaarigarId meant another user's id looked absent, the
+   * insert fell through, and Mongo rejected it on the collection-wide unique
+   * _id - surfacing as a 500 that the outbox would retry forever. Ownership has
+   * to select the branch, not filter the query:
+   *
+   *   absent                  -> insert
+   *   present, caller owns it -> idempotent success (a retry of their own write)
+   *   present, someone else   -> conflict
+   */
+  const claimed = await db.collection(JOBS).findOne({ _id: id as never });
+  if (claimed) {
+    if (claimed.kaarigarId !== kaarigarId) return { status: 'conflict' };
+    const { _id, ...j } = claimed;
     return { status: 'duplicate', job: { ...j, id: String(_id) } as JobItem };
   }
 
@@ -94,7 +108,22 @@ export async function createJob(kaarigarId: string, input: unknown): Promise<Cre
     skillsTagged: Array.isArray(body.skillsTagged) ? body.skillsTagged.filter((s) => typeof s === 'string') : undefined,
   };
 
-  await db.collection(JOBS).insertOne({ _id: id as never, ...job });
+  try {
+    await db.collection(JOBS).insertOne({ _id: id as never, ...job });
+  } catch (err) {
+    // The unscoped read above closes the common case but not the race: two
+    // concurrent creates of the same id both see it absent. A race that only
+    // fires under load is the version of this bug that survives to Day 9, so
+    // the duplicate-key error routes back through the SAME three branches.
+    if ((err as { code?: number }).code === 11000) {
+      const raced = await db.collection(JOBS).findOne({ _id: id as never });
+      if (!raced) throw err;
+      if (raced.kaarigarId !== kaarigarId) return { status: 'conflict' };
+      const { _id, ...j } = raced;
+      return { status: 'duplicate', job: { ...j, id: String(_id) } as JobItem };
+    }
+    throw err;
+  }
   return { status: 'created', job: { id, ...job } };
 }
 

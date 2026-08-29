@@ -5,6 +5,7 @@ import { requireAuth } from '../middleware/auth';
 import { getProfileIdForUser } from '../data/profiles';
 import { createJob, jobExists } from '../data/jobs';
 import { createEntry } from '../data/ledger';
+import { classify } from '../lib/retry';
 
 /**
  * sync-svc - offline outbox ingest.
@@ -47,7 +48,45 @@ type ItemResult = {
   reason?: string;
   message?: string;
   field?: string;
+  /** The status this item would have received as a standalone request. */
+  httpStatus: number;
+  /**
+   * Whether the client should keep this item queued. DERIVED from httpStatus by
+   * lib/retry.ts and never decided at the rejection site - a permanent failure
+   * classified as retryable is an outbox that retries forever, and deciding it
+   * per-error-site recreates that bug with every new reason someone adds.
+   */
+  retryable: boolean;
+  /** What the client should set syncState to (section 9.1). */
+  syncState: 'pending' | 'failed';
 };
+
+/** Build a rejection with its retry disposition derived, not hand-written. */
+function reject(
+  index: number,
+  kind: ItemKind | 'unknown',
+  id: string | null,
+  httpStatus: number,
+  reason: string,
+  message: string,
+  field?: string
+): ItemResult {
+  return { index, kind, id, status: 'rejected', reason, message, field, httpStatus, ...classify(httpStatus) };
+}
+
+function accept(index: number, kind: ItemKind, id: string, duplicate: boolean): ItemResult {
+  // A duplicate means the server already holds it - success from the outbox's
+  // point of view, not something to retry.
+  return {
+    index,
+    kind,
+    id,
+    status: duplicate ? 'duplicate' : 'accepted',
+    httpStatus: duplicate ? 200 : 201,
+    retryable: false,
+    syncState: 'pending',
+  };
+}
 
 function dbGuard(res: Response): boolean {
   if (isDbConnected()) return true;
@@ -62,6 +101,8 @@ const idOf = (payload: unknown): string | null => {
   const id = (payload as { id?: unknown } | null)?.id;
   return typeof id === 'string' && id ? id : null;
 };
+
+const CONFLICT_MESSAGE = 'That id is already in use. Generate a new one and retry.';
 
 /**
  * POST /api/sync/batch
@@ -121,12 +162,7 @@ syncRouter.post('/batch', requireAuth, async (req: Request, res: Response) => {
       const id = idOf(item?.payload);
 
       if (item?.kind !== 'job' && item?.kind !== 'ledger_entry') {
-        results[i] = {
-          index: i, kind: 'unknown', id,
-          status: 'rejected',
-          reason: 'unknown_kind',
-          message: "kind must be 'job' or 'ledger_entry'.",
-        };
+        results[i] = reject(i, 'unknown', id, 400, 'unknown_kind', "kind must be 'job' or 'ledger_entry'.");
         continue;
       }
 
@@ -134,27 +170,23 @@ syncRouter.post('/batch', requireAuth, async (req: Request, res: Response) => {
         if (item.kind === 'job') {
           const outcome = await createJob(uid, item.payload);
           if (outcome.status === 'rejected') {
-            results[i] = {
-              index: i, kind: 'job', id,
-              status: 'rejected', reason: 'validation_failed',
-              field: outcome.field, message: outcome.message,
-            };
+            results[i] = reject(i, 'job', id, 400, 'validation_failed', outcome.message, outcome.field);
+          } else if (outcome.status === 'conflict') {
+            // Generic to the client; detail to the log.
+            console.warn(`[sync] id conflict: job ${id} requested by uid=${uid}`);
+            results[i] = reject(i, 'job', id, 409, 'id_conflict', CONFLICT_MESSAGE);
           } else {
-            results[i] = {
-              index: i, kind: 'job', id: outcome.job.id,
-              status: outcome.status === 'duplicate' ? 'duplicate' : 'accepted',
-            };
+            results[i] = accept(i, 'job', outcome.job.id, outcome.status === 'duplicate');
           }
           continue;
         }
 
         // ledger_entry
         if (!profileId) {
-          results[i] = {
-            index: i, kind: 'ledger_entry', id,
-            status: 'rejected', reason: 'no_profile',
-            message: 'This user has no passport yet. Call GET /api/passport/me before syncing entries.',
-          };
+          results[i] = reject(
+            i, 'ledger_entry', id, 409, 'no_profile',
+            'This user has no passport yet. Call GET /api/passport/me before syncing entries.'
+          );
           continue;
         }
 
@@ -163,50 +195,51 @@ syncRouter.post('/batch', requireAuth, async (req: Request, res: Response) => {
         // passport would later fail to render.
         const jobId = (item.payload as { jobId?: unknown } | null)?.jobId;
         if (typeof jobId === 'string' && jobId && !(await jobExists(uid, jobId))) {
-          results[i] = {
-            index: i, kind: 'ledger_entry', id,
-            status: 'rejected', reason: 'unknown_job',
-            field: 'jobId',
-            message: `No job ${jobId} for this user. Sync the job before its ledger entry.`,
-          };
+          results[i] = reject(
+            i, 'ledger_entry', id, 400, 'unknown_job',
+            `No job ${jobId} for this user. Sync the job before its ledger entry.`, 'jobId'
+          );
           continue;
         }
 
         const outcome = await createEntry(profileId, item.payload);
         if (outcome.status === 'rejected') {
-          results[i] = {
-            index: i, kind: 'ledger_entry', id,
-            status: 'rejected', reason: 'validation_failed',
-            field: outcome.field, message: outcome.message,
-          };
+          results[i] = reject(i, 'ledger_entry', id, 400, 'validation_failed', outcome.message, outcome.field);
+        } else if (outcome.status === 'conflict') {
+          console.warn(`[sync] id conflict: ledger_entry ${id} requested by uid=${uid}`);
+          results[i] = reject(i, 'ledger_entry', id, 409, 'id_conflict', CONFLICT_MESSAGE);
         } else {
-          results[i] = {
-            index: i, kind: 'ledger_entry', id: outcome.entry.id,
-            status: outcome.status === 'duplicate' ? 'duplicate' : 'accepted',
-          };
+          results[i] = accept(i, 'ledger_entry', outcome.entry.id, outcome.status === 'duplicate');
         }
       } catch (err) {
-        // One item throwing must not abort the flush.
+        // One item throwing must not abort the flush. 500 classifies as
+        // retryable - genuinely transient, unlike the 4xx rejections above.
         console.error(`[sync] item ${i} (${item.kind}) failed:`, err);
-        results[i] = {
-          index: i, kind: item.kind, id,
-          status: 'rejected', reason: 'server_error',
-          message: 'This item could not be stored. It remains queued; retry it.',
-        };
+        results[i] = reject(
+          i, item.kind, id, 500, 'server_error',
+          'This item could not be stored. It remains queued; retry it.'
+        );
       }
     }
 
     const accepted = results.filter((r) => r.status === 'accepted').length;
     const duplicates = results.filter((r) => r.status === 'duplicate').length;
     const rejected = results.filter((r) => r.status === 'rejected').length;
+    const permanent = results.filter((r) => r.status === 'rejected' && !r.retryable).length;
 
-    console.log(`[sync] batch of ${items.length}: ${accepted} accepted, ${duplicates} duplicate, ${rejected} rejected`);
+    console.log(
+      `[sync] batch of ${items.length}: ${accepted} accepted, ${duplicates} duplicate, ` +
+      `${rejected} rejected (${permanent} permanent, ${rejected - permanent} retryable)`
+    );
 
     return res.json({
       processed: items.length,
       accepted,
       duplicates,
       rejected,
+      // Items the client must DROP from the outbox and mark failed. Leaving
+      // them queued is the retry-forever bug.
+      permanentlyFailed: permanent,
       // The client marks accepted AND duplicate items synced - a duplicate
       // means the server already holds it, which is success from the outbox's
       // point of view, not a failure to retry forever.

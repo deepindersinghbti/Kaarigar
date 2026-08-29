@@ -6,6 +6,7 @@ import { getProfileIdForUser } from '../data/profiles';
 import { uuidv7 } from '../../lib/ids';
 import type { KamaiEntry, LedgerDirection } from '../../types';
 import { ENTRIES, createEntry, ensureLedgerIndexes } from '../data/ledger';
+import { queryString } from '../lib/query';
 
 /**
  * ledger-svc - append-only earnings, expenses and udhaar.
@@ -66,6 +67,13 @@ ledgerRouter.post('/entries', requireAuth, async (req: Request, res: Response) =
     if (outcome.status === 'rejected') {
       return res.status(400).json({ error: 'invalid_field', field: outcome.field, message: outcome.message });
     }
+    if (outcome.status === 'conflict') {
+      console.warn(`[ledger] id conflict: ${String((req.body ?? {}).id)} requested by uid=${req.user!.uid}`);
+      return res.status(409).json({
+        error: 'id_conflict',
+        message: 'That id is already in use. Generate a new one and retry.',
+      });
+    }
     if (outcome.status === 'duplicate') {
       return res.status(200).json({ entry: outcome.entry, idempotentReplay: true });
     }
@@ -89,7 +97,7 @@ ledgerRouter.get('/entries', requireAuth, async (req: Request, res: Response) =>
     const profileId = await requireProfile(req, res);
     if (!profileId) return;
 
-    const { from, to } = periodRange(String(req.query.period ?? 'all'));
+    const { from, to } = periodRange(queryString(req.query.period) || 'all');
     const filter: Record<string, unknown> = { profileId };
     if (from) filter.date = { $gte: from, $lte: to };
 
@@ -130,7 +138,7 @@ function periodRange(period: string): { from: string; to: string } {
 ledgerRouter.get('/summary', requireAuth, async (req: Request, res: Response) => {
   if (!dbGuard(res)) return;
 
-  const period = String(req.query.period ?? 'month');
+  const period = queryString(req.query.period) || 'month';
   if (!['day', 'week', 'month', 'all'].includes(period)) {
     return res.status(400).json({ error: 'invalid_period', message: 'period must be day, week, month or all.' });
   }

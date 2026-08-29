@@ -3,6 +3,7 @@ import type { Request, Response } from 'express';
 import { isDbConnected } from '../db';
 import { requireAuth } from '../middleware/auth';
 import { findBand, confidenceOf, listTasks, MIN_OBSERVATIONS } from '../data/rateBands';
+import { queryString, optionalQueryString } from '../lib/query';
 
 /**
  * pricing-svc - fair-price rate bands (Mol-Bhav, section 4C).
@@ -59,9 +60,9 @@ pricingRouter.get('/tasks', requireAuth, async (_req: Request, res: Response) =>
 pricingRouter.get('/band', requireAuth, async (req: Request, res: Response) => {
   if (!dbGuard(res)) return;
 
-  const trade = String(req.query.trade ?? '').trim();
-  const taskCode = String(req.query.taskCode ?? '').trim();
-  const locality = String(req.query.locality ?? '').trim() || undefined;
+  const trade = queryString(req.query.trade);
+  const taskCode = queryString(req.query.taskCode);
+  const locality = optionalQueryString(req.query.locality);
 
   if (!trade || !taskCode) {
     return res.status(400).json({

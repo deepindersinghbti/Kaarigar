@@ -132,8 +132,27 @@ export function isDbConnected(): boolean {
   return db !== null;
 }
 
-/** Last connection error, for surfacing in health output. */
-export function getDbError(): string | null {
+export type DbErrorCategory = 'unreachable' | 'auth' | 'timeout' | 'unknown';
+
+/**
+ * A CATEGORY, not the driver's message.
+ *
+ * /api/health is unauthenticated, and Mongo error strings can carry cluster
+ * hostnames and connection-string fragments. The category is enough for anyone
+ * operating the service to know what to check; the full string stays in the
+ * logs, where it is already written on every failure.
+ */
+export function getDbErrorCategory(): DbErrorCategory | null {
+  if (!lastError) return null;
+  const m = lastError.message;
+  if (/timed out|ETIMEDOUT|ServerSelection/i.test(m)) return 'timeout';
+  if (/auth|credential|password|unauthorized/i.test(m)) return 'auth';
+  if (/ECONNREFUSED|ECONNRESET|ENOTFOUND|EHOSTUNREACH|network/i.test(m)) return 'unreachable';
+  return 'unknown';
+}
+
+/** Full driver message. Server-side only - never put this in a response. */
+export function getDbErrorDetail(): string | null {
   return lastError ? lastError.message : null;
 }
 

@@ -2,6 +2,8 @@ import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { GoogleGenAI } from '@google/genai';
 import type { AssistantFallbackReason } from '../../types';
+import { requireAuth } from '../middleware/auth';
+import { rateLimit } from '../middleware/rateLimit';
 
 /**
  * assistant - voice input processing (Architecture Amendment 2).
@@ -14,6 +16,22 @@ import type { AssistantFallbackReason } from '../../types';
  */
 
 export const assistantRouter = Router();
+
+/**
+ * Maximum characters accepted from the caller.
+ *
+ * Generous for a single spoken turn - a worker describing a job says perhaps
+ * 200 characters - while killing the 50,000-character case that reached Gemini
+ * unbounded before this. Every character is billed, and the endpoint is
+ * internet-facing once deployed.
+ */
+const MAX_INPUT_CHARS = 2_000;
+
+/**
+ * 20 calls per minute. Comfortably above a real conversation, well below what
+ * makes the endpoint worth abusing for free inference on a billed account.
+ */
+const assistantLimit = rateLimit({ name: 'assistant', windowMs: 60_000, max: 20 });
 
 
 /**
@@ -38,7 +56,7 @@ function getGenAI(): GoogleGenAI | null {
 }
 
 // API: Process Voice Input with Gemini 3.7 Flash + Robust Local Fallback
-assistantRouter.post('/process', async (req: Request, res: Response) => {
+assistantRouter.post('/process', requireAuth, assistantLimit, async (req: Request, res: Response) => {
   const {
     userInput = '',
     language = 'hi',
@@ -47,6 +65,31 @@ assistantRouter.post('/process', async (req: Request, res: Response) => {
     workerName = 'Ramesh',
     pendingData = {},
   } = req.body;
+
+  // Validate before anything reaches a Gemini prompt. Previously the body was
+  // destructured with defaults and no type checks, so arbitrary JSON from any
+  // origin was interpolated into the prompt unbounded (audit, server.ts:40-47).
+  if (typeof req.body?.userInput !== 'string') {
+    return res.status(400).json({ error: 'invalid_field', field: 'userInput', message: 'userInput must be a string.' });
+  }
+  if (req.body.userInput.length > MAX_INPUT_CHARS) {
+    return res.status(400).json({
+      error: 'input_too_long',
+      field: 'userInput',
+      message: `userInput must be at most ${MAX_INPUT_CHARS} characters.`,
+      max: MAX_INPUT_CHARS,
+      received: req.body.userInput.length,
+    });
+  }
+  if (req.body.language !== undefined && typeof req.body.language !== 'string') {
+    return res.status(400).json({ error: 'invalid_field', field: 'language', message: 'language must be a string.' });
+  }
+  if (req.body.context !== undefined && typeof req.body.context !== 'string') {
+    return res.status(400).json({ error: 'invalid_field', field: 'context', message: 'context must be a string.' });
+  }
+  if (req.body.currentStep !== undefined && !Number.isFinite(Number(req.body.currentStep))) {
+    return res.status(400).json({ error: 'invalid_field', field: 'currentStep', message: 'currentStep must be a number.' });
+  }
 
   // P1 discriminator. There are four distinct ways to end up on the local
   // fallback and, before this, all four returned a well-formed 200 that was

@@ -19,6 +19,7 @@ export const ENTRIES = 'ledger_entries';
 export type EntryOutcome =
   | { status: 'created'; entry: KamaiEntry }
   | { status: 'duplicate'; entry: KamaiEntry }
+  | { status: 'conflict' }
   | { status: 'rejected'; field?: string; message: string };
 
 export const isDirection = (v: unknown): v is LedgerDirection => v === 'in' || v === 'out';
@@ -65,9 +66,11 @@ export async function createEntry(profileId: string, input: unknown): Promise<En
   const db = getDb();
   const id = typeof body.id === 'string' && body.id ? body.id : uuidv7();
 
-  const existing = await db.collection(ENTRIES).findOne({ _id: id as never, profileId });
-  if (existing) {
-    const { _id, ...e } = existing;
+  // Unscoped read; ownership picks the branch. See data/jobs.ts for why.
+  const claimed = await db.collection(ENTRIES).findOne({ _id: id as never });
+  if (claimed) {
+    if (claimed.profileId !== profileId) return { status: 'conflict' };
+    const { _id, ...e } = claimed;
     return { status: 'duplicate', entry: { ...e, id: String(_id) } as KamaiEntry };
   }
 
@@ -85,6 +88,19 @@ export async function createEntry(profileId: string, input: unknown): Promise<En
     createdAt: new Date().toISOString(),
   };
 
-  await db.collection(ENTRIES).insertOne({ _id: id as never, ...entry });
+  try {
+    await db.collection(ENTRIES).insertOne({ _id: id as never, ...entry });
+  } catch (err) {
+    // Same race as jobs: route the duplicate-key error back through the same
+    // three branches rather than letting it surface as a 500.
+    if ((err as { code?: number }).code === 11000) {
+      const raced = await db.collection(ENTRIES).findOne({ _id: id as never });
+      if (!raced) throw err;
+      if (raced.profileId !== profileId) return { status: 'conflict' };
+      const { _id, ...e } = raced;
+      return { status: 'duplicate', entry: { ...e, id: String(_id) } as KamaiEntry };
+    }
+    throw err;
+  }
   return { status: 'created', entry: { id, ...entry } };
 }

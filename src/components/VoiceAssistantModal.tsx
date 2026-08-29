@@ -37,6 +37,7 @@ import {
 } from '../utils/speech';
 import { uuidv7 } from '../lib/ids';
 import { todayIso } from '../utils/date';
+import { authHeader } from '../lib/authToken';
 
 interface VoiceAssistantModalProps {
   isOpen: boolean;
@@ -194,7 +195,10 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
     try {
       const response = await fetch('/api/assistant/process', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        // The endpoint requires auth: every successful turn ends in an
+        // owner-scoped write. authHeader() is the seam - when AuthProvider
+        // lands, only src/lib/authToken.ts changes, not this call.
+        headers: { 'Content-Type': 'application/json', ...authHeader() },
         body: JSON.stringify({
           userInput: inputText,
           language: currentLanguage,

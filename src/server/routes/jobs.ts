@@ -5,6 +5,7 @@ import { requireAuth } from '../middleware/auth';
 import { JOB_TRANSITIONS } from '../../types';
 import type { JobState, JobStateTransition } from '../../types';
 import { JOBS, createJob, isJobState, ensureJobIndexes } from '../data/jobs';
+import { optionalQueryString } from '../lib/query';
 
 /**
  * jobs-svc - job lifecycle state machine.
@@ -36,8 +37,8 @@ jobsRouter.get('/', requireAuth, async (req: Request, res: Response) => {
     const db = getDb();
 
     const filter: Record<string, unknown> = { kaarigarId: req.user!.uid };
-    const status = req.query.status;
-    if (typeof status === 'string') {
+    const status = optionalQueryString(req.query.status);
+    if (status !== undefined) {
       if (!isJobState(status)) {
         return res.status(400).json({
           error: 'invalid_status',
@@ -73,6 +74,16 @@ jobsRouter.post('/', requireAuth, async (req: Request, res: Response) => {
 
     if (outcome.status === 'rejected') {
       return res.status(400).json({ error: 'invalid_field', field: outcome.field, message: outcome.message });
+    }
+    if (outcome.status === 'conflict') {
+      // Deliberately generic. A 409 already tells the caller the id is taken;
+      // saying "owned by another user" adds nothing they cannot infer and
+      // confirms it explicitly. Detail goes to the log, not the response.
+      console.warn(`[jobs] id conflict: ${String((req.body ?? {}).id)} requested by uid=${req.user!.uid}`);
+      return res.status(409).json({
+        error: 'id_conflict',
+        message: 'That id is already in use. Generate a new one and retry.',
+      });
     }
     if (outcome.status === 'duplicate') {
       return res.status(200).json({ job: outcome.job, idempotentReplay: true });
