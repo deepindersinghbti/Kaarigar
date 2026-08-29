@@ -26,7 +26,7 @@ import {
   INITIAL_JOBS,
   INITIAL_KAMAI,
 } from './data/initialData';
-import { uuidv7 } from './utils/uuid';
+import { uuidv7 } from './lib/ids';
 
 export default function App() {
   const navigate = useNavigate();

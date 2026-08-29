@@ -13,7 +13,16 @@
  * Layout (RFC 9562): 48-bit big-endian Unix milliseconds, 4-bit version (7),
  * 12 random bits, 2-bit variant (0b10), 62 random bits.
  *
- * Works in the browser and in Node: both provide globalThis.crypto.
+ * Works in the browser and in Node 18+: both provide globalThis.crypto, so no
+ * dependency is needed.
+ *
+ * CAVEAT: two ids generated inside the same millisecond sort by their random
+ * bits, not by creation order. The outbox is a localStorage array and preserves
+ * insertion order on its own - do not drop that ordering on the assumption that
+ * id sort replaces it.
+ *
+ * Server-side ids come from here too, NOT from crypto.randomUUID(). Mixing v4
+ * and v7 in one collection breaks the sort silently.
  */
 export function uuidv7(): string {
   const bytes = new Uint8Array(16);

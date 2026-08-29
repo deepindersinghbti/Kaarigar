@@ -35,7 +35,7 @@ import {
   sfx,
   isSpeechRecognitionSupported,
 } from '../utils/speech';
-import { uuidv7 } from '../utils/uuid';
+import { uuidv7 } from '../lib/ids';
 import { todayIso } from '../utils/date';
 
 interface VoiceAssistantModalProps {
