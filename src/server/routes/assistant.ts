@@ -135,6 +135,8 @@ Respond in valid JSON with:
         // mislabelled as an API error.
         try {
           const parsed = JSON.parse(response.text);
+          // D6: omit fallbackReason entirely on this path. Not null - the
+          // union forbids it, and JSON.stringify drops undefined anyway.
           return res.json({ ...parsed, source: 'gemini' as const });
         } catch (parseErr) {
           fallbackReason = 'invalid_json';
@@ -147,8 +149,15 @@ Respond in valid JSON with:
     fallbackDetail = err instanceof Error ? err.message : String(err);
   }
 
+  // Every branch above sets a reason, but the variable is nullable, and the
+  // contract's discriminated union will not accept `fallbackReason: null`.
+  // Narrow it here rather than casting: if a future branch forgets to set one,
+  // this produces 'api_error' instead of an unlabelled fallback, which is the
+  // failure mode this whole field exists to eliminate.
+  const reason: FallbackReason = fallbackReason ?? 'api_error';
+
   console.warn(
-    `[assistant] serving local fallback — reason=${fallbackReason}` +
+    `[assistant] serving local fallback — reason=${reason}` +
     (fallbackDetail ? ` detail=${fallbackDetail}` : '')
   );
 
@@ -157,7 +166,7 @@ Respond in valid JSON with:
   return res.json({
     ...result,
     source: 'fallback' as const,
-    fallbackReason,
+    fallbackReason: reason,
     // Error text can carry request and key metadata, so it is withheld in
     // production. The server log above always records it either way.
     ...(process.env.NODE_ENV !== 'production' && fallbackDetail ? { fallbackDetail } : {}),

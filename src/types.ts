@@ -124,6 +124,50 @@ export type JobState =
   | 'CANCELLED'
   | 'DISPUTED';
 
+/**
+ * Legal transitions. Enforced server-side on every state change.
+ *
+ * DISPUTED has NO INBOUND EDGE in the locked scope: the state is
+ * representable so the data can be honest, but not reachable, because the
+ * dispute flow is cut. That is what keeps the two-role principle intact here
+ * too - the guard is this table, not the union, so nothing compiles into
+ * existence that guards nothing. When disputes get built it is one array
+ * entry, not an enum migration across three tracks.
+ */
+export const JOB_TRANSITIONS: Record<JobState, JobState[]> = {
+  REQUESTED:   ['QUOTED', 'CANCELLED'],
+  QUOTED:      ['ACCEPTED', 'CANCELLED'],
+  ACCEPTED:    ['SCHEDULED', 'CANCELLED'],
+  SCHEDULED:   ['IN_PROGRESS', 'CANCELLED'],
+  IN_PROGRESS: ['COMPLETED', 'CANCELLED'],
+  COMPLETED:   ['SETTLED'],
+  SETTLED:     ['REVIEWED'],
+  REVIEWED:    [],
+  CANCELLED:   [],
+  DISPUTED:    [],
+};
+
+/** Display buckets. Total by construction - adding a JobState breaks the build. */
+export type JobBadge = 'scheduled' | 'in_progress' | 'completed' | 'cancelled';
+
+/**
+ * A Record rather than a switch with a default: a Record fails to compile the
+ * moment an eleventh state appears, whereas a default silently absorbs it and
+ * renders the new state as whatever the fallback happens to be.
+ */
+export const JOB_BADGE: Record<JobState, JobBadge> = {
+  REQUESTED:   'scheduled',
+  QUOTED:      'scheduled',
+  ACCEPTED:    'scheduled',
+  SCHEDULED:   'scheduled',
+  IN_PROGRESS: 'in_progress',
+  COMPLETED:   'completed',
+  SETTLED:     'completed',
+  REVIEWED:    'completed',
+  CANCELLED:   'cancelled',
+  DISPUTED:    'cancelled',
+};
+
 /** Section 4E: every transition is timestamped and immutable. */
 export interface JobStateTransition {
   state: JobState;
@@ -294,12 +338,26 @@ export type AssistantFallbackReason =
   | 'invalid_json'                  // replied, but the body would not parse
   | 'api_error';                    // threw - quota, auth, network, bad model
 
-export interface AssistantProcessResponse {
+interface AssistantProcessBase {
   replyText: string;
   isComplete: boolean;
   requiresConfirmation: boolean;
   nextStep: number;
   extractedData?: AssistantMessage['extractedData'];
-  source: AssistantSource;
-  fallbackReason?: AssistantFallbackReason | null;
 }
+
+/**
+ * Discriminated on `source`: a fallback response cannot omit its reason, and a
+ * Gemini response cannot carry one.
+ *
+ * The earlier shape - `fallbackReason?: AssistantFallbackReason | null` - had
+ * three ways to say "absent" and let `{ source: 'fallback' }` with no reason
+ * compile, which is precisely the case this field exists to catch.
+ *
+ * Track A: the server must OMIT the key on the Gemini path, not send null.
+ * JSON.stringify drops undefined properties, so returning the object without
+ * the key is enough.
+ */
+export type AssistantProcessResponse =
+  | (AssistantProcessBase & { source: 'gemini'; fallbackReason?: never })
+  | (AssistantProcessBase & { source: 'fallback'; fallbackReason: AssistantFallbackReason });

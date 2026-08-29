@@ -1,6 +1,16 @@
 {
   "compilerOptions": {
     "target": "ES2022",
+    // Required for D6 to mean anything. Without it `null` is assignable to
+    // every type, so `fallbackReason: null` compiled cleanly against a union
+    // that exists precisely to forbid it. Enabling this produced ZERO new
+    // errors, so it costs nothing today and prevents a class of bug that
+    // otherwise surfaces at runtime.
+    //
+    // Full `strict` is NOT enabled: it reports ~1169 errors, almost all from
+    // @types/react being absent rather than from real defects. That is a
+    // separate, larger piece of work.
+    "strictNullChecks": true,
     "experimentalDecorators": true,
     "useDefineForClassFields": false,
     "module": "ESNext",

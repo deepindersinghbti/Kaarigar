@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { randomUUID, randomInt } from 'crypto';
+import { uuidv7 } from '../../lib/ids';
 import { getDb, isDbConnected } from '../db';
 import { requireAuth } from '../middleware/auth';
 import {
@@ -191,7 +192,9 @@ identityRouter.post('/otp/verify', async (req: Request, res: Response) => {
       await db.collection(USERS).updateOne({ phone }, { $set: { lastLoginAt: now } });
       user = { uid: String(existing._id), phone, roles: existing.roles as Role[] };
     } else {
-      const uid = randomUUID();
+      // D5: contract ids are v7. Mixing v4 and v7 in one collection breaks
+      // the sort silently. Challenge ids below stay v4 - ephemeral, never sorted.
+      const uid = uuidv7();
       const roles: Role[] = ['kaarigar'];
       await db.collection(USERS).insertOne({
         _id: uid as never,
