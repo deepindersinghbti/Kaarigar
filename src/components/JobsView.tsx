@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { JobItem, SupportedLanguage } from '../types';
 import { TRANSLATIONS } from '../data/translations';
+import { todayIso } from '../utils/date';
 
 interface JobsViewProps {
   jobs: JobItem[];
@@ -31,7 +32,7 @@ export const JobsView: React.FC<JobsViewProps> = ({
   const [filter, setFilter] = useState<'all' | 'today' | 'week'>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
-  const todayStr = '2026-08-27'; // matching current local time
+  const todayStr = todayIso();
 
   const filteredJobs = jobs.filter((job) => {
     const matchesSearch =

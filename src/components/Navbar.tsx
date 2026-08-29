@@ -9,33 +9,31 @@ import {
   Globe,
   Sparkles,
 } from 'lucide-react';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { SupportedLanguage } from '../types';
 import { TRANSLATIONS, SUPPORTED_LANGUAGES } from '../data/translations';
 
 interface NavbarProps {
-  activeTab: string;
-  onTabChange: (tab: string) => void;
   currentLanguage: SupportedLanguage;
   onChangeLanguage: () => void;
   onOpenVoiceAssistant: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
-  activeTab,
-  onTabChange,
   currentLanguage,
   onChangeLanguage,
   onOpenVoiceAssistant,
 }) => {
+  const navigate = useNavigate();
   const t = TRANSLATIONS[currentLanguage];
   const langObj = SUPPORTED_LANGUAGES.find((l) => l.code === currentLanguage);
 
   const navItems = [
-    { id: 'home', label: t.navHome, icon: Home },
-    { id: 'passport', label: t.navPassport, icon: ShieldCheck },
-    { id: 'jobs', label: t.navJobs, icon: Briefcase },
-    { id: 'kamai', label: t.navKamai, icon: IndianRupee },
-    { id: 'profile', label: t.navProfile, icon: User },
+    { id: 'home', path: '/', label: t.navHome, icon: Home },
+    { id: 'passport', path: '/passport', label: t.navPassport, icon: ShieldCheck },
+    { id: 'jobs', path: '/jobs', label: t.navJobs, icon: Briefcase },
+    { id: 'kamai', path: '/kamai', label: t.navKamai, icon: IndianRupee },
+    { id: 'profile', path: '/profile', label: t.navProfile, icon: User },
   ];
 
   return (
@@ -49,7 +47,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* Logo & Tagline */}
           <div
             className="flex items-center gap-3 sm:gap-4 cursor-pointer"
-            onClick={() => onTabChange('home')}
+            onClick={() => navigate('/')}
           >
             <div className="w-11 h-11 sm:w-12 sm:h-12 bg-orange-500 rounded-2xl flex items-center justify-center text-white font-extrabold text-xl sm:text-2xl shadow-lg shadow-orange-200">
               K
@@ -101,29 +99,35 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="max-w-md mx-auto flex items-center justify-around relative">
           {navItems.map((item) => {
             const Icon = item.icon;
-            const isActive = activeTab === item.id;
             return (
-              <button
+              <NavLink
                 key={item.id}
+                to={item.path}
+                end={item.path === '/'}
                 id={`nav-item-${item.id}`}
-                onClick={() => onTabChange(item.id)}
-                className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-2xl transition-all ${
-                  isActive
-                    ? 'text-orange-600 font-black scale-105'
-                    : 'text-gray-400 hover:text-gray-700 font-semibold'
-                }`}
+                className={({ isActive }) =>
+                  `flex flex-col items-center justify-center py-1 px-2.5 rounded-2xl transition-all ${
+                    isActive
+                      ? 'text-orange-600 font-black scale-105'
+                      : 'text-gray-400 hover:text-gray-700 font-semibold'
+                  }`
+                }
               >
-                <div
-                  className={`p-1.5 rounded-xl transition-colors ${
-                    isActive ? 'bg-orange-100' : 'bg-transparent'
-                  }`}
-                >
-                  <Icon className={`w-5 h-5 ${isActive ? 'stroke-[2.5]' : ''}`} />
-                </div>
-                <span className="text-[10px] mt-0.5 whitespace-nowrap">
-                  {item.label}
-                </span>
-              </button>
+                {({ isActive }) => (
+                  <>
+                    <div
+                      className={`p-1.5 rounded-xl transition-colors ${
+                        isActive ? 'bg-orange-100' : 'bg-transparent'
+                      }`}
+                    >
+                      <Icon className={`w-5 h-5 ${isActive ? 'stroke-[2.5]' : ''}`} />
+                    </div>
+                    <span className="text-[10px] mt-0.5 whitespace-nowrap">
+                      {item.label}
+                    </span>
+                  </>
+                )}
+              </NavLink>
             );
           })}
         </div>

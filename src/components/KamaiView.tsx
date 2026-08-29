@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { KamaiEntry, SupportedLanguage } from '../types';
 import { TRANSLATIONS } from '../data/translations';
+import { todayIso } from '../utils/date';
 
 interface KamaiViewProps {
   kamaiList: KamaiEntry[];
@@ -29,7 +30,7 @@ export const KamaiView: React.FC<KamaiViewProps> = ({
   const t = TRANSLATIONS[currentLanguage];
   const [activeTab, setActiveTab] = useState<'today' | 'week' | 'month'>('today');
 
-  const todayStr = '2026-08-27';
+  const todayStr = todayIso();
 
   // Calculations
   const todayEntries = kamaiList.filter((k) => k.date === todayStr);
