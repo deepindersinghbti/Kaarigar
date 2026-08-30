@@ -1,53 +1,35 @@
-# Keep the Render free instance warm.
+# Manual pre-demo warmer for the Render free instance.
 #
-# WHY NOT AN INTERNAL SELF-PING. A setInterval inside the server cannot work,
-# by definition: Render free spins the CONTAINER down, so the process holding
-# the timer is stopped along with everything else. A timer that dies with the
-# thing it was meant to wake cannot wake it. It would also have no recovery
-# path - one missed tick and the service is asleep permanently, with the only
-# component that could fix it asleep too.
+# THIS IS NOT THE STANDING MONITOR. UptimeRobot is - see "Keeping the deploy
+# warm" in README.md for the URL and the alert condition. This workflow exists
+# only to warm the service on demand, immediately before a rehearsal or the
+# demo itself, without waiting for the next external poll.
 #
-# So the pinger has to live outside the service. This workflow is that pinger:
-# version-controlled, reviewable in a PR, and needing no third-party account.
+# WHY THERE IS NO `schedule:` HERE.
 #
-# ---------------------------------------------------------------------------
-# READ BEFORE CHANGING THE SCHEDULE - the cadence is budget-constrained.
+# A cron in this workflow was the original design and was rejected on review,
+# correctly. Actions bills per job rounded UP to the minute, and this repository
+# is private, so a schedule tight enough to beat the 15-minute spin-down costs
+# ~1,950 of the 2,000 free minutes/month. That is nearly the entire CI allowance
+# for a repository that will want CI before Day 9, spent on a trigger that is
+# best-effort and runs late under load anyway - so it would consume the budget
+# AND still miss windows.
 #
-# GitHub bills Actions per job, rounded UP to the minute. This job runs for a
-# few seconds and is still billed as one minute. This repository is PRIVATE,
-# so it draws on the 2,000 free minutes/month rather than the unlimited pool
-# public repositories get.
+# An external uptime monitor costs zero Actions minutes and fires on time. The
+# scheduling belongs there; only the manual warm-up belongs here.
 #
-#   */10 24/7      = 144 runs/day = 4,320 min/month   OVER BUDGET
-#   */12 03-15 UTC =  65 runs/day = 1,950 min/month   fits, 12 < 15 min spin-down
-#
-# 03:00-15:59 UTC is 08:30-21:29 IST - waking hours, which is when anyone would
-# scan a QR. Outside it the service sleeps and the first morning ping wakes it.
-#
-# If the repository is ever made public, Actions minutes stop being metered and
-# this can go to `*/10 * * * *` for round-the-clock warmth.
-# ---------------------------------------------------------------------------
-#
-# TIMING CAVEAT, STATED HONESTLY. GitHub's scheduled triggers are best-effort
-# and run late under load - sometimes past the 15-minute spin-down window. This
-# reduces cold starts substantially; it does not eliminate them. For the demo
-# itself, hit the URL by hand a few minutes beforehand, and consider a dedicated
-# uptime pinger (UptimeRobot, cron-job.org - both free) which fires on time.
-#
-# NOTE: `schedule` only fires from the DEFAULT BRANCH. This does nothing until
-# it is merged to main.
+# WHY NOT AN INTERNAL SELF-PING, for the record: Render free spins the CONTAINER
+# down, so a setInterval inside the server stops with it. A timer that dies
+# alongside the thing it was meant to wake cannot wake it, and one missed tick
+# leaves the service asleep with the only component that could fix it asleep too.
 
-name: Keep warm
+name: Warm the deploy (manual)
 
 on:
-  schedule:
-    - cron: '*/12 3-15 * * *'
-  # So the pinger can be fired by hand before a rehearsal or a demo without
-  # waiting for the next slot.
   workflow_dispatch:
 
-# The token needs nothing. Narrowing it means a compromised action in this
-# workflow cannot touch the repository.
+# The token needs nothing. Narrowing it means a compromised action here cannot
+# touch the repository.
 permissions: {}
 
 concurrency:
@@ -65,9 +47,9 @@ jobs:
           echo "Pinging $URL"
 
           # --max-time 90 because a COLD start on Render free takes ~50s. A
-          # shorter timeout would abandon exactly the request that is doing the
-          # useful work - waking the service - and report failure while the
-          # wake-up it triggered succeeded.
+          # shorter timeout would abandon exactly the request doing the useful
+          # work - waking the service - and report failure while the wake-up it
+          # triggered succeeded.
           CODE=$(curl -s -o /tmp/body.json -w '%{http_code}' --max-time 90 \
                       --retry 2 --retry-delay 5 "$URL" || echo 000)
 
@@ -81,9 +63,8 @@ jobs:
           fi
 
           # A 200 with db.connected=false means the process is up but Atlas is
-          # unreachable. Warm but broken is still broken, and it is worth a
-          # failed run rather than a green tick, because this is the only thing
-          # checking the deploy between rehearsals.
+          # unreachable. Warm but broken is still broken. This is the same
+          # condition the UptimeRobot keyword monitor alerts on.
           if grep -q '"connected":false' /tmp/body.json; then
             echo "::error::Service is up but the database is unreachable."
             exit 1
