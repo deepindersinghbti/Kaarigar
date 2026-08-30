@@ -74,3 +74,20 @@ export async function listTasks(): Promise<Array<{ trade: string; taskCode: stri
   }
   return out.sort((a, b) => a.trade.localeCompare(b.trade) || a.taskCode.localeCompare(b.taskCode));
 }
+
+/**
+ * A band seeded without a citation reports this as its basis.
+ *
+ * Lives here, beside the collection it describes, rather than in the seeder:
+ * scripts/check-rates.ts needs it too, and importing it from a script would
+ * execute that script's main() as a side effect of the import - which it did,
+ * and which made `npm run check:rates` print the seeder's refusal notice.
+ *
+ * The string is deliberately self-declaring. GET /api/pricing/band returns it
+ * verbatim as the band's stated basis, so an unsourced band announces itself
+ * rather than passing as authoritative (section 14.1).
+ */
+export const UNSOURCED_LABEL = 'PLACEHOLDER - not sourced, replace before demo';
+
+/** What an un-cited row carries in data/rate-bands.csv. */
+export const UNSOURCED_SENTINEL = 'UNSOURCED';
