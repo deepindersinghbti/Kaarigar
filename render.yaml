@@ -70,3 +70,35 @@ services:
         sync: false
       - key: VITE_FIREBASE_APP_ID
         sync: false
+
+      # --- Client build-time vars actually read by the bundle today ---
+      #
+      # Both are inlined by Vite at BUILD time, not read at runtime. Changing
+      # either one in the Render dashboard therefore requires a REDEPLOY, not a
+      # restart. A restart leaves the old value compiled into the JS and the
+      # change appears to have been ignored.
+
+      # VITE_DEMO_TOKEN: TEMPORARY. Bearer token for the seeded demo worker.
+      #
+      # Without it the deploy builds green and looks healthy while
+      # /api/assistant/process returns 401 for every request - authHeader()
+      # (src/lib/authToken.ts) emits no header and requireAuth rejects. The
+      # voice flow is the only feature currently demonstrable in the app, so
+      # omitting this ships a deploy whose one working feature is broken.
+      #
+      # It expires in 12 hours and it ships in the browser bundle, which makes
+      # it a live credential for the demo account on a public origin. Acceptable
+      # against seed data; mint a fresh one with `npm run demo:token` and
+      # redeploy when it lapses.
+      #
+      # DELETE THIS KEY once AuthProvider lands. Day 9 confirms it is gone.
+      - key: VITE_DEMO_TOKEN
+        sync: false
+
+      # VITE_USE_API: per-screen data source switch (src/lib/featureFlags.ts).
+      # Unset means every screen reads localStorage, which is today's default
+      # and changes nothing. Declared now so the screen-by-screen migration can
+      # flip screens on the deploy without editing this file mid-week.
+      # Day 9 requires a recorded decision on its value in the demo build.
+      - key: VITE_USE_API
+        sync: false
