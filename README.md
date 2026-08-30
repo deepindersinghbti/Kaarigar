@@ -86,14 +86,114 @@ task appears to need a change there, stop and raise it.
 
 ## Auth
 
-Firebase phone OTP could not be made to deliver (see `TYPES_PROPOSAL.md` history
-and the auth commit). The app currently uses its own OTP endpoints with
-**identical architecture and stubbed delivery only** — the code is written to the
-server log rather than sent by SMS. Everything else is real: hashed codes,
-expiry, attempt caps, single use, throttling, signed JWTs, 15-minute access
-tokens and rotating refresh tokens with reuse detection.
+The app uses its own OTP endpoints. **Only delivery is stubbed** — the code is
+written to the server log instead of being sent by SMS. Every security property
+is real:
+
+| Property | Implementation |
+|---|---|
+| Code generation | `randomInt(0, 1000000)` — cryptographically secure |
+| Storage | Only a hash is stored, never the code |
+| Expiry | 5 minutes |
+| Attempt cap | Enforced; returns 429 once exceeded |
+| Single use | Challenge burned before tokens are issued |
+| Throttling | Capped codes per number per window |
+| Enumeration resistance | Identical response whether or not the number is known |
+| Tokens | 15-minute access, rotating refresh, reuse detection revokes the family |
 
 `requireAuth` is the swap point. If Firebase starts working, one line changes.
+
+### Firebase phone OTP: what is actually wrong
+
+**Status: abandoned after exhaustive elimination. Do not re-derive this.**
+
+§6.4 of the status report left the cause as an *unconfirmed* hypothesis
+("backend provisioning lag on a new project"). That hypothesis, and every other
+one available, has now been tested and disproved.
+
+#### The decisive result
+
+A **brand-new Firebase project**, configured from scratch — Phone sign-in
+enabled, Blaze billing active, India added to the SMS region policy, `localhost`
+authorised by default — fails with the **identical** `INVALID_APP_CREDENTIAL`.
+
+This was therefore never about the original project. It is not a configuration
+mistake, and it is not reachable from any console setting.
+
+#### What was eliminated
+
+| Checked | Result |
+|---|---|
+| Billing | Blaze active on both projects |
+| Phone provider enabled | Yes, or the error would be `auth/operation-not-allowed` |
+| SMS region policy | India allowed (the new project surfaced this as its own distinct error, then it cleared) |
+| Authorized domains | `localhost` **and** `kaarigar.onrender.com` both present |
+| reCAPTCHA Enterprise enforcement | `ENFORCEMENT_STATE_UNSPECIFIED` |
+| reCAPTCHA Enterprise API | Was **disabled**; enabling it changed nothing |
+| SMS toll-fraud / bot score | Off — optional features, not required |
+| Client-side token generation | Valid, ~2,300 chars, all five request fields present |
+| "Provisioning lag" | Days elapsed; identical failure |
+| **Fresh project** | **Identical failure** |
+
+#### Two traps that cost time here
+
+**`producerProjectNumber` is Google's, not yours.** The `GetRecaptchaParam`
+response returns `recaptchaSiteKey: 6LcMZR0U…` and
+`producerProjectNumber: 551503664846` — **identical across two different Firebase
+projects.** It is Firebase's shared reCAPTCHA infrastructure for phone auth, not
+a per-project key. Do not read it as evidence of which project is loaded, and do
+not expect that key to appear in your Cloud reCAPTCHA console: it is a classic
+(`6L…`) key, and classic keys live at `google.com/recaptcha/admin`, never in the
+Enterprise key list. An empty Enterprise key list is normal.
+
+**Vite reads `.env` once, at startup.** A dev server left running from before an
+`.env` edit keeps serving the old config no matter how often the page is
+reloaded. When swapping Firebase projects, kill every server on the port first,
+then confirm what is actually being served:
+
+```
+curl -s http://localhost:3000/otp-test.ts | grep -o 'your-project-id'
+```
+
+The reliable in-page check is the `Config loaded. project: …` line, **not**
+`producerProjectNumber`.
+
+#### What is confirmed working
+
+So nobody re-checks it: the widget renders and solves, a ~2,300-character token
+is produced, the request carries `phoneNumber`, `clientType`, `captchaResponse`,
+`recaptchaVersion` and `recaptchaToken`, and both `recaptchaParams` and
+`recaptchaConfig` return HTTP 200. The client is fine. Google rejects a
+valid-looking token at a level we cannot see or change.
+
+#### If someone wants to try again
+
+Two things were never tested, both cheap, neither likely given that a fresh
+project fails:
+
+1. **App Check enforcement** on the Authentication API (Firebase Console → App
+   Check → APIs). The harness sends no attestation.
+2. **API-key *API* restrictions** — distinct from referrer restrictions. Google
+   Cloud Console → Credentials → the browser key must permit **Identity Toolkit
+   API** and **Token Service API**.
+
+Beyond those, escalate to Firebase support rather than re-testing the table
+above.
+
+### Why this is not a blocker
+
+`MIGRATION_PLAN.md` Day 2 pre-authorised the fallback: `requireAuth` presents the
+same `req.user` either way, so nothing downstream depends on which path issued
+the token. §14.1 is explicit that a clearly-labelled stub is acceptable and that
+claiming a live integration you do not have is the fastest way to lose a panel.
+
+Note also that Firebase is not interchangeable with an SMS gateway. Firebase
+**replaces** these OTP endpoints — Google generates, delivers and verifies its
+own code. Sending *our* codes through a gateway (MSG91, Twilio, AWS SNS) instead
+requires TRAI **DLT registration**: a Principal Entity, a registered sender
+header, and a registered template, which needs a registered entity and takes
+days at minimum. Firebase was chosen precisely to sidestep that, which is why
+"just use Twilio" is not a same-week substitute.
 
 ## Keeping the deploy warm
 
