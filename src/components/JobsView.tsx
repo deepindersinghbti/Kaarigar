@@ -15,11 +15,14 @@ import {
 } from 'lucide-react';
 import { JobItem, SupportedLanguage, SyncState } from '../types';
 import { SyncBadge } from './SyncBadge';
+import { SendReviewLink } from './SendReviewLink';
 import { TRANSLATIONS } from '../data/translations';
 import { todayIso } from '../utils/date';
 
 interface JobsViewProps {
   jobs: JobItem[];
+  /** Shown in the share text the customer receives, so it names a person. */
+  workerName: string;
   currentLanguage: SupportedLanguage;
   onAddJobVoice: () => void;
   /**
@@ -33,6 +36,7 @@ interface JobsViewProps {
 
 export const JobsView: React.FC<JobsViewProps> = ({
   jobs,
+  workerName,
   syncStateOf,
   currentLanguage,
   onAddJobVoice,
@@ -269,6 +273,13 @@ export const JobsView: React.FC<JobsViewProps> = ({
                   ))}
                 </div>
               )}
+
+              {/* Renders nothing unless the job is COMPLETED or SETTLED. */}
+              <SendReviewLink
+                job={job}
+                workerName={workerName}
+                currentLanguage={currentLanguage}
+              />
             </div>
           ))
         )}

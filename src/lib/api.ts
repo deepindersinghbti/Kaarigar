@@ -133,6 +133,21 @@ export const api = {
     return body.job;
   },
 
+  /**
+   * Mint the review link a worker sends to their customer.
+   *
+   * Owner-scoped server-side: minting for a job you do not own answers 404, so
+   * there is nothing to check here beyond being signed in. The URL comes back
+   * absolute, built from the server's own resolveOrigin(), so it matches the
+   * passport QR's origin rather than being reassembled on the client.
+   */
+  async createReviewLink(jobId: string): Promise<{ url: string; jobId: string }> {
+    return request<{ url: string; jobId: string }>('/api/reviews/link', {
+      method: 'POST',
+      body: JSON.stringify({ jobId }),
+    });
+  },
+
   async listEntries(period = 'all'): Promise<KamaiEntry[]> {
     const body = await request<{ entries: KamaiEntry[] }>(
       `/api/ledger/entries?period=${encodeURIComponent(period)}`
