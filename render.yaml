@@ -83,10 +83,28 @@ services:
       # before login existed. AuthProvider replaced it. Do not reintroduce it:
       # a 401 now means "sign in", not "ship a credential".
 
-      # VITE_USE_API: per-screen data source switch (src/lib/featureFlags.ts).
-      # Unset means every screen reads localStorage, which is today's default
-      # and changes nothing. Declared now so the screen-by-screen migration can
-      # flip screens on the deploy without editing this file mid-week.
-      # Day 9 requires a recorded decision on its value in the demo build.
+      # VITE_USE_API: per-screen data source switch (src/lib/featureFlags.ts),
+      # mapped onto App's three state slices by src/lib/dataSource.ts.
+      #
+      # SET TO "all" - AND THIS IS THE DAY 9 DECISION, RECORDED HERE.
+      #
+      # It is a declared value rather than sync:false on purpose. A dashboard-
+      # only setting is invisible to everyone who reads this repository, and
+      # "which screens are on the API in the demo build" is a question the team
+      # must be able to answer by reading the source rather than by asking
+      # whoever last opened Render. The runbook requirement is that the answer
+      # is recorded; this is the recording.
+      #
+      # "all" rather than a subset because a subset is not the smaller step it
+      # looks like: the dashboard reads all three data domains, so any flag that
+      # includes `home` pulls all three anyway. See dataSource.ts.
+      #
+      # RUNNING THE DEMO CONFIG DAILY IS THE POINT. Every day the deploy runs a
+      # configuration we do not intend to present is a day of untested risk
+      # banked against the one morning it cannot be spent.
+      #
+      # Vite inlines this at BUILD time. Changing it needs a REDEPLOY, not a
+      # restart - a restart leaves the old value compiled into the JS and looks
+      # exactly like the change was ignored.
       - key: VITE_USE_API
-        sync: false
+        value: all

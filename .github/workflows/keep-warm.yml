@@ -1,0 +1,73 @@
+# Manual pre-demo warmer for the Render free instance.
+#
+# THIS IS NOT THE STANDING MONITOR. UptimeRobot is - see "Keeping the deploy
+# warm" in README.md for the URL and the alert condition. This workflow exists
+# only to warm the service on demand, immediately before a rehearsal or the
+# demo itself, without waiting for the next external poll.
+#
+# WHY THERE IS NO `schedule:` HERE.
+#
+# A cron in this workflow was the original design and was rejected on review,
+# correctly. Actions bills per job rounded UP to the minute, and this repository
+# is private, so a schedule tight enough to beat the 15-minute spin-down costs
+# ~1,950 of the 2,000 free minutes/month. That is nearly the entire CI allowance
+# for a repository that will want CI before Day 9, spent on a trigger that is
+# best-effort and runs late under load anyway - so it would consume the budget
+# AND still miss windows.
+#
+# An external uptime monitor costs zero Actions minutes and fires on time. The
+# scheduling belongs there; only the manual warm-up belongs here.
+#
+# WHY NOT AN INTERNAL SELF-PING, for the record: Render free spins the CONTAINER
+# down, so a setInterval inside the server stops with it. A timer that dies
+# alongside the thing it was meant to wake cannot wake it, and one missed tick
+# leaves the service asleep with the only component that could fix it asleep too.
+
+name: Warm the deploy (manual)
+
+on:
+  workflow_dispatch:
+
+# The token needs nothing. Narrowing it means a compromised action here cannot
+# touch the repository.
+permissions: {}
+
+concurrency:
+  group: keep-warm
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping /api/health
+        run: |
+          URL="${{ vars.KEEP_WARM_URL || 'https://kaarigar.onrender.com/api/health' }}"
+          echo "Pinging $URL"
+
+          # --max-time 90 because a COLD start on Render free takes ~50s. A
+          # shorter timeout would abandon exactly the request doing the useful
+          # work - waking the service - and report failure while the wake-up it
+          # triggered succeeded.
+          CODE=$(curl -s -o /tmp/body.json -w '%{http_code}' --max-time 90 \
+                      --retry 2 --retry-delay 5 "$URL" || echo 000)
+
+          echo "HTTP $CODE"
+          cat /tmp/body.json 2>/dev/null || true
+          echo
+
+          if [ "$CODE" != "200" ]; then
+            echo "::error::Health check returned $CODE - the service may be down, not merely cold."
+            exit 1
+          fi
+
+          # A 200 with db.connected=false means the process is up but Atlas is
+          # unreachable. Warm but broken is still broken. This is the same
+          # condition the UptimeRobot keyword monitor alerts on.
+          if grep -q '"connected":false' /tmp/body.json; then
+            echo "::error::Service is up but the database is unreachable."
+            exit 1
+          fi
+
+          echo "Service is warm and the database is reachable."
