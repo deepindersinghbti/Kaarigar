@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { WorkerProfile, SupportedLanguage } from '../types';
 import { TRANSLATIONS } from '../data/translations';
+import { passportUrl } from '../lib/passportLink';
 
 interface DigitalPassportProps {
   profile: WorkerProfile;
@@ -35,22 +36,37 @@ export const DigitalPassport: React.FC<DigitalPassportProps> = ({
   const [isFlipped, setIsFlipped] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  /**
+   * Share the PUBLIC passport page.
+   *
+   * Both branches were wrong before this. The clipboard branch copied
+   * `https://kaarigar.app/passport/{id}` - a domain this project never serves,
+   * keyed by the internal profile id rather than the public handle - so the one
+   * thing a worker could hand a customer led nowhere. The navigator.share branch
+   * sent window.location.href, which is the in-app route (/passport) and needs a
+   * login to open, so a customer received a link to a screen they cannot reach.
+   *
+   * Both now send the same URL the QR encodes, built by passportUrl() from the
+   * origin the server reported. They cannot diverge, which matters because the
+   * QR may end up printed.
+   */
   const handleShare = () => {
+    const url = passportUrl(profile.passportHandle);
+
     if (navigator.share) {
       navigator
         .share({
           title: `${profile.name} - Verified Digital Kaarigar Passport`,
-          text: `View ${profile.name}'s verified ${profile.trade} passport with 18 years experience & Skill India certification.`,
-          url: window.location.href,
+          text: `View ${profile.name}'s verified ${profile.trade} work history and reviews.`,
+          url,
         })
         .catch(() => {});
-    } else {
-      navigator.clipboard.writeText(
-        `https://kaarigar.app/passport/${profile.id}`
-      );
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      return;
     }
+
+    navigator.clipboard.writeText(url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   return (
