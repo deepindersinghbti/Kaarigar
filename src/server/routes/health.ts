@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { isDbConnected, getDbErrorCategory } from '../db';
+import { resolveOrigin } from '../lib/origin';
 
 /**
  * health - liveness and dependency state.
@@ -17,9 +18,24 @@ import { isDbConnected, getDbErrorCategory } from '../db';
 
 export const healthRouter = Router();
 
-healthRouter.get('/', (_req: Request, res: Response) => {
+healthRouter.get('/', (req: Request, res: Response) => {
   res.json({
     status: 'ok',
+    /**
+     * The origin the SERVER believes it is reachable at - the same value
+     * resolveOrigin() gives the passport QR.
+     *
+     * Published so the client's Share button can build the identical URL rather
+     * than guessing at one. window.location.origin is right in every ordinary
+     * case and wrong in exactly the case that matters: when PUBLIC_ORIGIN is set
+     * to pin printed QR codes to a chosen domain, a client guessing from its own
+     * location would hand out a different link than the QR encodes. One of them
+     * would then be wrong on a printed card, and nobody would find out until
+     * someone scanned it.
+     *
+     * Not a disclosure: this is the origin the caller already used to reach here.
+     */
+    publicOrigin: resolveOrigin(req),
     hasGeminiKey: !!process.env.GEMINI_API_KEY,
     db: {
       connected: isDbConnected(),

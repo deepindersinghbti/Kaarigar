@@ -13,6 +13,8 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
+import { resolveDemoOtp, demoOtpAccepts } from '../src/server/auth/demoOtp';
+
 const BASE = process.env.TEST_BASE_URL || 'http://localhost:3000';
 
 let passed = 0;
@@ -168,6 +170,70 @@ async function main() {
   check('db error is a category or null',
     err === null || ['unreachable', 'auth', 'timeout', 'unknown'].includes(err),
     `got ${JSON.stringify(err)}`);
+
+  // ---------------------------------------------------------------------
+  // Demo OTP bypass. Two properties, both load-bearing: it is OFF unless
+  // explicitly enabled, and when on it touches exactly one number.
+  //
+  // Asserted in-process rather than over HTTP because both require controlling
+  // the server's environment, and the suite runs against an already-started
+  // server whose env it cannot change. resolveDemoOtp() reads process.env on
+  // every call precisely so this is testable.
+  // ---------------------------------------------------------------------
+  console.log('\ndemo OTP bypass');
+
+  const savedEnv = {
+    enabled: process.env.DEMO_OTP_ENABLED,
+    phone: process.env.DEMO_OTP_PHONE,
+    code: process.env.DEMO_OTP_CODE,
+  };
+
+  try {
+    // -- off by default --------------------------------------------------
+    delete process.env.DEMO_OTP_ENABLED;
+    delete process.env.DEMO_OTP_PHONE;
+    delete process.env.DEMO_OTP_CODE;
+
+    check('off when no env is set', resolveDemoOtp() === null);
+    check('accepts nothing when off', demoOtpAccepts('+919876543210', '000000') === false);
+
+    // Config present but not switched on: still off. Enabling must be explicit,
+    // never a side effect of having set the other two.
+    process.env.DEMO_OTP_PHONE = '+919876543210';
+    process.env.DEMO_OTP_CODE = '424242';
+    check('off until DEMO_OTP_ENABLED is true', resolveDemoOtp() === null);
+    check('accepts nothing while unenabled', demoOtpAccepts('+919876543210', '424242') === false);
+
+    // Enabled but malformed: unparseable means off, not partially on.
+    process.env.DEMO_OTP_ENABLED = 'true';
+    process.env.DEMO_OTP_CODE = 'abc';
+    check('off when the code is unparseable', resolveDemoOtp() === null);
+    process.env.DEMO_OTP_CODE = '424242';
+    process.env.DEMO_OTP_PHONE = 'not-a-phone';
+    check('off when the phone is unparseable', resolveDemoOtp() === null);
+
+    // -- scoped to exactly one number ------------------------------------
+    process.env.DEMO_OTP_PHONE = '+919876543210';
+    check('on when fully configured', resolveDemoOtp() !== null);
+    check('accepts the demo number with the fixed code',
+      demoOtpAccepts('+919876543210', '424242') === true);
+
+    check('a DIFFERENT number is unaffected by the same code',
+      demoOtpAccepts('+919000000123', '424242') === false);
+    check('the demo number still rejects a wrong code',
+      demoOtpAccepts('+919876543210', '111111') === false);
+    check('no length-prefix match',
+      demoOtpAccepts('+919876543210', '4242') === false);
+  } finally {
+    for (const [k, v] of Object.entries({
+      DEMO_OTP_ENABLED: savedEnv.enabled,
+      DEMO_OTP_PHONE: savedEnv.phone,
+      DEMO_OTP_CODE: savedEnv.code,
+    })) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  }
 
   console.log(`\n${passed} passed, ${failed} failed\n`);
   process.exit(failed === 0 ? 0 : 1);

@@ -4,6 +4,7 @@ import { randomUUID, randomInt } from 'crypto';
 import { uuidv7 } from '../../lib/ids';
 import { getDb, isDbConnected } from '../db';
 import { requireAuth } from '../middleware/auth';
+import { demoOtpAccepts } from '../auth/demoOtp';
 import {
   signAccessToken,
   signRefreshToken,
@@ -169,7 +170,22 @@ identityRouter.post('/otp/verify', async (req: Request, res: Response) => {
       return res.status(429).json({ error: 'too_many_attempts', message: 'Too many attempts. Request a new code.' });
     }
 
-    if (!otpMatches(code, challengeId, challenge.codeHash)) {
+    /**
+     * The real hashed code, or the demo bypass for one configured number.
+     *
+     * demoOtpAccepts() is false whenever the bypass is off, and false for every
+     * phone that is not the configured one - checked before the submitted code
+     * is examined - so this line changes nothing for any other number.
+     *
+     * It sits INSIDE the existing guards on purpose. The challenge must still
+     * exist, be unconsumed, be unexpired, and be under the attempt cap before
+     * we get here, so the bypass shortens the code, never the flow.
+     */
+    const accepted =
+      otpMatches(code, challengeId, challenge.codeHash) ||
+      demoOtpAccepts(challenge.phone as string, code);
+
+    if (!accepted) {
       await db.collection(CHALLENGES).updateOne({ _id: challengeId as never }, { $inc: { attempts: 1 } });
       return res.status(401).json({
         error: 'incorrect_code',
