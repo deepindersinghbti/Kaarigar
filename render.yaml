@@ -78,22 +78,10 @@ services:
       # restart. A restart leaves the old value compiled into the JS and the
       # change appears to have been ignored.
 
-      # VITE_DEMO_TOKEN: TEMPORARY. Bearer token for the seeded demo worker.
-      #
-      # Without it the deploy builds green and looks healthy while
-      # /api/assistant/process returns 401 for every request - authHeader()
-      # (src/lib/authToken.ts) emits no header and requireAuth rejects. The
-      # voice flow is the only feature currently demonstrable in the app, so
-      # omitting this ships a deploy whose one working feature is broken.
-      #
-      # It expires in 12 hours and it ships in the browser bundle, which makes
-      # it a live credential for the demo account on a public origin. Acceptable
-      # against seed data; mint a fresh one with `npm run demo:token` and
-      # redeploy when it lapses.
-      #
-      # DELETE THIS KEY once AuthProvider lands. Day 9 confirms it is gone.
-      - key: VITE_DEMO_TOKEN
-        sync: false
+      # VITE_DEMO_TOKEN IS GONE. It was a 12-hour bearer token for the seeded
+      # demo worker, compiled into the browser bundle so the voice flow worked
+      # before login existed. AuthProvider replaced it. Do not reintroduce it:
+      # a 401 now means "sign in", not "ship a credential".
 
       # VITE_USE_API: per-screen data source switch (src/lib/featureFlags.ts).
       # Unset means every screen reads localStorage, which is today's default
