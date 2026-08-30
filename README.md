@@ -285,3 +285,70 @@ unadvertised URL. It is not acceptable in the build that ships to a demo.
 `vite.config.ts` (the `main` entry is the default), and delete `otp-test.html`
 and `otp-test.ts` once the go/no-go is recorded — the harness itself says it is
 throwaway.
+
+## Rate bands: sourcing the fair-price data
+
+The Mol-Bhav engine (§4C) serves bands from `rate_bands`, seeded from
+**`data/rate-bands.csv`** — one row per band, with a mandatory `source` column.
+
+### The rates are currently NOT sourced
+
+Every band still carries the placeholder sentinel, and the API reports
+`seededFrom` as `"PLACEHOLDER - not sourced, replace before demo"`, so an
+unsourced band announces itself rather than passing as authoritative.
+
+**This is deliberate, and it is not the same as being finished.** §14.1 is
+explicit that claiming a source you do not have is the fastest way to lose a
+panel — so a plausible number under a fabricated *"CPWD DSR 2024"* citation
+would be strictly worse than an obvious placeholder.
+
+```bash
+npm run check:rates
+```
+
+Reports what the **database** actually serves and exits non-zero while anything
+is unsourced. It reads the database rather than the CSV, because the two diverge
+the moment someone forgets to re-seed. An **empty** citation counts as unsourced
+too — that is the worst case of the three, carrying neither a source nor a
+warning.
+
+### Replacing a row with real data
+
+1. Find the figure in a published schedule
+2. Put it in `p25`/`p50`/`p75`, and the statutory floor in `wage_floor`
+3. Replace `source` with a citation precise enough for a stranger to check —
+   `"CPWD DSR 2023 Vol-2 item 1.10.2"`, not `"CPWD"`
+4. `npm run seed:rates` then `npm run check:rates`
+
+`seed:rates` **refuses** to write unsourced rows unless `--allow-unsourced` is
+passed, so shipping placeholders is a deliberate act rather than an oversight.
+
+### A caution specific to CPWD DSR
+
+DSR items are construction line-items — *"wiring for light point with 1.5 sq mm
+FR PVC insulated copper conductor in surface/recessed conduit"* — **not**
+consumer service tasks like `fan_install`. Mapping one to the other is an
+editorial judgement, not a lookup.
+
+If you make that judgement, say so in the citation: *"derived from CPWD DSR 2023
+item 1.10.2, labour component only"* — rather than implying CPWD published a
+rate for fan installation. It did not.
+
+### Sources
+
+- CPWD Delhi Schedule of Rates — [cpwd.gov.in](https://cpwd.gov.in) (Vol-1 Civil, Vol-2 Electrical)
+- Delhi minimum wages — [labour.delhi.gov.in](https://labour.delhi.gov.in/labour/current-minimum-wage-rate) (rates are in the linked PDFs, not on the page)
+- Central sphere minimum wages — [clc.gov.in/clc/min-wages](https://clc.gov.in/clc/min-wages)
+
+Note that published secondary sources **disagree** on the current Delhi skilled
+rate. Read the figure from the Labour Department notification PDF itself and
+cite the order number and effective date.
+
+### One known-bad row
+
+`electrician/unsupported_task` sits in the database with an **empty**
+`seededFrom` and does not appear in the CSV. It is referenced nowhere in the
+repo — likely a leftover from manual testing. `check:rates` flags it as
+`NO CITATION AT ALL`. It has been left in place rather than deleted, because it
+is not this change's data to remove; delete it deliberately when someone
+confirms nothing depends on it.

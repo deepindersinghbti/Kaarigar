@@ -1,0 +1,71 @@
+# Rate bands for the Mol-Bhav fair-price engine (Architecture section 4C).
+#
+# ONE ROW = ONE PUBLISHED BAND. The `source` column is a CITATION and is
+# mandatory. A row whose source is the UNSOURCED sentinel is refused by
+# `npm run seed:rates` unless --allow-unsourced is passed explicitly, so an
+# unsourced band can only ever reach the database as a deliberate act.
+#
+# HOW TO REPLACE A ROW WITH REAL DATA
+#   1. Find the figure in a published schedule (see SOURCES below).
+#   2. Put the number in p25/p50/p75 and the statutory floor in wage_floor.
+#   3. Replace `source` with a citation precise enough for a stranger to check:
+#        "CPWD DSR 2023 Vol-2 item 1.10.2"
+#        "Delhi Labour Dept order F.No.(142)/02/MW/VII/Part file/211-241, eff 01/04/2025"
+#      NOT "CPWD" and NOT "government rates". The API prints this string as the
+#      band's stated basis, so it is read by whoever is deciding whether to
+#      trust the number.
+#   4. `npm run seed:rates` then `npm run check:rates`.
+#
+# A CAUTION ABOUT CPWD DSR SPECIFICALLY. DSR items are construction line-items
+# ("wiring for light point with 1.5 sq mm FR PVC insulated copper conductor in
+# surface/recessed conduit"), not consumer service tasks like `fan_install`.
+# Mapping one to the other is an editorial judgement, not a lookup. If you make
+# that judgement, say so in the citation - "derived from CPWD DSR 2023 item
+# 1.10.2, labour component only" - rather than implying CPWD published a rate
+# for fan installation. It did not.
+#
+# SOURCES
+#   CPWD Delhi Schedule of Rates   cpwd.gov.in  (Vol-1 Civil, Vol-2 Electrical)
+#   Delhi minimum wages            labour.delhi.gov.in/labour/current-minimum-wage-rate
+#   Central sphere minimum wages   clc.gov.in/clc/min-wages
+#   State PWD schedules            per-state PWD site
+#
+# `unit` is carried here but NOT yet written to the database: RateBand has no
+# unit field and types.ts is frozen (see section 6.2 - wageFloor is a DAILY wage
+# and was being applied to per-sqft tasks). When that contract change is agreed,
+# persisting this column is a one-line change in the seeder. Until then it
+# documents which rows are per-unit so the distinction is at least visible.
+#
+trade,task_code,unit,p25,p50,p75,wage_floor,source
+electrician,fan_install,job,400,600,850,350,UNSOURCED
+electrician,fan_repair,job,250,400,600,350,UNSOURCED
+electrician,switchboard_install,job,800,1200,1800,350,UNSOURCED
+electrician,mcb_replace,job,600,900,1400,350,UNSOURCED
+electrician,house_wiring_point,point,250,350,500,350,UNSOURCED
+electrician,inverter_install,job,1200,1800,2600,350,UNSOURCED
+electrician,geyser_point,point,700,1000,1500,350,UNSOURCED
+electrician,earthing_check,job,500,800,1200,350,UNSOURCED
+electrician,light_fitting,job,200,300,450,350,UNSOURCED
+electrician,fault_diagnosis,job,300,500,800,350,UNSOURCED
+plumber,tap_replace,job,200,350,500,350,UNSOURCED
+plumber,leak_repair,job,300,500,800,350,UNSOURCED
+plumber,toilet_install,job,1200,1800,2500,350,UNSOURCED
+plumber,pipe_replace_metre,metre,150,250,400,350,UNSOURCED
+plumber,water_tank_clean,job,600,900,1400,350,UNSOURCED
+plumber,motor_install,job,800,1200,1800,350,UNSOURCED
+plumber,drain_unblock,job,400,650,1000,350,UNSOURCED
+plumber,geyser_plumbing,job,700,1000,1500,350,UNSOURCED
+carpenter,door_repair,job,400,700,1100,350,UNSOURCED
+carpenter,lock_install,job,250,400,600,350,UNSOURCED
+carpenter,furniture_repair,job,500,900,1500,350,UNSOURCED
+carpenter,window_frame,job,1000,1600,2400,350,UNSOURCED
+carpenter,shelf_install,job,400,650,1000,350,UNSOURCED
+carpenter,modular_fitting_day,day,1000,1400,2000,350,UNSOURCED
+painter,wall_paint_sqft,sqft,8,14,22,350,UNSOURCED
+painter,putty_sqft,sqft,6,10,16,350,UNSOURCED
+painter,wood_polish_sqft,sqft,15,25,40,350,UNSOURCED
+painter,day_rate,day,700,1000,1500,350,UNSOURCED
+mason,brickwork_sqft,sqft,35,55,80,350,UNSOURCED
+mason,plaster_sqft,sqft,18,28,45,350,UNSOURCED
+mason,tile_laying_sqft,sqft,30,50,75,350,UNSOURCED
+mason,day_rate,day,800,1100,1600,350,UNSOURCED
