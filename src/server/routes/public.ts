@@ -1,10 +1,15 @@
-import { Router } from 'express';
+import { Router, urlencoded } from 'express';
 import type { Request, Response } from 'express';
 import QRCode from 'qrcode';
 
 import { isDbConnected } from '../db';
-import { findPublicProfileByHandle } from '../data/profiles';
+import { findPublicProfileByHandle, findDisplayNameByUserId, findOwnerIdByHandle } from '../data/profiles';
+import { resolveOrigin } from '../lib/origin';
 import type { PublicProfile } from '../data/profiles';
+import { createReview, summariseFor } from '../data/reviews';
+import type { ReviewSummary } from '../data/reviews';
+import { gateReviewToken } from './reputation';
+import type { ReviewRatings } from '../../types';
 
 /**
  * public - server-rendered surfaces that require no login and no app install.
@@ -49,33 +54,6 @@ function esc(value: unknown): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
-}
-
-// ---------------------------------------------------------------------------
-// Origin resolution
-// ---------------------------------------------------------------------------
-
-/**
- * The absolute origin this page is being served from.
- *
- * The QR must encode a REACHABLE absolute URL. A QR pointing at localhost is
- * useless the moment it leaves the machine that generated it, and one pointing
- * at http:// when the site is https:// produces a mixed-content warning on the
- * scanning phone - the worst possible first impression for a trust product.
- *
- * PUBLIC_ORIGIN wins when set, because that is the only way to be certain the
- * printed QR matches the domain the project actually demos on. Otherwise the
- * origin is reconstructed from the request. Render terminates TLS at its proxy
- * and forwards the original scheme in x-forwarded-proto, so reading req.protocol
- * alone yields "http" behind the proxy and bakes the wrong scheme into the QR.
- */
-function resolveOrigin(req: Request): string {
-  const configured = process.env.PUBLIC_ORIGIN;
-  if (configured) return configured.replace(/\/+$/, '');
-
-  const forwarded = String(req.headers['x-forwarded-proto'] ?? '').split(',')[0].trim();
-  const proto = forwarded || req.protocol || 'http';
-  return `${proto}://${req.get('host')}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -179,6 +157,20 @@ h1{font-size:26px;font-weight:800;letter-spacing:-.02em;margin-bottom:2px}
 .err code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#f3f4f6;
   padding:2px 6px;border-radius:5px;font-size:13px}
 
+.rsum{display:flex;gap:14px;align-items:stretch;background:rgba(17,24,39,.9);
+  border:1px solid #1f2937;border-radius:16px;padding:12px}
+.rbig{text-align:center;padding-right:14px;border-right:1px solid #1f2937;min-width:92px;
+  display:flex;flex-direction:column;justify-content:center}
+.rnum{font-size:28px;font-weight:900;color:#fb923c;line-height:1}
+.rout{font-size:11px;color:#9ca3af;font-weight:700}
+.rcount{font-size:10px;color:#9ca3af;margin-top:3px;text-transform:uppercase;font-weight:700}
+.raxes{flex:1;display:grid;grid-template-columns:1fr 1fr;gap:3px 12px;align-content:center}
+.axr{display:flex;justify-content:space-between;font-size:11px;color:#d1d5db}
+.axv{font-weight:900;color:#4ade80}
+.rq{font-size:12px;color:#d1d5db;font-style:italic;border-left:2px solid rgba(251,146,60,.5);
+  padding:2px 0 2px 10px;margin-top:8px}
+.rnote{font-size:10px;color:#6b7280;margin-top:8px}
+
 @media(max-width:520px){
   .bio-row{flex-direction:column;text-align:center;gap:12px}
   .qrow{flex-direction:column;text-align:center}
@@ -220,7 +212,48 @@ ${canonical ? `<meta property="og:url" content="${esc(canonical)}">\n<link rel="
 </html>`;
 }
 
-function renderPassport(p: PublicProfile, url: string, qrSvg: string): string {
+/**
+ * The reviews block on a public passport.
+ *
+ * Renders NOTHING when there are no reviews. A "0.0 out of 5" or an empty
+ * five-star row reads as a bad worker rather than a new one, and section 11's
+ * new-worker floor exists precisely because starting people at zero makes the
+ * platform useless to those who need it most. Absence is honest; a zero is not.
+ */
+function renderReviews(r: ReviewSummary): string {
+  if (r.count === 0 || r.average === null || !r.axes) return '';
+
+  const axisRow = (label: string, value: number) =>
+    `<div class="axr"><span>${esc(label)}</span><span class="axv">${esc(value.toFixed(1))}</span></div>`;
+
+  const quotes = r.recent
+    .filter((x) => x.text)
+    .slice(0, 2)
+    .map((x) => `<blockquote class="rq">${esc(x.text)}</blockquote>`)
+    .join('');
+
+  return `
+  <div class="sec">
+    <div class="sec-h">Customer Reviews</div>
+    <div class="rsum">
+      <div class="rbig">
+        <span class="rnum">${esc(r.average.toFixed(1))}</span>
+        <span class="rout">/ 5</span>
+        <div class="rcount">${esc(r.count)} ${r.count === 1 ? 'review' : 'reviews'}</div>
+      </div>
+      <div class="raxes">
+        ${axisRow('Workmanship', r.axes.workmanship)}
+        ${axisRow('Punctuality', r.axes.punctuality)}
+        ${axisRow('Price honesty', r.axes.priceHonesty)}
+        ${axisRow('Cleanliness', r.axes.cleanliness)}
+      </div>
+    </div>
+    ${quotes}
+    <p class="rnote">Each review is tied to one completed job and cannot be self-awarded.</p>
+  </div>`;
+}
+
+function renderPassport(p: PublicProfile, url: string, qrSvg: string, reviews: ReviewSummary): string {
   const verified = p.verifiedStatus === 'verified';
   const skills = Array.isArray(p.skills) ? p.skills : [];
   const certs = Array.isArray(p.certifications) ? p.certifications : [];
@@ -275,6 +308,8 @@ function renderPassport(p: PublicProfile, url: string, qrSvg: string): string {
   }
 
   ${p.bio ? `<div class="sec"><div class="sec-h">About</div><p class="bio">${esc(p.bio)}</p></div>` : ''}
+
+  ${renderReviews(reviews)}
 
   <div class="qrow">
     <div class="qbox">${qrSvg}</div>
@@ -364,6 +399,15 @@ publicRouter.get('/p/:handle', async (req: Request, res: Response) => {
 
     const url = `${resolveOrigin(req)}/p/${profile.passportHandle}`;
 
+    // Reviews are keyed by the owner's user id, which PublicProfile withholds -
+    // hence the separate server-side lookup. Absent or failed, the page still
+    // renders: a passport that 500s because its review count could not be read
+    // is worse than a passport with no review block.
+    const ownerId = await findOwnerIdByHandle(profile.passportHandle);
+    const reviews = ownerId
+      ? await summariseFor(ownerId)
+      : { count: 0, average: null, axes: null, recent: [] };
+
     // Error correction level Q (~25%) rather than the M default. This QR is
     // scanned off a phone screen, a printed card, and - per the demo plan - a
     // projector, where contrast is poor and part of the symbol may be washed
@@ -379,7 +423,7 @@ publicRouter.get('/p/:handle', async (req: Request, res: Response) => {
     // Short public cache: a passport changes rarely, but "rarely" is not
     // "never", and a stale trust signal is worse than an extra request.
     res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
-    res.status(200).send(renderPassport(profile, url, qrSvg));
+    res.status(200).send(renderPassport(profile, url, qrSvg, reviews));
   } catch (err) {
     console.error('[public] /p/:handle failed', err);
     res.status(500).send(
@@ -390,5 +434,253 @@ publicRouter.get('/p/:handle', async (req: Request, res: Response) => {
          <p>This passport could not be rendered. Please try again.</p></div>`
       )
     );
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Review flow (section 4D)
+// ---------------------------------------------------------------------------
+
+const AXIS_LABELS: Array<{ key: keyof ReviewRatings; label: string; hindi: string }> = [
+  { key: 'workmanship', label: 'Workmanship', hindi: 'काम की गुणवत्ता' },
+  { key: 'punctuality', label: 'Punctuality', hindi: 'समय पर आना' },
+  { key: 'priceHonesty', label: 'Price honesty', hindi: 'दाम में ईमानदारी' },
+  { key: 'cleanliness', label: 'Cleanliness', hindi: 'सफ़ाई' },
+];
+
+/**
+ * Extra styles for the review form, appended to the same STYLES block the
+ * passport uses so the two pages read as one product.
+ *
+ * The rating control is a radio group styled as five large buttons, NOT a star
+ * widget. Stars need JavaScript and a pointer; radios work with no script, with
+ * a keyboard, with a screen reader, and on a connection that dropped the
+ * bundle. Section 4H's 48dp floor is a size, which a star glyph fails at.
+ */
+const REVIEW_STYLES = `
+.rform{background:#fff;border:1px solid #e5e7eb;border-radius:24px;padding:22px}
+.jobref{background:#f9fafb;border:1px solid #e5e7eb;border-radius:16px;padding:12px 14px;margin-bottom:20px}
+.jobref .k{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#6b7280;font-weight:800}
+.jobref .t{font-size:15px;font-weight:800;color:#111827;margin-top:2px}
+.jobref .m{font-size:12px;color:#6b7280;margin-top:2px}
+.axis{margin-bottom:18px;border:0;padding:0}
+.axis>legend{font-size:13px;font-weight:800;color:#111827;padding:0}
+.axis .sub{font-size:11px;color:#6b7280;margin-bottom:8px}
+.scale{display:flex;gap:6px}
+.scale input{position:absolute;opacity:0;width:0;height:0}
+.scale label{
+  flex:1;min-width:48px;height:52px;display:flex;align-items:center;justify-content:center;
+  border:2px solid #e5e7eb;border-radius:14px;background:#f9fafb;cursor:pointer;
+  font-size:17px;font-weight:900;color:#6b7280;transition:.12s
+}
+.scale input:checked + label{background:#f97316;border-color:#f97316;color:#fff}
+.scale input:focus-visible + label{outline:3px solid #fdba74;outline-offset:2px}
+.scale-ends{display:flex;justify-content:space-between;font-size:10px;color:#9ca3af;margin-top:4px;font-weight:700}
+textarea{
+  width:100%;min-height:90px;border:2px solid #e5e7eb;border-radius:16px;padding:12px;
+  font:inherit;font-size:14px;resize:vertical;background:#f9fafb;color:#111827
+}
+textarea:focus{outline:none;border-color:#fb923c}
+.submit{
+  width:100%;height:56px;margin-top:18px;border:0;border-radius:16px;background:#f97316;color:#fff;
+  font-size:16px;font-weight:900;cursor:pointer
+}
+.done{background:#fff;border:1px solid #e5e7eb;border-radius:24px;padding:36px 24px;text-align:center}
+.done .tick{width:60px;height:60px;border-radius:50%;background:#dcfce7;color:#16a34a;
+  display:flex;align-items:center;justify-content:center;font-size:30px;margin:0 auto 14px}
+`;
+
+function reviewShell(title: string, body: string): string {
+  return shell(title, 'Rate the work you received.', body).replace(
+    '</style>',
+    `${REVIEW_STYLES}</style>`
+  );
+}
+
+function renderReviewForm(
+  token: string,
+  job: { title: string; date: string },
+  workerName: string,
+  error?: string
+): string {
+  const axes = AXIS_LABELS.map(
+    (a) => `
+    <fieldset class="axis">
+      <legend>${esc(a.label)}</legend>
+      <div class="sub">${esc(a.hindi)}</div>
+      <div class="scale">
+        ${[1, 2, 3, 4, 5]
+          .map(
+            (n) =>
+              `<input type="radio" id="${esc(a.key)}-${n}" name="${esc(a.key)}" value="${n}" required>` +
+              `<label for="${esc(a.key)}-${n}">${n}</label>`
+          )
+          .join('')}
+      </div>
+      <div class="scale-ends"><span>1 &mdash; poor</span><span>5 &mdash; excellent</span></div>
+    </fieldset>`
+  ).join('');
+
+  return reviewShell(
+    `Rate ${workerName} | Kaarigar`,
+    `
+<div class="eyebrow"><span class="dot"></span><span>Job-anchored review</span></div>
+<h1>How was the work?</h1>
+<p class="sub">&#2325;&#2366;&#2350; &#2325;&#2376;&#2360;&#2366; &#2352;&#2361;&#2366;? &bull; Tied to this one job.</p>
+
+${
+  error
+    ? `<div class="err" style="padding:14px;margin-bottom:14px;text-align:left"><p>${esc(error)}</p></div>`
+    : ''
+}
+
+<form class="rform" method="POST" action="/r/${esc(token)}">
+  <div class="jobref">
+    <div class="k">You are reviewing</div>
+    <div class="t">${esc(workerName)}</div>
+    <div class="m">${esc(job.title)}${job.date ? ` &bull; ${esc(job.date)}` : ''}</div>
+  </div>
+
+  ${axes}
+
+  <fieldset class="axis">
+    <legend>Anything to add?</legend>
+    <div class="sub">&#2325;&#2369;&#2331; &#2324;&#2352; &#2325;&#2361;&#2344;&#2366; &#2330;&#2366;&#2361;&#2375;&#2306; &#2340;&#2379; &#2354;&#2367;&#2326;&#2375;&#2306; (optional)</div>
+    <textarea name="text" maxlength="1000" placeholder="What went well, or what could be better?"></textarea>
+  </fieldset>
+
+  <button class="submit" type="submit">Submit review</button>
+</form>
+
+<p class="foot">
+  This review is permanently attached to one completed job. It cannot be edited or repeated.<br>
+  It becomes part of that worker's portable passport &mdash; owned by them, not by us.
+</p>`
+  );
+}
+
+function renderReviewDone(workerName: string): string {
+  return reviewShell(
+    'Thank you | Kaarigar',
+    `<div class="done">
+       <div class="tick">&#10003;</div>
+       <h1 style="font-size:20px">Thank you</h1>
+       <p style="color:#6b7280;font-size:14px;margin-top:6px">
+         Your review is now part of ${esc(workerName)}'s passport.<br>
+         It helps the next customer trust them.
+       </p>
+     </div>`
+  );
+}
+
+function renderReviewClosed(message: string): string {
+  return reviewShell(
+    'Review link | Kaarigar',
+    `<div class="err"><h1>This link cannot be used</h1><p>${esc(message)}</p></div>`
+  );
+}
+
+/**
+ * GET /r/:token - the customer's review form.
+ *
+ * No auth and no app, which is the entire point: the customer who just paid a
+ * worker will not install anything to leave a rating, and a flow that asks them
+ * to is a flow that collects no reviews.
+ *
+ * Like /p/:handle, this previously answered 200 with the React shell for ANY
+ * token, so an expired or forged link looked alive and served nothing. Every
+ * failure below is now a real status with a real page.
+ */
+publicRouter.get('/r/:token', async (req: Request, res: Response) => {
+  res.type('html');
+
+  if (!isDbConnected()) {
+    res.status(503).send(renderReviewClosed('This link could not be opened. Please try again in a moment.'));
+    return;
+  }
+
+  try {
+    const gate = await gateReviewToken(String(req.params.token ?? ''));
+    if (!gate.ok) {
+      res.status(gate.status).send(renderReviewClosed(gate.message));
+      return;
+    }
+
+    const name = await findDisplayNameByUserId(gate.job.kaarigarId);
+
+    // Never cached. The link is single-use, and a cached form would let someone
+    // reload their way back to a page for a review that has already landed.
+    res.set('Cache-Control', 'no-store');
+    res.status(200).send(renderReviewForm(String(req.params.token ?? ''), gate.job, name));
+  } catch (err) {
+    console.error('[public] GET /r/:token failed', err);
+    res.status(500).send(renderReviewClosed('Something went wrong opening this link.'));
+  }
+});
+
+/**
+ * POST /r/:token - the same form, submitted.
+ *
+ * A plain HTML form post, so the flow needs no JavaScript at all. The JSON
+ * endpoint at POST /api/reviews exists alongside it for the app; both go
+ * through gateReviewToken and createReview, so they cannot disagree about who
+ * may review what.
+ */
+/**
+ * The urlencoded parser is mounted HERE, on this one route, rather than in the
+ * bootstrap.
+ *
+ * This is the only route in the application that receives an HTML form post -
+ * everything else speaks JSON, which app.use(express.json()) already covers.
+ * Scoping it keeps the bootstrap's rule intact (adding a route must never
+ * require editing it) and keeps a form parser off every JSON endpoint that has
+ * no use for one.
+ *
+ * Without it req.body is undefined for a form submission and every review is
+ * rejected as missing all four ratings - a failure that looks like broken
+ * validation rather than a missing parser.
+ */
+publicRouter.post('/r/:token', urlencoded({ extended: false }), async (req: Request, res: Response) => {
+  res.type('html');
+  const token = String(req.params.token ?? '');
+
+  if (!isDbConnected()) {
+    res.status(503).send(renderReviewClosed('Your review could not be saved. Please try again in a moment.'));
+    return;
+  }
+
+  try {
+    const gate = await gateReviewToken(token);
+    if (!gate.ok) {
+      res.status(gate.status).send(renderReviewClosed(gate.message));
+      return;
+    }
+
+    const name = await findDisplayNameByUserId(gate.job.kaarigarId);
+    const outcome = await createReview({
+      jobId: gate.job.id,
+      subjectId: gate.job.kaarigarId,
+      // A urlencoded form body arrives as strings; createReview coerces and
+      // bounds-checks each axis, so the same validation covers both entry points.
+      ratings: req.body,
+      text: req.body?.text,
+    });
+
+    if (outcome.status === 'rejected') {
+      // Re-render with the server's own message rather than a generic failure,
+      // so the customer can see which axis they missed.
+      res.status(400).send(renderReviewForm(token, gate.job, name, outcome.message));
+      return;
+    }
+    if (outcome.status === 'already_reviewed') {
+      res.status(409).send(renderReviewClosed('This job has already been reviewed. Thank you.'));
+      return;
+    }
+
+    res.set('Cache-Control', 'no-store');
+    res.status(201).send(renderReviewDone(name));
+  } catch (err) {
+    console.error('[public] POST /r/:token failed', err);
+    res.status(500).send(renderReviewClosed('Your review could not be saved.'));
   }
 });

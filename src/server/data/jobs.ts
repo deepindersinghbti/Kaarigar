@@ -132,3 +132,56 @@ export async function jobExists(kaarigarId: string, jobId: string): Promise<bool
   const doc = await getDb().collection(JOBS).findOne({ _id: jobId as never, kaarigarId }, { projection: { _id: 1 } });
   return doc !== null;
 }
+
+/**
+ * States in which a completed job may be reviewed.
+ *
+ * Section 8 says "COMPLETED"; the state machine adds SETTLED between COMPLETED
+ * and REVIEWED, and a job whose payment has been logged is plainly still
+ * reviewable. Both are accepted. Anything earlier is not: section 4D's whole
+ * defence against fake reviews is that the work provably happened.
+ */
+const REVIEWABLE: JobState[] = ['COMPLETED', 'SETTLED'];
+
+export interface ReviewableJob {
+  id: string;
+  kaarigarId: string;
+  title: string;
+  customerName: string;
+  status: JobState;
+  date: string;
+  reviewable: boolean;
+}
+
+/**
+ * Look up a job by id for the review flow, UNSCOPED BY OWNER.
+ *
+ * Every other read in this module is filtered by kaarigarId because the caller
+ * is the owner. This one cannot be: the reviewer is a customer with no account,
+ * holding a signed link. Authorisation for this read is the HMAC on that token,
+ * verified before this is ever called - see lib/reviewToken.ts.
+ *
+ * The projection is narrow on purpose. This feeds a page shown to someone who
+ * is not the worker, so amount, agreedPrice, customerPhone and location stay
+ * out of it; the reviewer needs to recognise the job, not audit it.
+ */
+export async function findJobForReview(jobId: string): Promise<ReviewableJob | null> {
+  const doc = await getDb()
+    .collection(JOBS)
+    .findOne(
+      { _id: jobId as never },
+      { projection: { kaarigarId: 1, title: 1, customerName: 1, status: 1, date: 1 } }
+    );
+  if (!doc) return null;
+
+  const status = doc.status as JobState;
+  return {
+    id: String(doc._id),
+    kaarigarId: String(doc.kaarigarId),
+    title: String(doc.title ?? ''),
+    customerName: String(doc.customerName ?? ''),
+    status,
+    date: String(doc.date ?? ''),
+    reviewable: REVIEWABLE.includes(status),
+  };
+}
