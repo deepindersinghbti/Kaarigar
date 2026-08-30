@@ -9,7 +9,13 @@
     "start": "node dist/server.cjs",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "seed": "tsx scripts/seed.ts",
+    "seed:rates": "tsx scripts/seedRateBands.ts",
+    "demo:token": "tsx scripts/demoToken.ts",
+    "test:regressions": "tsx scripts/test-regressions.ts",
+    "check:tree": "tsx scripts/check-tree.ts",
+    "prepare": "git config core.hooksPath .githooks || exit 0"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

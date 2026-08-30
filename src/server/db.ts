@@ -27,6 +27,39 @@ let db: Db | null = null;
 let lastError: Error | null = null;
 
 /**
+ * Background reconnection.
+ *
+ * connectDb() runs once at boot, and a transient failure there used to disable
+ * the database until someone restarted the process - which actually happened
+ * during Day 7 testing: a `read ECONNRESET` at startup left every authenticated
+ * route answering 503 on an otherwise healthy server.
+ *
+ * On a demo day that is the difference between a five-second blip and a dead
+ * app. Retries run with backoff and stop as soon as a connection succeeds.
+ */
+let retryTimer: NodeJS.Timeout | null = null;
+let retryDelayMs = 2_000;
+const MAX_RETRY_DELAY_MS = 30_000;
+
+function scheduleRetry(): void {
+  if (retryTimer || db) return;
+  retryTimer = setTimeout(() => {
+    retryTimer = null;
+    void connectDb().then((connected) => {
+      if (connected) {
+        retryDelayMs = 2_000;
+        console.log('[db] reconnected');
+      } else {
+        retryDelayMs = Math.min(retryDelayMs * 2, MAX_RETRY_DELAY_MS);
+        scheduleRetry();
+      }
+    });
+  }, retryDelayMs);
+  // Do not hold the process open purely to retry.
+  retryTimer.unref?.();
+}
+
+/**
  * Connect once, at boot. Idempotent.
  *
  * Never throws. A missing URI or an unreachable cluster must not stop the
@@ -66,6 +99,7 @@ export async function connectDb(): Promise<Db | null> {
     client = null;
     db = null;
     console.error('[db] connection failed:', lastError.message);
+    scheduleRetry();
     if (/timed out|ETIMEDOUT|ServerSelection/i.test(lastError.message)) {
       console.error(
         '[db] A timeout almost always means this machine\'s IP is not in the Atlas\n' +
@@ -98,12 +132,35 @@ export function isDbConnected(): boolean {
   return db !== null;
 }
 
-/** Last connection error, for surfacing in health output. */
-export function getDbError(): string | null {
+export type DbErrorCategory = 'unreachable' | 'auth' | 'timeout' | 'unknown';
+
+/**
+ * A CATEGORY, not the driver's message.
+ *
+ * /api/health is unauthenticated, and Mongo error strings can carry cluster
+ * hostnames and connection-string fragments. The category is enough for anyone
+ * operating the service to know what to check; the full string stays in the
+ * logs, where it is already written on every failure.
+ */
+export function getDbErrorCategory(): DbErrorCategory | null {
+  if (!lastError) return null;
+  const m = lastError.message;
+  if (/timed out|ETIMEDOUT|ServerSelection/i.test(m)) return 'timeout';
+  if (/auth|credential|password|unauthorized/i.test(m)) return 'auth';
+  if (/ECONNREFUSED|ECONNRESET|ENOTFOUND|EHOSTUNREACH|network/i.test(m)) return 'unreachable';
+  return 'unknown';
+}
+
+/** Full driver message. Server-side only - never put this in a response. */
+export function getDbErrorDetail(): string | null {
   return lastError ? lastError.message : null;
 }
 
 export async function closeDb(): Promise<void> {
+  if (retryTimer) {
+    clearTimeout(retryTimer);
+    retryTimer = null;
+  }
   if (client) {
     await client.close();
     client = null;

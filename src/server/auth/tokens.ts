@@ -61,14 +61,19 @@ function secret(): string {
   return s;
 }
 
-export function signAccessToken(user: AuthUser): string {
+/**
+ * @param ttlSeconds override, used ONLY by scripts/demoToken.ts. The API never
+ * passes it - a long-lived access token is acceptable for a rehearsed demo
+ * build and is not acceptable for a real session.
+ */
+export function signAccessToken(user: AuthUser, ttlSeconds: number = ACCESS_TTL_SECONDS): string {
   const claims: AccessClaims = {
     sub: user.uid,
     phone: user.phone,
     roles: user.roles,
     typ: 'access',
   };
-  return jwt.sign(claims, secret(), { expiresIn: ACCESS_TTL_SECONDS });
+  return jwt.sign(claims, secret(), { expiresIn: ttlSeconds });
 }
 
 export function verifyAccessToken(token: string): AuthUser {

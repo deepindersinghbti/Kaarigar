@@ -1,0 +1,21 @@
+#!/bin/sh
+#
+# Refuse a commit whose tracked files import a file that is not tracked.
+#
+# The failure this prevents: a new module is written, its importers are staged,
+# the new file itself is left untracked, and the commit lands. It works locally
+# because the file is on disk. The next person pulls a tree that will not start,
+# and the stack trace points at the importer rather than the missing file.
+#
+# `tsc --noEmit` does not catch this - type-checking reads the working tree, not
+# the index - so this check is not redundant with the lint step.
+#
+# Bypass with `git commit --no-verify` if you genuinely mean to commit a
+# partial tree.
+
+npm run --silent check:tree || {
+  echo ""
+  echo "pre-commit: blocked. Fix the imports above, or 'git add' the missing files."
+  echo "            Use 'git commit --no-verify' to override deliberately."
+  exit 1
+}

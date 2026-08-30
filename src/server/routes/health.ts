@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
-import { isDbConnected, getDbError } from '../db';
+import { isDbConnected, getDbErrorCategory } from '../db';
 
 /**
  * health - liveness and dependency state.
@@ -23,7 +23,9 @@ healthRouter.get('/', (_req: Request, res: Response) => {
     hasGeminiKey: !!process.env.GEMINI_API_KEY,
     db: {
       connected: isDbConnected(),
-      error: getDbError(),
+      // A category, not the driver string. This endpoint is unauthenticated and
+      // Mongo errors can leak cluster hostnames. Detail is in the logs.
+      error: getDbErrorCategory(),
     },
     appName: 'Kaarigar Saathi',
   });
