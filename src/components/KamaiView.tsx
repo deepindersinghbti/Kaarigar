@@ -12,7 +12,8 @@ import {
   Download,
   Share2,
 } from 'lucide-react';
-import { KamaiEntry, SupportedLanguage } from '../types';
+import { KamaiEntry, SupportedLanguage, SyncState } from '../types';
+import { SyncBadge } from './SyncBadge';
 import { TRANSLATIONS } from '../data/translations';
 import { todayIso } from '../utils/date';
 
@@ -20,10 +21,13 @@ interface KamaiViewProps {
   kamaiList: KamaiEntry[];
   currentLanguage: SupportedLanguage;
   onAddKamaiVoice: () => void;
+  /** Sync state per record (section 9.1). See JobsView for why it is a function. */
+  syncStateOf: (recordId: string) => SyncState;
 }
 
 export const KamaiView: React.FC<KamaiViewProps> = ({
   kamaiList,
+  syncStateOf,
   currentLanguage,
   onAddKamaiVoice,
 }) => {
@@ -234,8 +238,9 @@ export const KamaiView: React.FC<KamaiViewProps> = ({
                   <h4 className="font-extrabold text-sm sm:text-base text-gray-900">
                     {item.description}
                   </h4>
-                  <div className="text-xs text-gray-400 font-medium">
-                    {item.date} {item.customerName ? `• ${item.customerName}` : ''}
+                  <div className="text-xs text-gray-400 font-medium flex items-center gap-1.5 flex-wrap">
+                    <span>{item.date} {item.customerName ? `• ${item.customerName}` : ''}</span>
+                    <SyncBadge state={syncStateOf(item.id)} currentLanguage={currentLanguage} compact />
                   </div>
                 </div>
               </div>
