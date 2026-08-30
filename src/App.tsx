@@ -17,6 +17,9 @@ import { LoginScreen } from './components/LoginScreen';
 import { useAuth } from './auth/AuthProvider';
 import { api, ApiError } from './lib/api';
 import { useApiForDomain, anyDomainOnApi } from './lib/dataSource';
+import { enqueue } from './lib/outbox';
+import { useOutbox } from './hooks/useOutbox';
+import { SyncSummary } from './components/SyncBadge';
 
 import {
   WorkerProfile,
@@ -35,6 +38,7 @@ import { uuidv7 } from './lib/ids';
 export default function App() {
   const navigate = useNavigate();
   const { status } = useAuth();
+  const outbox = useOutbox();
 
   /**
    * Tab ids are route paths now. Kept as a helper so child components can go on
@@ -266,36 +270,30 @@ export default function App() {
      * The job is posted before its ledger entry - causal order (section 9.2),
      * so the entry never references a jobId the server has not seen.
      */
-    void (async () => {
-      try {
-        if (jobsOnApi) await api.createJob(newJob);
-        if (kamaiOnApi) await api.createEntry(newKamai);
-      } catch (e) {
-        if (e instanceof ApiError && e.status === 401) return;
-        if (jobsOnApi) setJobs((prev) => prev.filter((j) => j.id !== newJob.id));
-        if (kamaiOnApi) setKamaiList((prev) => prev.filter((k) => k.id !== newKamai.id));
-        setDataError(e instanceof Error ? e.message : 'Could not save this job.');
-      }
-    })();
+    /**
+     * QUEUED, NOT POSTED. Section 9.1: the write already succeeded locally and
+     * the UI must not block on the network.
+     *
+     * This replaces an optimistic post that ROLLED BACK on failure. That was
+     * correct online and wrong offline - it deleted a job the worker had just
+     * recorded because the network happened to be absent, which is precisely
+     * what a money record must never do. Nothing is removed now; the item sits
+     * in the outbox with a visible badge until the server confirms it.
+     *
+     * The job is enqueued before its ledger entry, so causal order (9.2 step 3)
+     * holds even if the two land in different batches.
+     */
+    if (jobsOnApi) enqueue('job', newJob);
+    if (kamaiOnApi) enqueue('ledger_entry', newKamai);
   };
 
   const handleSaveKamai = (newEntries: KamaiEntry[]) => {
     setKamaiList((prev) => [...newEntries, ...prev]);
     if (!kamaiOnApi) return;
 
-    void (async () => {
-      try {
-        // Sequential, not Promise.all: the ledger is append-only and ordered,
-        // and firing a batch concurrently gives up the ordering for latency
-        // nobody will notice on one or two entries.
-        for (const entry of newEntries) await api.createEntry(entry);
-      } catch (e) {
-        if (e instanceof ApiError && e.status === 401) return;
-        const ids = new Set(newEntries.map((n) => n.id));
-        setKamaiList((prev) => prev.filter((k) => !ids.has(k.id)));
-        setDataError(e instanceof Error ? e.message : 'Could not save this entry.');
-      }
-    })();
+    // Queued in order. The ledger is append-only, and the outbox preserves the
+    // order entries were created in rather than racing them.
+    for (const entry of newEntries) enqueue('ledger_entry', entry);
   };
 
   /**
@@ -377,6 +375,17 @@ export default function App() {
       />
 
       {/* Main App Content View Area */}
+      {/* Section 9.1: the queue must be VISIBLE. Renders nothing when there is
+          nothing outstanding, so it stays meaningful rather than becoming
+          furniture the worker stops reading. */}
+      <SyncSummary
+        pending={outbox.pending}
+        failed={outbox.failed}
+        offline={outbox.offline}
+        currentLanguage={currentLanguage}
+        onRetry={outbox.retry}
+      />
+
       {/* A write failed after the app had already loaded. Not fatal - the rest
           of the app still works - but it must not be silent, because the screen
           has already rolled back and the worker needs to know why. */}
@@ -425,6 +434,7 @@ export default function App() {
             element={
               <JobsView
                 jobs={jobs}
+                syncStateOf={outbox.stateOf}
                 currentLanguage={currentLanguage}
                 onAddJobVoice={() => handleOpenVoiceAssistant('add_job')}
               />
@@ -435,6 +445,7 @@ export default function App() {
             element={
               <KamaiView
                 kamaiList={kamaiList}
+                syncStateOf={outbox.stateOf}
                 currentLanguage={currentLanguage}
                 onAddKamaiVoice={() => handleOpenVoiceAssistant('add_kamai')}
               />

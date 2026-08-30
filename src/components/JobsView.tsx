@@ -13,7 +13,8 @@ import {
   ChevronRight,
   Filter,
 } from 'lucide-react';
-import { JobItem, SupportedLanguage } from '../types';
+import { JobItem, SupportedLanguage, SyncState } from '../types';
+import { SyncBadge } from './SyncBadge';
 import { TRANSLATIONS } from '../data/translations';
 import { todayIso } from '../utils/date';
 
@@ -21,10 +22,18 @@ interface JobsViewProps {
   jobs: JobItem[];
   currentLanguage: SupportedLanguage;
   onAddJobVoice: () => void;
+  /**
+   * Sync state per record (section 9.1). A function rather than a field on the
+   * job because the outbox is the authority on what has actually reached the
+   * server, and a copy embedded in the record would go stale the moment a flush
+   * succeeded.
+   */
+  syncStateOf: (recordId: string) => SyncState;
 }
 
 export const JobsView: React.FC<JobsViewProps> = ({
   jobs,
+  syncStateOf,
   currentLanguage,
   onAddJobVoice,
 }) => {
@@ -179,6 +188,7 @@ export const JobsView: React.FC<JobsViewProps> = ({
                     <span className="text-xs text-gray-400 font-medium">
                       {job.date} • {job.time || '11:00 AM'}
                     </span>
+                    <SyncBadge state={syncStateOf(job.id)} currentLanguage={currentLanguage} compact />
                   </div>
                   <h3 className="font-extrabold text-base sm:text-lg text-gray-900">
                     {job.title}
