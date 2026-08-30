@@ -108,3 +108,39 @@ export async function findPublicProfileByHandle(handle: string): Promise<PublicP
     .findOne({ passportHandle: handle }, { projection: PUBLIC_PROJECTION });
   return (doc as PublicProfile | null) ?? null;
 }
+
+/**
+ * The display name for a user id, for surfaces that know the worker only as a
+ * job's kaarigarId - the review form, which reaches the worker through a job
+ * rather than through a handle.
+ *
+ * Falls back to a neutral label rather than an empty string, so a profile that
+ * has not been named yet renders as "this kaarigar" instead of a page with a
+ * hole where a person should be.
+ */
+export async function findDisplayNameByUserId(uid: string): Promise<string> {
+  const doc = await getDb()
+    .collection(PROFILES)
+    .findOne({ userId: uid }, { projection: { name: 1 } });
+  const name = doc && typeof doc.name === 'string' ? doc.name.trim() : '';
+  return name || 'this kaarigar';
+}
+
+/**
+ * The owner's user id for a passport handle. SERVER-SIDE JOIN KEY ONLY.
+ *
+ * Reviews are stored against subjectId, which is the kaarigar's user id, but
+ * PublicProfile deliberately withholds userId - so the passport page needs this
+ * to fetch a worker's reviews without that id ever entering the shape that gets
+ * rendered.
+ *
+ * Kept as a separate call rather than widening PUBLIC_PROJECTION on purpose:
+ * the projection is the privacy guarantee, and adding a field to it "just for
+ * the server" is exactly how such a guarantee erodes.
+ */
+export async function findOwnerIdByHandle(handle: string): Promise<string | null> {
+  const doc = await getDb()
+    .collection(PROFILES)
+    .findOne({ passportHandle: handle }, { projection: { userId: 1 } });
+  return doc && typeof doc.userId === 'string' ? doc.userId : null;
+}
