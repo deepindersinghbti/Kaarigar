@@ -105,58 +105,80 @@ is real:
 
 ### Firebase phone OTP: what is actually wrong
 
-Recorded because §6.4 of the status report left this as an *unconfirmed*
-hypothesis, and that hypothesis has since been disproved. Do not spend time
-re-deriving it.
+**Status: abandoned after exhaustive elimination. Do not re-derive this.**
 
-Tested from both origins with `otp-test.html` on 30 August 2026:
+§6.4 of the status report left the cause as an *unconfirmed* hypothesis
+("backend provisioning lag on a new project"). That hypothesis, and every other
+one available, has now been tested and disproved.
 
-| Origin | Result |
+#### The decisive result
+
+A **brand-new Firebase project**, configured from scratch — Phone sign-in
+enabled, Blaze billing active, India added to the SMS region policy, `localhost`
+authorised by default — fails with the **identical** `INVALID_APP_CREDENTIAL`.
+
+This was therefore never about the original project. It is not a configuration
+mistake, and it is not reachable from any console setting.
+
+#### What was eliminated
+
+| Checked | Result |
 |---|---|
-| `localhost` (authorised by default) | `INVALID_APP_CREDENTIAL` |
-| `kaarigar.onrender.com` | `CAPTCHA_CHECK_FAILED: Hostname match not found` |
+| Billing | Blaze active on both projects |
+| Phone provider enabled | Yes, or the error would be `auth/operation-not-allowed` |
+| SMS region policy | India allowed (the new project surfaced this as its own distinct error, then it cleared) |
+| Authorized domains | `localhost` **and** `kaarigar.onrender.com` both present |
+| reCAPTCHA Enterprise enforcement | `ENFORCEMENT_STATE_UNSPECIFIED` |
+| reCAPTCHA Enterprise API | Was **disabled**; enabling it changed nothing |
+| SMS toll-fraud / bot score | Off — optional features, not required |
+| Client-side token generation | Valid, ~2,300 chars, all five request fields present |
+| "Provisioning lag" | Days elapsed; identical failure |
+| **Fresh project** | **Identical failure** |
 
-**These are two separate faults.** The deploy has an additional domain-allowlist
-problem layered on top of the original one; localhost isolates that away and
-still fails.
+#### Two traps that cost time here
 
-**The "backend provisioning lag on a new project" hypothesis is dead.** It was
-the main reason to believe waiting would help. Days have passed and localhost
-fails identically.
+**`producerProjectNumber` is Google's, not yours.** The `GetRecaptchaParam`
+response returns `recaptchaSiteKey: 6LcMZR0U…` and
+`producerProjectNumber: 551503664846` — **identical across two different Firebase
+projects.** It is Firebase's shared reCAPTCHA infrastructure for phone auth, not
+a per-project key. Do not read it as evidence of which project is loaded, and do
+not expect that key to appear in your Cloud reCAPTCHA console: it is a classic
+(`6L…`) key, and classic keys live at `google.com/recaptcha/admin`, never in the
+Enterprise key list. An empty Enterprise key list is normal.
 
-What is confirmed working, so nobody re-checks it:
+**Vite reads `.env` once, at startup.** A dev server left running from before an
+`.env` edit keeps serving the old config no matter how often the page is
+reloaded. When swapping Firebase projects, kill every server on the port first,
+then confirm what is actually being served:
 
-- The reCAPTCHA widget renders and solves; a ~2,300-character token is produced
-- The request carries all five expected fields: `phoneNumber`, `clientType`,
-  `captchaResponse`, `recaptchaVersion`, `recaptchaToken`
-- `recaptchaParams` and `recaptchaConfig` both return HTTP 200
-- reCAPTCHA Enterprise is **not** enforced (`ENFORCEMENT_STATE_UNSPECIFIED` for
-  `PHONE_PROVIDER`), so Enterprise misconfiguration is ruled out
-- The phone provider is enabled, or the error would be `auth/operation-not-allowed`
-- Billing is enabled, or the error would be `auth/billing-not-enabled`
+```
+curl -s http://localhost:3000/otp-test.ts | grep -o 'your-project-id'
+```
 
-The client side is therefore fine. Google is rejecting a valid-looking token at
-the **project** level.
+The reliable in-page check is the `Config loaded. project: …` line, **not**
+`producerProjectNumber`.
 
-**Not yet eliminated**, and the two best remaining candidates:
+#### What is confirmed working
 
-1. **App Check enforcement** — Firebase Console → App Check → APIs →
-   Authentication. If enforcement is on, every request without an App Check
-   attestation is rejected, and the harness sends none. This matches the symptom
-   most closely and was never on the ruled-out list.
-2. **API key *API* restrictions**, which are distinct from referrer
-   restrictions — Google Cloud Console → APIs & Services → Credentials → the
-   browser key. **Identity Toolkit API** and **Token Service API** must both be
-   permitted. Correct referrers do not help if the API itself is excluded.
+So nobody re-checks it: the widget renders and solves, a ~2,300-character token
+is produced, the request carries `phoneNumber`, `clientType`, `captchaResponse`,
+`recaptchaVersion` and `recaptchaToken`, and both `recaptchaParams` and
+`recaptchaConfig` return HTTP 200. The client is fine. Google rejects a
+valid-looking token at a level we cannot see or change.
 
-If neither: create a **fresh Firebase project**, enable Phone sign-in and
-billing, put the new four values in `.env`, and retest on localhost. Fifteen
-minutes, and decisive — a fresh project working proves the current one is
-half-provisioned, which no further console-poking will fix.
+#### If someone wants to try again
 
-**Before testing from the deploy again**, add `kaarigar.onrender.com` to Firebase
-Console → Authentication → Settings → Authorized domains, or the hostname fault
-masks whatever the real one is.
+Two things were never tested, both cheap, neither likely given that a fresh
+project fails:
+
+1. **App Check enforcement** on the Authentication API (Firebase Console → App
+   Check → APIs). The harness sends no attestation.
+2. **API-key *API* restrictions** — distinct from referrer restrictions. Google
+   Cloud Console → Credentials → the browser key must permit **Identity Toolkit
+   API** and **Token Service API**.
+
+Beyond those, escalate to Firebase support rather than re-testing the table
+above.
 
 ### Why this is not a blocker
 
