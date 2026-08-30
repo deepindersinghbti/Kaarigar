@@ -434,6 +434,7 @@ export default function App() {
             element={
               <JobsView
                 jobs={jobs}
+                workerName={profile.name}
                 syncStateOf={outbox.stateOf}
                 currentLanguage={currentLanguage}
                 onAddJobVoice={() => handleOpenVoiceAssistant('add_job')}
