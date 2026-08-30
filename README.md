@@ -86,14 +86,92 @@ task appears to need a change there, stop and raise it.
 
 ## Auth
 
-Firebase phone OTP could not be made to deliver (see `TYPES_PROPOSAL.md` history
-and the auth commit). The app currently uses its own OTP endpoints with
-**identical architecture and stubbed delivery only** — the code is written to the
-server log rather than sent by SMS. Everything else is real: hashed codes,
-expiry, attempt caps, single use, throttling, signed JWTs, 15-minute access
-tokens and rotating refresh tokens with reuse detection.
+The app uses its own OTP endpoints. **Only delivery is stubbed** — the code is
+written to the server log instead of being sent by SMS. Every security property
+is real:
+
+| Property | Implementation |
+|---|---|
+| Code generation | `randomInt(0, 1000000)` — cryptographically secure |
+| Storage | Only a hash is stored, never the code |
+| Expiry | 5 minutes |
+| Attempt cap | Enforced; returns 429 once exceeded |
+| Single use | Challenge burned before tokens are issued |
+| Throttling | Capped codes per number per window |
+| Enumeration resistance | Identical response whether or not the number is known |
+| Tokens | 15-minute access, rotating refresh, reuse detection revokes the family |
 
 `requireAuth` is the swap point. If Firebase starts working, one line changes.
+
+### Firebase phone OTP: what is actually wrong
+
+Recorded because §6.4 of the status report left this as an *unconfirmed*
+hypothesis, and that hypothesis has since been disproved. Do not spend time
+re-deriving it.
+
+Tested from both origins with `otp-test.html` on 30 August 2026:
+
+| Origin | Result |
+|---|---|
+| `localhost` (authorised by default) | `INVALID_APP_CREDENTIAL` |
+| `kaarigar.onrender.com` | `CAPTCHA_CHECK_FAILED: Hostname match not found` |
+
+**These are two separate faults.** The deploy has an additional domain-allowlist
+problem layered on top of the original one; localhost isolates that away and
+still fails.
+
+**The "backend provisioning lag on a new project" hypothesis is dead.** It was
+the main reason to believe waiting would help. Days have passed and localhost
+fails identically.
+
+What is confirmed working, so nobody re-checks it:
+
+- The reCAPTCHA widget renders and solves; a ~2,300-character token is produced
+- The request carries all five expected fields: `phoneNumber`, `clientType`,
+  `captchaResponse`, `recaptchaVersion`, `recaptchaToken`
+- `recaptchaParams` and `recaptchaConfig` both return HTTP 200
+- reCAPTCHA Enterprise is **not** enforced (`ENFORCEMENT_STATE_UNSPECIFIED` for
+  `PHONE_PROVIDER`), so Enterprise misconfiguration is ruled out
+- The phone provider is enabled, or the error would be `auth/operation-not-allowed`
+- Billing is enabled, or the error would be `auth/billing-not-enabled`
+
+The client side is therefore fine. Google is rejecting a valid-looking token at
+the **project** level.
+
+**Not yet eliminated**, and the two best remaining candidates:
+
+1. **App Check enforcement** — Firebase Console → App Check → APIs →
+   Authentication. If enforcement is on, every request without an App Check
+   attestation is rejected, and the harness sends none. This matches the symptom
+   most closely and was never on the ruled-out list.
+2. **API key *API* restrictions**, which are distinct from referrer
+   restrictions — Google Cloud Console → APIs & Services → Credentials → the
+   browser key. **Identity Toolkit API** and **Token Service API** must both be
+   permitted. Correct referrers do not help if the API itself is excluded.
+
+If neither: create a **fresh Firebase project**, enable Phone sign-in and
+billing, put the new four values in `.env`, and retest on localhost. Fifteen
+minutes, and decisive — a fresh project working proves the current one is
+half-provisioned, which no further console-poking will fix.
+
+**Before testing from the deploy again**, add `kaarigar.onrender.com` to Firebase
+Console → Authentication → Settings → Authorized domains, or the hostname fault
+masks whatever the real one is.
+
+### Why this is not a blocker
+
+`MIGRATION_PLAN.md` Day 2 pre-authorised the fallback: `requireAuth` presents the
+same `req.user` either way, so nothing downstream depends on which path issued
+the token. §14.1 is explicit that a clearly-labelled stub is acceptable and that
+claiming a live integration you do not have is the fastest way to lose a panel.
+
+Note also that Firebase is not interchangeable with an SMS gateway. Firebase
+**replaces** these OTP endpoints — Google generates, delivers and verifies its
+own code. Sending *our* codes through a gateway (MSG91, Twilio, AWS SNS) instead
+requires TRAI **DLT registration**: a Principal Entity, a registered sender
+header, and a registered template, which needs a registered entity and takes
+days at minimum. Firebase was chosen precisely to sidestep that, which is why
+"just use Twilio" is not a same-week substitute.
 
 ## Keeping the deploy warm
 
