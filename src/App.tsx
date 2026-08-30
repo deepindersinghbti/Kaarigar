@@ -13,6 +13,8 @@ import { KamaiView } from './components/KamaiView';
 import { ProfileView } from './components/ProfileView';
 import { VoiceAssistantModal } from './components/VoiceAssistantModal';
 import { LanguageSelectorModal } from './components/LanguageSelectorModal';
+import { LoginScreen } from './components/LoginScreen';
+import { useAuth } from './auth/AuthProvider';
 
 import {
   WorkerProfile,
@@ -30,6 +32,7 @@ import { uuidv7 } from './lib/ids';
 
 export default function App() {
   const navigate = useNavigate();
+  const { status } = useAuth();
 
   /**
    * Tab ids are route paths now. Kept as a helper so child components can go on
@@ -158,6 +161,41 @@ export default function App() {
   const handleSaveKamai = (newEntries: KamaiEntry[]) => {
     setKamaiList((prev) => [...newEntries, ...prev]);
   };
+
+  /**
+   * The auth gate.
+   *
+   * Placed here, after every hook above, because hook order must not change
+   * between renders - returning early before them would break the rules of
+   * hooks the moment `status` flips. The cost is that the app's state
+   * initialisers run for a signed-out visitor too; they read localStorage and
+   * nothing else, so that is free.
+   *
+   * 'loading' renders nothing rather than the login screen. A signed-in worker
+   * reopening the app would otherwise see a flash of the login form before the
+   * stored session is restored, which reads as "it logged me out" - the exact
+   * impression a financial record must never give.
+   */
+  if (status === 'loading') {
+    return <div className="min-h-screen bg-[#F3F4F6]" />;
+  }
+
+  if (status === 'unauthenticated') {
+    return (
+      <>
+        <LoginScreen
+          currentLanguage={currentLanguage}
+          onChangeLanguage={() => setIsLangModalOpen(true)}
+        />
+        <LanguageSelectorModal
+          isOpen={isLangModalOpen}
+          onClose={() => setIsLangModalOpen(false)}
+          currentLanguage={currentLanguage}
+          onSelectLanguage={setCurrentLanguage}
+        />
+      </>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#F3F4F6] text-gray-900 flex flex-col font-sans antialiased selection:bg-orange-200">
