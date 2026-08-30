@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import type { AuthUser } from '../types';
+import { setUnauthorizedHandler } from '../lib/api';
 import {
   clearSession,
   isExpiring,
@@ -137,6 +138,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     },
     [refresh]
   );
+
+  /**
+   * Let the API client end the session when any request comes back 401.
+   *
+   * The refresh timer covers ordinary expiry, but a backgrounded tab has its
+   * timers throttled, so a token can lapse without the timer getting a turn.
+   * Without this the next read 401s and the screen renders empty - a worker
+   * with a full ledger sees zero jobs and zero earnings, which is the most
+   * alarming possible way to fail.
+   */
+  useEffect(() => {
+    setUnauthorizedHandler(applySignOut);
+    return () => setUnauthorizedHandler(null);
+  }, [applySignOut]);
 
   // Boot: restore whatever is in storage.
   useEffect(() => {
