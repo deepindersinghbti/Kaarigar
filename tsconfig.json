@@ -7,9 +7,20 @@
     // errors, so it costs nothing today and prevents a class of bug that
     // otherwise surfaces at runtime.
     //
-    // Full `strict` is NOT enabled: it reports ~1169 errors, almost all from
-    // @types/react being absent rather than from real defects. That is a
-    // separate, larger piece of work.
+    // Full `strict` IS now enabled. It previously reported ~1169 errors, which
+    // were attributed to @types/react being absent. That was correct; the
+    // accompanying estimate that fixing it "touches every component" was not.
+    // Installing @types/react and @types/react-dom took the full-strict count
+    // from ~1169 to ZERO with no source change at all.
+    //
+    // So strict is admitted on exactly the reasoning that admitted
+    // strictNullChecks above - it costs nothing today and prevents a class of
+    // bug that otherwise surfaces at runtime. It constrains only NEW code,
+    // which is why now is the moment: Track B is about to write most of the
+    // component code this project will ever have.
+    //
+    // strictNullChecks is implied by strict; kept explicit for the note above.
+    "strict": true,
     "strictNullChecks": true,
     "experimentalDecorators": true,
     "useDefineForClassFields": false,

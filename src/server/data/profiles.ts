@@ -1,4 +1,5 @@
 import { getDb } from '../db';
+import type { WorkerProfile } from '../../types';
 
 /**
  * Data access for kaarigar_profiles.
@@ -27,4 +28,83 @@ export const PROFILES = 'kaarigar_profiles';
 export async function getProfileIdForUser(uid: string): Promise<string | null> {
   const doc = await getDb().collection(PROFILES).findOne({ userId: uid }, { projection: { _id: 1 } });
   return doc ? String(doc._id) : null;
+}
+
+/**
+ * The fields a public passport page may show.
+ *
+ * An ALLOWLIST, and a deliberately narrow one. Architecture section 8 specifies
+ * "only fields the worker marked public", but WorkerProfile carries no
+ * per-field visibility flag and types.ts is frozen, so per-field control is a
+ * V1 change. Until it exists, the safe reading of that requirement is to
+ * publish only what a customer needs in order to decide whether to trust this
+ * worker, and nothing else.
+ *
+ * Excluded, and why - each of these is a privacy defect if it leaks, not a
+ * missing feature:
+ *   phone          PII. Section 12.2 data minimisation. A public page that
+ *                  publishes a phone number is a scraping target, and the
+ *                  worker never consented to that.
+ *   totalEarnings  Income is the private core of the product. Section 4F makes
+ *                  every income disclosure consent-mediated with a named
+ *                  purpose and an expiry. A public page is the exact opposite.
+ *   dailyRate      A negotiating position. Mol-Bhav publishes bands for a task
+ *                  (section 4C), never one worker's private floor.
+ *   bloodGroup     Health data. A customer hiring a plumber has no use for it.
+ *   userId         Internal identifier; nothing outside the server needs it.
+ *
+ * Derived with Pick from the frozen contract rather than declared as a new
+ * interface, so this adds no second definition of a profile that could drift
+ * from types.ts.
+ */
+export type PublicProfile = Pick<
+  WorkerProfile,
+  | 'passportHandle'
+  | 'name'
+  | 'trade'
+  | 'ncoCode'
+  | 'experienceYears'
+  | 'location'
+  | 'skills'
+  | 'certifications'
+  | 'rating'
+  | 'totalJobsCount'
+  | 'verifiedStatus'
+  | 'joinedDate'
+  | 'bio'
+>;
+
+const PUBLIC_PROJECTION = {
+  _id: 0,
+  passportHandle: 1,
+  name: 1,
+  trade: 1,
+  ncoCode: 1,
+  experienceYears: 1,
+  location: 1,
+  skills: 1,
+  certifications: 1,
+  rating: 1,
+  totalJobsCount: 1,
+  verifiedStatus: 1,
+  joinedDate: 1,
+  bio: 1,
+} as const;
+
+/**
+ * Look up a passport by its public handle, or null if there is no such handle.
+ *
+ * The projection is applied in the QUERY, not after it, so the excluded fields
+ * never enter the process at all. A later refactor cannot accidentally spread
+ * a full document into a template, because the full document was never loaded.
+ *
+ * Unauthenticated by design - this backs GET /p/:handle. That is safe only
+ * because of the projection above, which is why the two live together here
+ * rather than the projection sitting in the route.
+ */
+export async function findPublicProfileByHandle(handle: string): Promise<PublicProfile | null> {
+  const doc = await getDb()
+    .collection(PROFILES)
+    .findOne({ passportHandle: handle }, { projection: PUBLIC_PROJECTION });
+  return (doc as PublicProfile | null) ?? null;
 }
