@@ -133,6 +133,31 @@ export async function jobExists(kaarigarId: string, jobId: string): Promise<bool
   return doc !== null;
 }
 
+export interface JobOutcomeCounts {
+  total: number;
+  completed: number;
+  cancelled: number;
+}
+
+/**
+ * Count the job evidence used by the published trust rubric.
+ *
+ * This deliberately stays a server-side aggregate: a worker can edit their
+ * profile, but they cannot edit the jobs that contribute to this breakdown.
+ * SETTLED and REVIEWED remain completed work for scoring purposes because a
+ * payment or review is a later state in the same legal lifecycle.
+ */
+export async function countJobOutcomes(kaarigarId: string): Promise<JobOutcomeCounts> {
+  const collection = getDb().collection(JOBS);
+  const [total, completed, cancelled] = await Promise.all([
+    collection.countDocuments({ kaarigarId }),
+    collection.countDocuments({ kaarigarId, status: { $in: ['COMPLETED', 'SETTLED', 'REVIEWED'] } }),
+    collection.countDocuments({ kaarigarId, status: 'CANCELLED' }),
+  ]);
+
+  return { total, completed, cancelled };
+}
+
 /**
  * States in which a completed job may be reviewed.
  *

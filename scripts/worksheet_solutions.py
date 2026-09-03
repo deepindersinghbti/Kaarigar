@@ -1,0 +1,330 @@
+from worksheet_question_texts import SOURCE_QUESTIONS
+
+
+def append_worked_worksheets(story, styles, chapter, section, text, note, equation, fraction):
+    def problem(title, question):
+        section(story, title, styles)
+        problem_number = title.split(" ", 1)[0]
+        note(story, f"<b>Question.</b> {SOURCE_QUESTIONS.get(problem_number, question)}", styles)
+
+    def final(value):
+        note(story, f"<b>Final answer.</b> {value}", styles)
+
+    def mismatch(printed, verified):
+        note(
+            story,
+            f"<b>Answer-key check.</b> Printed answer: {printed}<br/><b>Verified from the supplied data:</b> {verified}",
+            styles,
+        )
+
+    chapter(story, 11, "Worksheet 1 - Fully Worked Solutions", "Measures of central tendency and positional measures", styles)
+
+    problem("W1.1 Arithmetic mean - company orders", "The numbers of new orders received over 25 working days were 3, 0, 1, 4, 4, 4, 2, 5, 3, 6, 4, 5, 1, 4, 2, 3, 0, 2, 0, 5, 4, 2, 3, 3, 1. Calculate the arithmetic mean.")
+    equation(story, "N = 25        Σxᵢ = 71", styles)
+    fraction(story, "x̄ =", "Σxᵢ", "N", "", styles)
+    fraction(story, "x̄ =", "71", "25", "= 2.84", styles)
+    final("The arithmetic mean is <b>2.84 orders per working day</b>.")
+
+    problem("W1.2 Arithmetic mean - nurses' overtime", "The listed monthly overtime hours are 13, 13, 12, 15, 7, 15, 5, 12, 6, 7, 12, 10, 9, 13, 12, 5, 9, 6, 10, 5, 6, 9, 6, 9, 12. Calculate the arithmetic mean.")
+    text(story, "Although the question says fifteen nurses, 25 observations are printed. The calculation therefore uses all 25 listed observations.", styles)
+    equation(story, "N = 25        Σxᵢ = 238", styles)
+    fraction(story, "x̄ =", "238", "25", "= 9.52", styles)
+    final("The arithmetic mean is <b>9.52 hours</b>.")
+
+    problem("W1.3 Mean - continuous accident data", "For 50 weeks, the accident classes 0-4, 5-9, 10-14, 15-19, 20-24 have frequencies 5, 22, 13, 8, 2. Calculate the arithmetic mean.")
+    equation(story, "xᵢ = 2, 7, 12, 17, 22", styles)
+    equation(story, "Σfᵢ = 50        Σfᵢxᵢ = 5(2)+22(7)+13(12)+8(17)+2(22) = 500", styles)
+    fraction(story, "x̄ =", "Σfᵢxᵢ", "Σfᵢ", "", styles)
+    fraction(story, "x̄ =", "500", "50", "= 10", styles)
+    final("The mean is <b>10 accidents per week</b>.")
+
+    problem("W1.4 Mean by step deviation - overtime hours", "The overtime classes 10-15, 15-20, 20-25, 25-30, 30-35, 35-40 have frequencies 11, 20, 35, 20, 8, 6. Calculate the mean using the shortcut or step-deviation method.")
+    equation(story, "xᵢ = 12.5, 17.5, 22.5, 27.5, 32.5, 37.5", styles)
+    equation(story, "A = 22.5        h = 5        uᵢ = −2, −1, 0, 1, 2, 3", styles)
+    equation(story, "Σfᵢuᵢ = 11(−2)+20(−1)+35(0)+20(1)+8(2)+6(3) = 12", styles)
+    fraction(story, "x̄ = A +", "Σfᵢuᵢ", "Σfᵢ", "× h", styles)
+    fraction(story, "x̄ = 22.5 +", "12", "100", "× 5 = 23.1", styles)
+    final("The average overtime is <b>23.1 hours</b>.")
+
+    problem("W1.5 Correcting a mean - one error", "The average dividend of 10 chemical companies was 18%. Later, the correct value 12 was found to have been read as 22. Find the correct average.")
+    equation(story, "Σxwrong = 10(18) = 180", styles)
+    equation(story, "Σxcorrect = 180 − 22 + 12 = 170", styles)
+    fraction(story, "x̄correct =", "170", "10", "= 17%", styles)
+    final("The corrected average dividend is <b>17%</b>.")
+
+    problem("W1.6 Correcting a mean - two errors", "The mean of 200 observations was 50. Values 192 and 88 were incorrectly read as 92 and 8. Find the correct mean.")
+    equation(story, "Σxwrong = 200(50) = 10,000", styles)
+    equation(story, "Σxcorrect = 10,000 − 92 − 8 + 192 + 88 = 10,180", styles)
+    fraction(story, "x̄correct =", "10,180", "200", "= 50.9", styles)
+    final("The corrected mean is <b>50.9</b>.")
+
+    problem("W1.7 Median - ungrouped data", "The numbers of patients examined per hour are 10, 12, 15, 20, 13, 24, 17, 18. Calculate the median.")
+    equation(story, "10, 12, 13, 15, 17, 18, 20, 24", styles)
+    equation(story, "N = 8", styles)
+    fraction(story, "Median =", "x₄ + x₅", "2", "", styles)
+    fraction(story, "Median =", "15 + 17", "2", "= 16", styles)
+    final("The median is <b>16 patients per hour</b>.")
+
+    problem("W1.8 Median wage - grouped data", "A factory employs 3,000 persons: 5% earn below Rs 150; 580 earn Rs 151-200; 30% earn Rs 201-250; 500 earn Rs 251-300; 20% earn Rs 301-350; the rest earn Rs 351 or more. Find the median wage.")
+    equation(story, "f = 150, 580, 900, 500, 600, 270", styles)
+    equation(story, "CF = 150, 730, 1630, 2130, 2730, 3000", styles)
+    equation(story, "N/2 = 1500        Median class = 201-250", styles)
+    equation(story, "L = 200.5        CF< = 730        fₘ = 900        h = 50", styles)
+    fraction(story, "Median = 200.5 +", "1500 − 730", "900", "× 50", styles)
+    equation(story, "Median = 200.5 + 42.7778 = 243.2778", styles)
+    final("The median wage is <b>Rs 243.28 per day</b>.")
+
+    problem("W1.9 Quartiles and P75 - graphical distribution", "Kilometres covered and frequencies are: 100-110: 4, 110-120: 0, 120-130: 3, 130-140: 7, 140-150: 11, 150-160: 8, 160-170: 5, 170-180: 0, 180-190: 2. Form cumulative frequencies and calculate Q1, Q2, Q3, and P75.")
+    equation(story, "CF = 4, 4, 7, 14, 25, 33, 38, 38, 40        N = 40", styles)
+    fraction(story, "Q₁ = 130 +", "10 − 7", "7", "× 10 = 134.29", styles)
+    fraction(story, "Q₂ = 140 +", "20 − 14", "11", "× 10 = 145.45", styles)
+    fraction(story, "Q₃ = 150 +", "30 − 25", "8", "× 10 = 156.25", styles)
+    equation(story, "P₇₅ = Q₃ = 156.25", styles)
+    mismatch("Q₁ = 135 km, Q₂ = 145 km, Q₃ = P₇₅ = 155 km (graphical readings)", "Formula interpolation gives Q₁ = 134.29 km, Q₂ = 145.45 km, Q₃ = P₇₅ = 156.25 km. A hand-drawn ogive may produce the printed approximations.")
+
+    problem("W1.10 Q1, D7, and P60 - grouped overtime", "The overtime classes 10-15, 15-20, 20-25, 25-30, 30-35, 35-40 have frequencies 11, 20, 35, 20, 8, 6. Calculate Q1, D7, and P60.")
+    equation(story, "CF = 11, 31, 66, 86, 94, 100        N = 100", styles)
+    fraction(story, "Q₁ = 15 +", "25 − 11", "20", "× 5 = 18.5", styles)
+    fraction(story, "D₇ = 25 +", "70 − 66", "20", "× 5 = 26", styles)
+    fraction(story, "P₆₀ = 20 +", "60 − 31", "35", "× 5 = 24.14", styles)
+    mismatch("Q₁ = 18.5, D₇ = 25.57, P₆₀ = 24.14", "Q₁ = 18.5 hours, D₇ = 26.00 hours, P₆₀ = 24.14 hours. The printed D₇ does not follow the supplied frequency table.")
+
+    chapter(story, 12, "Worksheet 2 - Fully Worked Solutions", "Dispersion, skewness, kurtosis, and moments", styles)
+
+    problem("W2.1 Range - monthly sales", "Monthly sales in Rs '000 are 80, 82, 82, 84, 84, 86, 86, 88, 88, 90, 90, 92. Calculate the range and coefficient of range.")
+    equation(story, "R = Xₘₐₓ − Xₘᵢₙ = 92 − 80 = 12", styles)
+    fraction(story, "Coefficient of Range =", "92 − 80", "92 + 80", "= 0.0698", styles)
+    final("Range = <b>12</b>; coefficient of range = <b>0.0698</b>.")
+
+    problem("W2.2 Range - daily wages", "The daily wages are Rs 120, 125, 130, 135, 140, 145, 150, 155, 160, 165. Calculate the range and coefficient of range.")
+    equation(story, "R = 165 − 120 = 45", styles)
+    fraction(story, "Coefficient of Range =", "165 − 120", "165 + 120", "= 0.1579", styles)
+    final("Range = <b>Rs 45</b>; coefficient of range = <b>0.1579</b>.")
+
+    problem("W2.3 Variance and SD - commodity prices", "Prices for seven days are 240, 260, 270, 245, 255, 286, 264. Calculate the variance and standard deviation.")
+    equation(story, "N = 7        Σxᵢ = 1820        x̄ = 260", styles)
+    equation(story, "Σ(xᵢ − x̄)² = 1442", styles)
+    fraction(story, "σ² =", "1442", "7", "= 206", styles)
+    equation(story, "σ = √206 = 14.35", styles)
+    mismatch("Variance = 196.49; SD = 14.02", "Variance = 206.00; SD = 14.35 from the seven printed observations.")
+
+    problem("W2.4 Standard deviation - student marks", "Marks are 12, 15, 18, 20, 22, 25, 28, 30, 32, 35. Calculate the standard deviation.")
+    equation(story, "N = 10        Σxᵢ = 237        x̄ = 23.7", styles)
+    equation(story, "Σ(xᵢ − x̄)² = 518.1", styles)
+    fraction(story, "σ² =", "518.1", "10", "= 51.81", styles)
+    equation(story, "σ = √51.81 = 7.20", styles)
+    final("The population standard deviation is <b>7.20 marks</b> (the worksheet rounds it to 7.18).")
+
+    problem("W2.5 Standard deviation - engineering-company profits", "Profit classes 0-10, 10-20, 20-30, 30-40, 40-50, 50-60 have frequencies 8, 12, 20, 30, 20, 10. Calculate the standard deviation.")
+    equation(story, "xᵢ = 5, 15, 25, 35, 45, 55        N = 100", styles)
+    equation(story, "Σfᵢxᵢ = 3220        x̄ = 32.2", styles)
+    equation(story, "Σfᵢ(xᵢ − x̄)² = 19,216", styles)
+    fraction(story, "σ² =", "19,216", "100", "= 192.16", styles)
+    equation(story, "σ = √192.16 = 13.86", styles)
+    mismatch("SD = 14.91 crore", "SD = 13.86 crore from the printed classes and frequencies.")
+
+    problem("W2.6 Variance and SD - weekly accidents", "Accident classes 0-4, 5-9, 10-14, 15-19, 20-24 have frequencies 5, 22, 13, 8, 2. Calculate variance and standard deviation.")
+    equation(story, "xᵢ = 2, 7, 12, 17, 22        x̄ = 10", styles)
+    equation(story, "Σfᵢ(xᵢ − x̄)² = 1250", styles)
+    fraction(story, "σ² =", "1250", "50", "= 25", styles)
+    equation(story, "σ = √25 = 5", styles)
+    mismatch("Variance = 24.0; SD = 4.90", "Variance = 25.00; SD = 5.00 from the printed distribution.")
+
+    problem("W2.7 Coefficient of variation - products A and B", "Weekly sales are A: 59, 75, 27, 63, 27, 28, 56 and B: 150, 200, 125, 310, 330, 250, 225. Determine which product has greater fluctuation.")
+    equation(story, "x̄ₐ = 47.857        σₐ = 18.597", styles)
+    fraction(story, "CVₐ =", "18.597", "47.857", "× 100 = 38.86%", styles)
+    equation(story, "x̄ᵦ = 227.143        σᵦ = 70.804", styles)
+    fraction(story, "CVᵦ =", "70.804", "227.143", "× 100 = 31.17%", styles)
+    equation(story, "CVₐ > CVᵦ", styles)
+    final("<b>Product A</b> has greater relative fluctuation. The printed CV values differ, but the printed conclusion is correct.")
+
+    problem("W2.8 Consistency - two factories", "Factory A has mean 500 and SD 40. Factory B has mean 600 and SD 45. Which factory is more consistent?")
+    fraction(story, "CVₐ =", "40", "500", "× 100 = 8%", styles)
+    fraction(story, "CVᵦ =", "45", "600", "× 100 = 7.5%", styles)
+    equation(story, "CVᵦ < CVₐ", styles)
+    mismatch("Factory A is more consistent", "Factory B is more consistent because 7.5% < 8%.")
+
+    problem("W2.9 Mean deviation - quantity demanded", "Values 60, 61, 62, 63, 64, 65, 66, 67, 68 have frequencies 2, 0, 15, 29, 25, 12, 10, 4, 3. Find mean deviation from the mean.")
+    equation(story, "N = 100        Σfᵢxᵢ = 6389        x̄ = 63.89", styles)
+    equation(story, "Σfᵢ|xᵢ − x̄| = 123.88", styles)
+    fraction(story, "MDx̄ =", "123.88", "100", "= 1.2388", styles)
+    mismatch("MD = 1.19 units", "MD = 1.24 units from the printed distribution.")
+
+    problem("W2.10 Mean deviation - discrete grouped data", "Values x = 10, 20, 30, 40, 50 have frequencies f = 5, 8, 12, 7, 3. Find mean deviation from the mean.")
+    equation(story, "N = 35        Σfᵢxᵢ = 1000        x̄ = 28.5714", styles)
+    equation(story, "Σfᵢ|xᵢ − x̄| = 322.8571", styles)
+    fraction(story, "MDx̄ =", "322.8571", "35", "= 9.2245", styles)
+    mismatch("MD = 9.71", "MD = 9.22 from the printed distribution.")
+
+    problem("W2.11 Karl Pearson skewness - rejected items", "Classes 21-25, 26-30, 31-35, 36-40, 41-45, 46-50, 51-55 have frequencies 5, 15, 28, 42, 15, 12, 3. Calculate mean, SD, and Karl Pearson's skewness.")
+    equation(story, "xᵢ = 23, 28, 33, 38, 43, 48, 53        N = 120", styles)
+    equation(story, "Σfᵢxᵢ = 4435        x̄ = 36.9583", styles)
+    equation(story, "σ² = 45.3733        σ = 6.7360", styles)
+    fraction(story, "Mode = 35.5 +", "42 − 28", "2(42) − 28 − 15", "× 5 = 37.2073", styles)
+    fraction(story, "Sk =", "36.9583 − 37.2073", "6.7360", "= −0.037", styles)
+    final("Mean = <b>36.96</b>, SD = <b>6.74</b>, Sk = <b>-0.04</b>; the distribution is approximately symmetric.")
+
+    problem("W2.12 Karl Pearson skewness - symmetric distribution", "Classes 0-10, 10-20, 20-30, 30-40, 40-50 have frequencies 5, 10, 20, 10, 5. Calculate Karl Pearson's coefficient of skewness.")
+    equation(story, "x̄ = 25        Mode = 25", styles)
+    fraction(story, "Sk =", "25 − 25", "σ", "= 0", styles)
+    final("The coefficient of skewness is <b>0</b>; the distribution is perfectly symmetric.")
+
+    problem("W2.13(a) CV and skewness from summary statistics", "For 50 observations, Σx = 500, Σx² = 6000, and Median = 12. Find the coefficient of variation and coefficient of skewness.")
+    fraction(story, "x̄ =", "500", "50", "= 10", styles)
+    equation(story, "σ² = 6000/50 − 10² = 20        σ = √20 = 4.4721", styles)
+    fraction(story, "CV =", "4.4721", "10", "× 100 = 44.72%", styles)
+    fraction(story, "Sk =", "3(10 − 12)", "4.4721", "= −1.342", styles)
+    mismatch("CV = 20%; Sk = 0", "CV = 44.72%; Sk = -1.342 from the supplied summary statistics.")
+
+    problem("W2.13(b) Mode and median from CV and skewness", "For a moderately skewed distribution, mean = 100, CV = 35%, and Pearson's coefficient of skewness = 0.2. Find the mode and median.")
+    equation(story, "35 = (σ/100)100        σ = 35", styles)
+    equation(story, "0.2 = (100 − Mode)/35        Mode = 93", styles)
+    equation(story, "0.2 = 3(100 − Median)/35        Median = 97.67", styles)
+    final("Mode = <b>93</b>; Median = <b>97.67</b> (approximately 98). The worksheet prints 97.")
+
+    problem("W2.14 Skewness and kurtosis from moments", "The first four central moments are 0, 16, -10, and 240. Calculate skewness and kurtosis.")
+    equation(story, "μ₁ = 0        μ₂ = 16        μ₃ = −10        μ₄ = 240", styles)
+    fraction(story, "γ₁ =", "−10", "16³ᐟ²", "= −0.15625", styles)
+    fraction(story, "β₁ =", "(−10)²", "16³", "= 0.02441", styles)
+    fraction(story, "β₂ =", "240", "16²", "= 0.9375", styles)
+    mismatch("β₁ = -0.0977; β₂ = 0.9375", "Signed skewness γ₁ = -0.15625; β₁ = 0.02441; β₂ = 0.9375.")
+
+    problem("W2.15 SD and kurtosis - electricity consumption", "Consumption classes 0-10, 10-20, 20-30, 30-40, 40-50 have frequencies 10, 20, 40, 20, 10. Find standard deviation and kurtosis.")
+    equation(story, "x̄ = 25        μ₂ = 120        μ₄ = 36,000", styles)
+    equation(story, "σ = √120 = 10.95", styles)
+    fraction(story, "β₂ =", "36,000", "120²", "= 2.50", styles)
+    equation(story, "β₂ < 3  ⟹  Platykurtic", styles)
+    mismatch("SD = 12.25; β₂ = 2.74", "SD = 10.95 kWh; β₂ = 2.50 from the supplied table.")
+
+    problem("W2.16 Kurtosis - continuous data", "Classes 10-20, 20-30, 30-40, 40-50 have frequencies 6, 12, 18, 4. Calculate the coefficient of kurtosis.")
+    equation(story, "x̄ = 30        μ₂ = 75        μ₄ = 13,125", styles)
+    fraction(story, "β₂ =", "13,125", "75²", "= 2.3333", styles)
+    final("β₂ = <b>2.33</b>; therefore the distribution is <b>platykurtic</b>.")
+
+    problem("W2.17 Moments - continuous frequency distribution", "Classes 0-10, 10-20, 20-30, 30-40 have frequencies 1, 4, 3, 2. Find variance, skewness, and kurtosis by moments.")
+    equation(story, "xᵢ = 5, 15, 25, 35        N = 10        x̄ = 21", styles)
+    equation(story, "μ₂ = 84        μ₃ = 72        μ₄ = 14,832", styles)
+    fraction(story, "γ₁ =", "72", "84³ᐟ²", "= 0.09352", styles)
+    fraction(story, "β₁ =", "72²", "84³", "= 0.00875", styles)
+    fraction(story, "β₂ =", "14,832", "84²", "= 2.1020", styles)
+    mismatch("μ₂ = 81.6; β₁ = 0.078; β₂ = 1.81", "μ₂ = 84; γ₁ = 0.09352; β₁ = 0.00875; β₂ = 2.1020 from the printed distribution.")
+
+    problem("W2.18 Coefficients from central moments", "The first four moments about the mean are 0, 4, 6, and 40. Calculate the coefficient of skewness and kurtosis.")
+    equation(story, "μ₁ = 0        μ₂ = 4        μ₃ = 6        μ₄ = 40", styles)
+    fraction(story, "γ₁ =", "6", "4³ᐟ²", "= 0.75", styles)
+    fraction(story, "β₁ =", "6²", "4³", "= 0.5625", styles)
+    fraction(story, "β₂ =", "40", "4²", "= 2.5", styles)
+    final("β₁ = <b>0.5625</b>; β₂ = <b>2.5</b>. The signed skewness is γ₁ = <b>0.75</b>.")
+
+    chapter(story, 13, "Worksheet 3 - Fully Worked Solutions", "Probability, conditional probability, total probability, and Bayes' theorem", styles)
+
+    problem("W3.1 Inclusion-exclusion - Shanghai and Beijing", "P(S) = 0.7, P(B) = 0.4, and P(S ∪ B) = 0.8. Find the probability of locating in both cities and in neither city.")
+    equation(story, "P(S ∩ B) = P(S) + P(B) − P(S ∪ B)", styles)
+    equation(story, "P(S ∩ B) = 0.7 + 0.4 − 0.8 = 0.3", styles)
+    equation(story, "P(Neither) = 1 − P(S ∪ B) = 1 − 0.8 = 0.2", styles)
+    final("P(Both) = <b>0.3</b>; P(Neither) = <b>0.2</b>.")
+
+    problem("W3.2 Inclusion-exclusion - bonds and mutual funds", "P(T) = 0.6, P(M) = 0.3, and P(T ∩ M) = 0.15. Find the probability of either investment and neither investment.")
+    equation(story, "P(T ∪ M) = 0.6 + 0.3 − 0.15 = 0.75", styles)
+    equation(story, "P(Neither) = 1 − 0.75 = 0.25", styles)
+    final("P(Either) = <b>0.75</b>; P(Neither) = <b>0.25</b>.")
+
+    problem("W3.3 Conditional probability - education and gender", "In 200 adults: Elementary has 38 males and 45 females; Secondary has 28 males and 50 females; College has 22 males and 17 females. Find P(Male|Secondary) and P(No College|Female).")
+    fraction(story, "P(Male|Secondary) =", "28", "28 + 50", "= 14/39 = 0.359", styles)
+    fraction(story, "P(No College|Female) =", "45 + 50", "45 + 50 + 17", "= 95/112 = 0.848", styles)
+    final("<b>14/39 ≈ 0.359</b> and <b>95/112 ≈ 0.848</b>.")
+
+    problem("W3.4 Conditional probability - hypertension and smoking", "Among 180 people, hypertension counts are 21 nonsmokers, 36 moderate smokers, 30 heavy smokers; nonhypertension counts are 48, 26, 19. Find P(Hypertension|Heavy) and P(Nonsmoker|Nonhypertension).")
+    fraction(story, "P(Hyp|Heavy) =", "30", "30 + 19", "= 30/49 = 0.612", styles)
+    fraction(story, "P(Nonsmoker|NH) =", "48", "48 + 26 + 19", "= 16/31 = 0.516", styles)
+    final("<b>30/49 ≈ 0.612</b> and <b>16/31 ≈ 0.516</b>.")
+
+    problem("W3.5 Conditional probability - oil and filter", "P(O) = 0.25, P(F) = 0.40, and P(O ∩ F) = 0.14. Find P(F|O) and P(O|F).")
+    fraction(story, "P(F|O) =", "P(O ∩ F)", "P(O)", "= 0.14/0.25 = 0.56", styles)
+    fraction(story, "P(O|F) =", "P(O ∩ F)", "P(F)", "= 0.14/0.40 = 0.35", styles)
+    final("P(F|O) = <b>0.56</b>; P(O|F) = <b>0.35</b>.")
+
+    problem("W3.6 Conditional probability - television show", "P(M) = 0.4, P(W) = 0.5, and P(M|W) = 0.7. Find the probability that both watch, that the wife watches given the husband watches, and that at least one watches.")
+    equation(story, "P(M ∩ W) = P(W)P(M|W) = 0.5(0.7) = 0.35", styles)
+    fraction(story, "P(W|M) =", "P(M ∩ W)", "P(M)", "= 0.35/0.4 = 0.875", styles)
+    equation(story, "P(M ∪ W) = 0.4 + 0.5 − 0.35 = 0.55", styles)
+    final("Both = <b>0.35</b>; P(W|M) = <b>0.875</b>; at least one = <b>0.55</b>.")
+
+    problem("W3.7 Conditional probability - bond referendum", "P(H) = 0.21, P(W) = 0.28, and P(H ∩ W) = 0.15. Find P(H ∪ W), P(W|H), and P(H|W′).")
+    equation(story, "P(H ∪ W) = 0.21 + 0.28 − 0.15 = 0.34", styles)
+    fraction(story, "P(W|H) =", "0.15", "0.21", "= 5/7", styles)
+    equation(story, "P(H ∩ W′) = P(H) − P(H ∩ W) = 0.06", styles)
+    fraction(story, "P(H|W′) =", "0.06", "1 − 0.28", "= 1/12", styles)
+    final("<b>0.34</b>, <b>5/7 ≈ 0.714</b>, and <b>1/12 ≈ 0.0833</b>.")
+
+    problem("W3.8 Total probability - cancer diagnosis", "P(C) = 0.05, P(D|C) = 0.78, and P(D|C′) = 0.06. Find the probability that an adult is diagnosed as having cancer.")
+    equation(story, "P(C′) = 1 − 0.05 = 0.95", styles)
+    equation(story, "P(D) = P(C)P(D|C) + P(C′)P(D|C′)", styles)
+    equation(story, "P(D) = 0.05(0.78) + 0.95(0.06) = 0.039 + 0.057 = 0.096", styles)
+    final("P(D) = <b>0.096</b>.")
+
+    problem("W3.9 Bayes' theorem - cancer after diagnosis", "Using W3.8, find the probability that a person diagnosed with cancer actually has cancer.")
+    fraction(story, "P(C|D) =", "P(C)P(D|C)", "P(D)", "", styles)
+    fraction(story, "P(C|D) =", "0.05(0.78)", "0.096", "= 0.40625", styles)
+    final("P(C|D) = <b>0.40625 = 40.625%</b>.")
+
+    problem("W3.10 Bayes' theorem - unstamped film packages", "John stamps 20% of packages and fails once in 200; Tom stamps 60% and fails once in 100; Jeff stamps 15% and fails once in 90; Pat stamps 5% and fails once in 200. Given a missing expiration date, find the probability John inspected it.")
+    equation(story, "P(F) = 0.20(1/200)+0.60(1/100)+0.15(1/90)+0.05(1/200)", styles)
+    equation(story, "P(F) = 107/12,000", styles)
+    fraction(story, "P(J|F) =", "0.20(1/200)", "107/12,000", "= 12/107 = 0.11215", styles)
+    mismatch("20/143 ≈ 0.1399", "12/107 ≈ 0.11215 from the stated workloads and failure rates.")
+
+    problem("W3.11 Conditional probability - relay stations", "For malfunctions caused by other human errors, stations A, B, and C report 7, 7, and 5 cases. Given this cause, find the probability the malfunction came from station C.")
+    fraction(story, "P(C|Human Error) =", "5", "7 + 7 + 5", "= 5/19 = 0.2632", styles)
+    final("The probability is <b>5/19 ≈ 0.263</b>.")
+
+    problem("W3.12 Bayes' theorem - latex paint and rollers", "P(L) = 0.75, P(R|L) = 0.60, and P(R|L′) = 0.30. Given that a customer buys a roller and paint, find the probability that the paint is latex.")
+    equation(story, "P(R) = 0.75(0.60) + 0.25(0.30) = 0.525", styles)
+    fraction(story, "P(L|R) =", "0.75(0.60)", "0.525", "= 6/7 = 0.8571", styles)
+    final("The probability is <b>6/7 ≈ 0.857</b>.")
+
+    problem("W3.13 Monty Hall", "A prize is behind one of three doors. You select door A. The host opens door B and shows no prize, then offers a switch to door C. Determine whether you should switch.")
+    equation(story, "P(Prize behind A) = 1/3", styles)
+    equation(story, "P(Prize not behind A) = 1 − 1/3 = 2/3", styles)
+    equation(story, "P(Win by staying) = 1/3", styles)
+    equation(story, "P(Win by switching) = 2/3", styles)
+    final("<b>Switch doors.</b> The probability of winning by switching is <b>2/3</b>.")
+
+    problem("W3.14 Bayes' theorem - truth serum", "P(Guilty) = 0.05. The serum identifies a guilty suspect as guilty 90% of the time and misjudges an innocent suspect as guilty 1% of the time. Given a guilty indication, find the probability the suspect is innocent.")
+    equation(story, "P(I) = 0.95        P(+|G) = 0.90        P(+|I) = 0.01", styles)
+    equation(story, "P(+) = 0.05(0.90) + 0.95(0.01) = 0.0545", styles)
+    fraction(story, "P(I|+) =", "0.95(0.01)", "0.0545", "= 19/109 = 0.17431", styles)
+    mismatch("0.155 = 15.5%", "19/109 ≈ 0.17431 = 17.43% from the stated probabilities.")
+
+    problem("W3.15 Bayes' theorem - faulty motel plumbing", "Clients are assigned to Ramada, Sheraton, and Lakeview with probabilities 0.20, 0.50, 0.30. Faulty-plumbing rates are 0.05, 0.04, 0.08. Find P(Faulty) and P(Lakeview|Faulty).")
+    equation(story, "P(F) = 0.20(0.05)+0.50(0.04)+0.30(0.08) = 0.054", styles)
+    fraction(story, "P(L|F) =", "0.30(0.08)", "0.054", "= 4/9 = 0.4444", styles)
+    final("P(F) = <b>0.054</b>; P(L|F) = <b>4/9 ≈ 0.444</b>.")
+
+    problem("W3.16 Bayes' theorem - consulting-firm overruns", "Firms A, B, and C are used with probabilities 0.40, 0.35, 0.25; their cost-overrun probabilities are 0.05, 0.03, 0.15. Given an overrun, find P(C|O) and P(A|O).")
+    equation(story, "P(O) = 0.40(0.05)+0.35(0.03)+0.25(0.15) = 0.068", styles)
+    fraction(story, "P(C|O) =", "0.25(0.15)", "0.068", "= 75/136 = 0.55147", styles)
+    fraction(story, "P(A|O) =", "0.40(0.05)", "0.068", "= 5/17 = 0.29412", styles)
+    mismatch("P(C|O) = 75/134; P(A|O) = 10/67", "P(C|O) = 75/136 ≈ 0.5515; P(A|O) = 5/17 ≈ 0.2941.")
+
+    problem("W3.17 Bayes' theorem - disease after a negative test", "P(C) = 0.07. The false-negative rate is 0.10 and the false-positive rate is 0.05. Given a negative result, find the probability the woman has the disease.")
+    equation(story, "P(−|C) = 0.10        P(−|C′) = 0.95", styles)
+    equation(story, "P(−) = 0.07(0.10)+0.93(0.95) = 0.8905", styles)
+    fraction(story, "P(C|−) =", "0.07(0.10)", "0.8905", "= 14/1781 = 0.00786", styles)
+    final("The probability is <b>0.00786 ≈ 0.786%</b>.")
+
+    problem("W3.18 Bayes' theorem - defectives in lots", "Lots of 20 contain 0, 1, or 2 defectives with probabilities 0.60, 0.30, 0.10. Two components are tested without replacement and neither is defective. Find the posterior probability of 0, 1, and 2 defectives in the lot.")
+    equation(story, "P(NN|D₀) = 1", styles)
+    fraction(story, "P(NN|D₁) =", "C(19,2)", "C(20,2)", "= 171/190 = 0.9", styles)
+    fraction(story, "P(NN|D₂) =", "C(18,2)", "C(20,2)", "= 153/190", styles)
+    equation(story, "P(NN) = 0.60(1)+0.30(0.9)+0.10(153/190) = 903/950", styles)
+    fraction(story, "P(D₀|NN) =", "0.60(1)", "903/950", "= 190/301 = 0.63123", styles)
+    fraction(story, "P(D₁|NN) =", "0.30(0.9)", "903/950", "= 171/602 = 0.28405", styles)
+    fraction(story, "P(D₂|NN) =", "0.10(153/190)", "903/950", "= 51/602 = 0.08472", styles)
+    mismatch("285/313, 28/313, 0", "190/301 ≈ 0.63123, 171/602 ≈ 0.28405, and 51/602 ≈ 0.08472.")
+
+    problem("W3.19 Bayes' theorem - rare disease", "One person in 500 has a disease. The correct-positive rate is 95% and the false-positive rate is 5%. Given a positive result, find the probability the person has the disease.")
+    equation(story, "P(C) = 1/500 = 0.002        P(C′) = 0.998", styles)
+    equation(story, "P(+) = 0.002(0.95)+0.998(0.05) = 0.0518", styles)
+    fraction(story, "P(C|+) =", "0.002(0.95)", "0.0518", "= 19/518 = 0.03668", styles)
+    final("The probability is <b>0.03668 ≈ 3.67%</b>.")

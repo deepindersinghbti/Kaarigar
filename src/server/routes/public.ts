@@ -8,8 +8,9 @@ import { resolveOrigin } from '../lib/origin';
 import type { PublicProfile } from '../data/profiles';
 import { createReview, summariseFor } from '../data/reviews';
 import type { ReviewSummary } from '../data/reviews';
+import { calculateTrustScore } from '../data/trustScore';
 import { gateReviewToken } from './reputation';
-import type { ReviewRatings } from '../../types';
+import type { ReviewRatings, TrustScore } from '../../types';
 
 /**
  * public - server-rendered surfaces that require no login and no app install.
@@ -89,6 +90,16 @@ body{
 .eyebrow span{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#15803d}
 h1{font-size:26px;font-weight:800;letter-spacing:-.02em;margin-bottom:2px}
 .sub{font-size:13px;color:#6b7280;margin-bottom:18px}
+.trust{margin-top:20px;padding:16px;border:1px solid #e5e7eb;border-radius:18px;background:#f9fafb}
+.trust-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.trust-title{font-size:13px;font-weight:900;color:#111827}
+.trust-score{font-size:24px;font-weight:900;color:#f97316}
+.trust-note{font-size:11px;color:#6b7280;margin-top:3px}
+.trust-row{display:grid;grid-template-columns:1fr 42px;gap:10px;align-items:center;margin-top:12px}
+.trust-label{font-size:11px;color:#374151;font-weight:700}
+.trust-bar{height:7px;background:#e5e7eb;border-radius:99px;overflow:hidden;margin-top:5px}
+.trust-fill{height:100%;background:#f97316;border-radius:99px}
+.trust-value{font-size:11px;font-weight:900;color:#6b7280;text-align:right}
 
 .card{
   position:relative;background:#111827;color:#fff;border-radius:24px;
@@ -253,7 +264,44 @@ function renderReviews(r: ReviewSummary): string {
   </div>`;
 }
 
-function renderPassport(p: PublicProfile, url: string, qrSvg: string, reviews: ReviewSummary): string {
+function renderTrustScore(score?: TrustScore): string {
+  if (!score) return '';
+
+  const rows: Array<{ label: string; value: number; max: number }> = [
+    { label: 'Phone identity', value: score.components.identityVerification, max: 20 },
+    { label: 'Skill credentials', value: score.components.skillCredentials, max: 15 },
+    { label: 'Job-linked work history', value: score.components.verifiedWorkHistory, max: 25 },
+    { label: 'Customer ratings', value: score.components.customerRatings, max: 25 },
+    { label: 'Reliability penalty', value: score.components.reliabilityRecord, max: 10 },
+    { label: 'Skilling engagement', value: score.components.skillingEngagement, max: 5 },
+  ];
+
+  const renderedRows = rows.map((row) => {
+    const positiveMax = row.max || 10;
+    const positiveValue = Math.max(0, row.value);
+    const width = Math.round(Math.min(100, (positiveValue / positiveMax) * 100));
+    const suffix = row.max ? ` / ${row.max}` : '';
+    return `<div class="trust-row">
+      <div><div class="trust-label">${esc(row.label)}</div><div class="trust-bar"><div class="trust-fill" style="width:${width}%"></div></div></div>
+      <div class="trust-value">${esc(`${row.value}${suffix}`)}</div>
+    </div>`;
+  }).join('');
+
+  return `<div class="trust">
+    <div class="trust-head"><div class="trust-title">Trust evidence</div><div class="trust-score">${esc(score.value)}<span style="font-size:12px;color:#6b7280"> / 100</span></div></div>
+    <div class="trust-note">A transparent rubric from phone OTP, completed jobs and customer feedback. Self-entered skills and certificates are not treated as verified.</div>
+    <div class="trust-note"><strong>Credential status:</strong> Not linked &middot; <strong>DigiLocker sandbox/mock:</strong> demo only. No live government verification is performed.</div>
+    ${renderedRows}
+  </div>`;
+}
+
+function renderPassport(
+  p: PublicProfile,
+  url: string,
+  qrSvg: string,
+  reviews: ReviewSummary,
+  trustScore?: TrustScore
+): string {
   const verified = p.verifiedStatus === 'verified';
   const skills = Array.isArray(p.skills) ? p.skills : [];
   const certs = Array.isArray(p.certifications) ? p.certifications : [];
@@ -261,7 +309,7 @@ function renderPassport(p: PublicProfile, url: string, qrSvg: string, reviews: R
   const body = `
 <div class="eyebrow"><span class="dot"></span><span>Government &amp; Industry Aligned</span></div>
 <h1>Digital Kaarigar Passport</h1>
-<p class="sub">QR-&#2360;&#2340;&#2381;&#2351;&#2366;&#2346;&#2367;&#2340; &#2325;&#2366;&#2352;&#2381;&#2351; &#2346;&#2361;&#2330;&#2366;&#2344; &#2346;&#2340;&#2381;&#2352; &bull; Verified independently, no app needed</p>
+<p class="sub">QR-&#2360;&#2340;&#2381;&#2351;&#2366;&#2346;&#2367;&#2340; &#2325;&#2366;&#2352;&#2381;&#2351; &#2346;&#2361;&#2330;&#2366;&#2344; &#2340;&#2325; &#2346;&#2361;&#2369;&#2305;&#2330; &bull; No app needed</p>
 
 <div class="card">
   <div class="chead">
@@ -295,14 +343,14 @@ function renderPassport(p: PublicProfile, url: string, qrSvg: string, reviews: R
 
   ${
     skills.length
-      ? `<div class="sec"><div class="sec-h">Verified Skills</div>
+      ? `<div class="sec"><div class="sec-h">Skills listed by worker</div>
          <div class="chips">${skills.map((s) => `<span class="chip">${esc(s)}</span>`).join('')}</div></div>`
       : ''
   }
 
   ${
     certs.length
-      ? `<div class="sec"><div class="sec-h">Accreditations &amp; Training</div>
+      ? `<div class="sec"><div class="sec-h">Credentials listed by worker</div>
          ${certs.map((c) => `<div class="cert">&#127894; ${esc(c)}</div>`).join('')}</div>`
       : ''
   }
@@ -310,6 +358,8 @@ function renderPassport(p: PublicProfile, url: string, qrSvg: string, reviews: R
   ${p.bio ? `<div class="sec"><div class="sec-h">About</div><p class="bio">${esc(p.bio)}</p></div>` : ''}
 
   ${renderReviews(reviews)}
+
+  ${renderTrustScore(trustScore)}
 
   <div class="qrow">
     <div class="qbox">${qrSvg}</div>
@@ -323,13 +373,13 @@ function renderPassport(p: PublicProfile, url: string, qrSvg: string, reviews: R
 
 <p class="foot">
   This passport is owned by the worker and travels with them.<br>
-  Verified fields come from completed jobs on Kaarigar &mdash; <strong>they cannot be self-awarded.</strong><br>
+  Job evidence and customer feedback are recorded on Kaarigar; skills and credentials remain worker-entered until an authorised verification is linked.<br>
   Earnings and contact details are private and are never shown here.
 </p>`;
 
   const desc = `${p.name} — ${p.trade}${p.location ? ` in ${p.location}` : ''}. ${
     p.experienceYears ?? 0
-  } years experience, ${p.totalJobsCount ?? 0} jobs completed. Verified Digital Kaarigar Passport.`;
+  } years experience, ${p.totalJobsCount ?? 0} jobs recorded. Digital Kaarigar Passport with job-linked evidence.`;
 
   return shell(`${p.name} — ${p.trade} | Kaarigar Passport`, desc, body, url);
 }
@@ -407,6 +457,7 @@ publicRouter.get('/p/:handle', async (req: Request, res: Response) => {
     const reviews = ownerId
       ? await summariseFor(ownerId)
       : { count: 0, average: null, axes: null, recent: [] };
+    const trustScore = ownerId ? await calculateTrustScore(ownerId) : undefined;
 
     // Error correction level Q (~25%) rather than the M default. This QR is
     // scanned off a phone screen, a printed card, and - per the demo plan - a
@@ -423,7 +474,7 @@ publicRouter.get('/p/:handle', async (req: Request, res: Response) => {
     // Short public cache: a passport changes rarely, but "rarely" is not
     // "never", and a stale trust signal is worse than an extra request.
     res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
-    res.status(200).send(renderPassport(profile, url, qrSvg, reviews));
+    res.status(200).send(renderPassport(profile, url, qrSvg, reviews, trustScore));
   } catch (err) {
     console.error('[public] /p/:handle failed', err);
     res.status(500).send(

@@ -47,6 +47,14 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
   onNavigateTab,
 }) => {
   const t = TRANSLATIONS[currentLanguage];
+  const identityLabel = profile.verifiedStatus === 'verified'
+    ? 'Identity verified'
+    : profile.verifiedStatus === 'pending'
+      ? 'Verification pending'
+      : 'Profile not verified';
+  const identityClass = profile.verifiedStatus === 'verified'
+    ? 'bg-green-100 text-green-700'
+    : 'bg-gray-100 text-gray-600';
 
   const todayStr = todayIso();
   const todayKamai = kamaiList
@@ -73,8 +81,8 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
               <h1 className="text-xl sm:text-2xl font-extrabold text-gray-900 leading-tight">
                 नमस्ते {profile.name.split(' ')[0]} जी 👋
               </h1>
-              <span className="bg-green-100 text-green-700 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full flex items-center gap-1">
-                <CheckCircle2 className="w-3 h-3 stroke-[3]" /> Verified
+              <span className={`${identityClass} text-[10px] font-extrabold px-2.5 py-0.5 rounded-full flex items-center gap-1`}>
+                <CheckCircle2 className="w-3 h-3 stroke-[3]" /> {identityLabel}
               </span>
             </div>
             <p className="text-xs text-gray-500 font-medium">
@@ -229,7 +237,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
         </button>
       </div>
 
-      {/* Quick Summary Cards (Today's Kamai & Verified Passport Snapshot) */}
+      {/* Quick Summary Cards (Today's Kamai & passport evidence snapshot) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
         {/* Today's Kamai Widget */}
         <div className="bg-white p-6 rounded-3xl border border-gray-200 shadow-sm space-y-3">
@@ -285,11 +293,11 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
                 {profile.rating}
               </span>
               <span className="text-xs text-gray-500 font-semibold">
-                (248+ प्रमाणित काम)
+                ({profile.totalJobsCount}+ recorded jobs)
               </span>
             </div>
             <span className="bg-green-50 text-green-700 border border-green-200 text-xs font-extrabold px-3 py-1 rounded-full">
-              100% Verified
+              Evidence snapshot
             </span>
           </div>
         </div>

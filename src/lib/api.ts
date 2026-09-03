@@ -1,5 +1,19 @@
 import { authHeader } from './authToken';
-import type { JobItem, KamaiEntry, WorkerProfile } from '../types';
+import type { JobItem, KamaiEntry, RateBand, WorkerProfile } from '../types';
+
+export interface PricingBandResult extends Partial<RateBand> {
+  trade: string;
+  taskCode: string;
+  locality: string;
+  suppressed: boolean;
+  confidence: 'observed' | 'seeded' | 'suppressed';
+  sampleN: number;
+  minObservations: number;
+  message?: string;
+  basis?: string;
+  floored?: boolean;
+  floorApplicable?: boolean;
+}
 
 /**
  * The typed client for every authenticated endpoint the screens use.
@@ -120,6 +134,17 @@ export const api = {
     return body.jobs;
   },
 
+  async listPricingTasks(): Promise<Array<{ trade: string; taskCode: string }>> {
+    const body = await request<{ tasks: Array<{ trade: string; taskCode: string }> }>('/api/pricing/tasks');
+    return body.tasks;
+  },
+
+  async getPricingBand(trade: string, taskCode: string, locality?: string): Promise<PricingBandResult> {
+    const params = new URLSearchParams({ trade, taskCode });
+    if (locality) params.set('locality', locality);
+    return request<PricingBandResult>(`/api/pricing/band?${params.toString()}`);
+  },
+
   /**
    * Create a job. The client-generated UUIDv7 already on the object is sent as
    * the id, and the server is idempotent on it, so a retry after a timeout
@@ -162,5 +187,38 @@ export const api = {
       body: JSON.stringify(entry),
     });
     return body.entry;
+  },
+
+  /** Download the server-generated append-only ledger statement. */
+  async downloadIncomeStatement(months: 6 | 12 = 6): Promise<Blob> {
+    let res: Response;
+    try {
+      res = await fetch('/api/ledger/export/income-statement', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeader(),
+        },
+        body: JSON.stringify({ months }),
+      });
+    } catch {
+      throw new ApiError(0, 'network_unreachable', 'No connection. Your data is safe on this device.');
+    }
+
+    if (res.status === 401) {
+      onUnauthorized?.();
+      throw new ApiError(401, 'unauthorized', 'Your session ended. Please sign in again.');
+    }
+    if (!res.ok) {
+      let message = `Request failed (${res.status}).`;
+      try {
+        const body = await res.json();
+        if (typeof body?.message === 'string') message = body.message;
+      } catch {
+        /* non-JSON body; keep the default */
+      }
+      throw new ApiError(res.status, 'income_statement_failed', message);
+    }
+    return res.blob();
   },
 };

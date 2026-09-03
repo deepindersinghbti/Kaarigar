@@ -31,6 +31,11 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   onSaveProfile,
 }) => {
   const t = TRANSLATIONS[currentLanguage];
+  const identityLabel = profile.verifiedStatus === 'verified'
+    ? 'Identity verified'
+    : profile.verifiedStatus === 'pending'
+      ? 'Verification pending'
+      : 'Profile not verified';
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState<WorkerProfile>({ ...profile });
 
@@ -55,8 +60,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               <h2 className="text-xl sm:text-2xl font-extrabold text-white">
                 {profile.name}
               </h2>
-              <span className="bg-green-500/20 text-green-400 text-xs font-bold px-2.5 py-0.5 rounded-full border border-green-500/30">
-                ✓ Verified
+              <span className="bg-gray-700/70 text-gray-200 text-xs font-bold px-2.5 py-0.5 rounded-full border border-gray-600">
+                {identityLabel}
               </span>
             </div>
             <p className="text-orange-400 font-bold text-sm">
@@ -220,7 +225,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             {/* Skills */}
             <div>
               <span className="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-2">
-                Certified Skills (हुनर)
+                Skills listed by worker (हुनर)
               </span>
               <div className="flex flex-wrap gap-2">
                 {profile.skills.map((skill, idx) => (
@@ -238,8 +243,11 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             {/* Accreditations */}
             <div>
               <span className="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-2">
-                ट्रेनिंग व सर्टिफिकेट्स (Certificates)
+                ट्रेनिंग व सर्टिफिकेट्स (Worker-entered)
               </span>
+              <p className="text-[11px] text-gray-500 mb-2">
+                Credential status: Not linked · DigiLocker sandbox/mock: demo only. No live government verification is performed.
+              </p>
               <div className="space-y-2.5">
                 {profile.certifications.map((cert, idx) => (
                   <div

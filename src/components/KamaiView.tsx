@@ -21,6 +21,7 @@ interface KamaiViewProps {
   kamaiList: KamaiEntry[];
   currentLanguage: SupportedLanguage;
   onAddKamaiVoice: () => void;
+  onDownloadIncomeStatement: () => void;
   /** Sync state per record (section 9.1). See JobsView for why it is a function. */
   syncStateOf: (recordId: string) => SyncState;
 }
@@ -30,6 +31,7 @@ export const KamaiView: React.FC<KamaiViewProps> = ({
   syncStateOf,
   currentLanguage,
   onAddKamaiVoice,
+  onDownloadIncomeStatement,
 }) => {
   const t = TRANSLATIONS[currentLanguage];
   const [activeTab, setActiveTab] = useState<'today' | 'week' | 'month'>('today');
@@ -75,14 +77,25 @@ export const KamaiView: React.FC<KamaiViewProps> = ({
         </div>
 
         {/* 🎙️ Add Earnings Voice Button */}
-        <button
-          id="kamai-view-voice-add-btn"
-          onClick={onAddKamaiVoice}
-          className="w-full sm:w-auto shrink-0 flex items-center justify-center gap-3 px-6 py-4 rounded-full bg-orange-500 hover:bg-orange-600 text-white font-extrabold text-base shadow-xl shadow-orange-200 transition-all active:scale-95 group"
-        >
-          <Mic className="w-5 h-5 group-hover:scale-110 transition-transform" />
-          <span>{t.addEarnings} (बोलकर)</span>
-        </button>
+        <div className="w-full sm:w-auto flex flex-col sm:flex-row gap-2 shrink-0">
+          <button
+            id="kamai-view-voice-add-btn"
+            onClick={onAddKamaiVoice}
+            className="flex items-center justify-center gap-3 px-6 py-4 rounded-full bg-orange-500 hover:bg-orange-600 text-white font-extrabold text-base shadow-xl shadow-orange-200 transition-all active:scale-95 group"
+          >
+            <Mic className="w-5 h-5 group-hover:scale-110 transition-transform" />
+            <span>{t.addEarnings} (बोलकर)</span>
+          </button>
+          <button
+            id="kamai-view-income-statement-btn"
+            type="button"
+            onClick={onDownloadIncomeStatement}
+            className="flex items-center justify-center gap-2 px-5 py-3 rounded-full bg-white border border-orange-200 text-orange-800 font-extrabold text-sm hover:bg-orange-50 transition-all active:scale-95"
+          >
+            <Download className="w-4 h-4" />
+            <span>Income PDF</span>
+          </button>
+        </div>
       </div>
 
       {/* Main Stats Grid */}

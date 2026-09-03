@@ -30,7 +30,7 @@ export const INITIAL_PROFILE: WorkerProfile = {
   rating: 4.9,
   totalJobsCount: 248,
   totalEarnings: 384500,
-  verifiedStatus: 'verified',
+  verifiedStatus: 'unverified',
   joinedDate: 'March 2024',
   bloodGroup: 'O+',
   dailyRate: 1200,

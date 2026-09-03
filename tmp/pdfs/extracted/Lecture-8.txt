@@ -1,0 +1,621 @@
+--- PAGE 1 ---
+Theory of Probability & Statistics
+Lecture 8: Skewness (Continued), Kurtosis & Central
+Moments
+Comprehensive Notes for B.Tech CSE Students
+
+--- PAGE 2 ---
+Table of Contents
+1 Karl Pearson’s Coefficient of Skewness (Continued) 3
+1.1 Example 1: Computing Karl Pearson’s Skewness . . . . . . . . . . . . . . 3
+1.2 Example 2: Detailed Calculation with Frequency Distribution . . . . . . 4
+2 Alternative Measures of Skewness 6
+2.1 Bowley’s Coefficient of Skewness (Based on Quartiles) . . . . . . . . . . . 6
+2.2 Properties of Bowley’s Skewness . . . . . . . . . . . . . . . . . . . . . . . 7
+2.3 Example: Bowley’s Skewness . . . . . . . . . . . . . . . . . . . . . . . . . 7
+3 Comparing Skewness Measures 7
+4 Introduction to Kurtosis through Stock Market Investment 7
+4.1 The Investment Dilemma . . . . . . . . . . . . . . . . . . . . . . . . . . . 8
+4.2 Understanding Stock Return Data . . . . . . . . . . . . . . . . . . . . . . 8
+4.3 Visualizing Stock Returns - The Power of Histograms . . . . . . . . . . . 9
+4.3.1 Figure 1: Composite Histogram of All Three Stock Types . . . . . 9
+4.3.2 Figure 2: Blue-chip Stock Returns (Mesokurtic) . . . . . . . . . . 10
+4.3.3 Figure 3: Cryptocurrency/Small-cap Returns (Leptokurtic) . . . . 11
+4.3.4 Figure 4: Utility Stock Returns (Platykurtic) . . . . . . . . . . . 12
+5 Concept of Kurtosis 12
+5.1 Types of Kurtosis . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 13
+5.1.1 Mesokurtic (β 2 = 3) . . . . . . . . . . . . . . . . . . . . . . . . . . 13
+5.1.2 Leptokurtic (β 2 >3) . . . . . . . . . . . . . . . . . . . . . . . . . 13
+5.1.3 Platykurtic (β 2 <3) . . . . . . . . . . . . . . . . . . . . . . . . . 14
+5.2 Comparative Analysis of Kurtosis Types in Stock Market . . . . . . . . . 14
+5.3 How to Identify Kurtosis from Data . . . . . . . . . . . . . . . . . . . . . 15
+6 Python Code to Generate Stock Market Kurtosis Visualizations 15
+7 Summary of Kurtosis and Investment Decisions 17
+8 Central Moments (Moments about Mean) 17
+8.1 Definition of Central Moments . . . . . . . . . . . . . . . . . . . . . . . . 17
+8.2 First Four Central Moments and Their Significance . . . . . . . . . . . . 17
+8.3 Using Moments to Calculate Skewness and Kurtosis . . . . . . . . . . . . 18
+8.3.1 Skewness using Moments . . . . . . . . . . . . . . . . . . . . . . . 18
+8.3.2 Kurtosis using Moments . . . . . . . . . . . . . . . . . . . . . . . 18
+1/20
+
+--- PAGE 3 ---
+8.4 Summary of Moments and Their Applications . . . . . . . . . . . . . . . 19
+9 Practice Exercises 19
+10 Key Takeaways for CSE Students 19
+2/20
+
+--- PAGE 4 ---
+1 Karl Pearson’s Coefficient of Skewness (Continued)
+1.1 Example 1: Computing Karl Pearson’s Skewness
+Example: Symmetric Data
+Data:8, 9, 10, 11, 12
+•Mean = 10
+•Median = 10
+•Mode = No unique mode
+•Standard Deviation = 1.58
+Using the median formula:
+Sk= 3(10−10)
+1.58 = 0
+1.58 = 0
+Interpretation:Sk = 0, data is perfectly symmetric.
+Example: Positively Skewed Data
+Data:1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 100
+•Mean = 14.09
+•Median = 6
+•Mode = No unique mode
+•Standard Deviation = 29.4
+Using the median formula:
+Sk= 3(14.09−6)
+29.4 = 3(8.09)
+29.4 = 24.27
+29.4 = 0.825
+Interpretation:Sk = 0.825 > 0, data is positively skewed (right-skewed).
+Example: Negatively Skewed Data
+Data:1, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99
+•Mean = 85.45
+•Median = 94
+•Mode = No unique mode
+•Standard Deviation = 29.4
+3/20
+
+--- PAGE 5 ---
+Using the median formula:
+Sk= 3(85.45−94)
+29.4 = 3(−8.55)
+29.4 = −25.65
+29.4 =−0.872
+Interpretation:Sk = -0.872 < 0, data is negatively skewed (left-skewed).
+1.2 Example 2: Detailed Calculation with Frequency Distribu-
+tion
+Full Example with Grouped Data
+Calculate Karl Pearson’s Coefficient of Skewness for the following distribution:
+Class Interval Frequency
+10 - 20 3
+20 - 30 5
+30 - 40 5
+40 - 50 7
+50 - 60 7
+60 - 70 6
+70 - 80 5
+80 - 90 7
+90 - 100 5
+Step 1: Calculate Mean
+Class fi xi fixi
+10 - 20 3 15 45
+20 - 30 5 25 125
+30 - 40 5 35 175
+40 - 50 7 45 315
+50 - 60 7 55 385
+60 - 70 6 65 390
+70 - 80 5 75 375
+80 - 90 7 85 595
+90 - 100 5 95 475
+N= 50 P = 2880
+4/20
+
+--- PAGE 6 ---
+x= 2880
+50 = 57.6
+Step 2: Calculate Median
+Class fi CF
+10 - 20 3 3
+20 - 30 5 8
+30 - 40 5 13
+40 - 50 7 20
+50 - 60 7 27
+60 - 70 6 33
+70 - 80 5 38
+80 - 90 7 45
+90 - 100 5 50
+Median position: N
+2 = 25Median class: 50 - 60 (CF 20 to 27)
+Median= 50 + 25−20
+7 ×10 = 50 + 5
+7 ×10 = 50 + 7.14 = 57.14
+Step 3: Calculate Mode
+Modal class: 40-50 (highest frequency = 7, but 50-60 and 80-90 also have 7) Using
+first modal class: 40-50
+•L= 40
+•f 1 = 7
+•f 0 = 5
+•f 2 = 7
+•h= 10
+Mode= 40 + 7−5
+2(7)−5−7 ×10 = 40 + 2
+14−12 ×10 = 40 + 10 = 50
+Step 4: Calculate Standard Deviation
+5/20
+
+--- PAGE 7 ---
+Class fi xi (xi − x) fi(xi − x)2
+10 - 20 3 15 -42.6 5443.08
+20 - 30 5 25 -32.6 5313.80
+30 - 40 5 35 -22.6 2553.80
+40 - 50 7 45 -12.6 1111.32
+50 - 60 7 55 -2.6 47.32
+60 - 70 6 65 7.4 328.56
+70 - 80 5 75 17.4 1513.80
+80 - 90 7 85 27.4 5255.32
+90 - 100 5 95 37.4 6993.80
+N= 50 P = 28560.80
+σ=
+r
+28560.80
+50 =
+√
+571.216 = 23.90
+Step 5: Calculate Karl Pearson’s Skewness
+Sk= Mean−Mode
+σ = 57.6−50
+23.90 = 7.6
+23.90 = 0.318
+Interpretation:Sk = 0.318 > 0, data is positively skewed (right-skewed).
+Verification with Median Formula:
+Sk= 3(Mean−Median)
+σ = 3(57.6−57.14)
+23.90 = 3(0.46)
+23.90 = 1.38
+23.90 = 0.058
+Note:The two formulas give slightly different results because mode is not well-
+defined (multimodal data). The median formula is more reliable in such cases.
+2 Alternative Measures of Skewness
+2.1 Bowley’s Coefficient of Skewness (Based on Quartiles)
+SkB = Q3 +Q 1 −2Q 2
+Q3 −Q 1
+Where:
+•Q 1 = First Quartile (25th percentile)
+•Q 2 = Second Quartile (Median, 50th percentile)
+•Q 3 = Third Quartile (75th percentile)
+6/20
+
+--- PAGE 8 ---
+2.2 Properties of Bowley’s Skewness
+Key Properties:
+•Range:Between -1 and +1
+•Sk = 0:Symmetric
+•Sk > 0:Positively skewed
+•Sk < 0:Negatively skewed
+•Robust:Less affected by outliers
+•Useful for:Skewed data with outliers
+2.3 Example: Bowley’s Skewness
+Using the data from the previous example:
+•Q 1 = 39(calculated earlier)
+•Q 2 = 57.14(Median)
+•Q 3 = 79(calculated earlier)
+SkB = Q3 +Q 1 −2Q 2
+Q3 −Q 1
+= 79 + 39−2(57.14)
+79−39 = 118−114.28
+40 = 3.72
+40 = 0.093
+Interpretation:Sk B = 0.093 > 0, slightly positively skewed.
+3 Comparing Skewness Measures
+Measure Formula Pros & Cons
+Karl Pearson
+(Mode)
+Mean−Mode
+σ Most common, but mode may not
+exist
+Karl Pearson (Me-
+dian)
+3(Mean−Median)
+σ More reliable when mode is not
+defined
+Bowley’s Q3+Q1−2Q2
+Q3−Q1
+Robust to outliers, uses quartiles
+4 Introduction to Kurtosis through Stock Market In-
+vestment
+7/20
+
+--- PAGE 9 ---
+4.1 The Investment Dilemma
+Imagine you have Rs. 1,00,000 to invest in the stock market. You are considering three
+different types of stocks:
+1.Blue-chip stocks(e.g., Reliance, TCS, HDFC Bank)
+2.Cryptocurrency or Small-cap stocks(e.g., Bitcoin, Ethereum, Penny stocks)
+3.Utility stocks(e.g., PowerGrid, NTPC, Adani Power)
+The Question
+Which stock should you invest in? Is it possible to make an informed decision just
+by looking at the data?
+Key Considerations:
+•Risk vs Reward:Higher potential returns usually come with higher risk
+•Consistency:Some stocks provide stable, predictable returns
+•Extreme Events:Some stocks have rare but massive gains or losses
+•Investment Horizon:Long-term vs short-term investment goals
+The Answer:Yes! By analyzing thedistributionof returns, we can understand
+thekurtosisof each stock. This helps us identify:
+•Which stock has the highest risk (leptokurtic - fat tails)
+•Which stock is most stable (platykurtic - light tails)
+•Which stock follows normal market behavior (mesokurtic - normal tails)
+4.2 Understanding Stock Return Data
+Let’s examine the daily returns (in %) of three different stocks over a year (252 trading
+days):
+Table 2: Daily Returns of Three Different Stocks
+Day Blue-chip Stock Cryptocurrency Utility Stock
+1 0.12% -0.35% 0.05%
+2 -0.08% 1.25% -0.12%
+3 0.15% -0.15% 0.08%
+4 -0.22% 2.45% -0.05%
+5 0.18% -0.55% 0.15%
+... ... ... ...
+252 0.05% -1.85% -0.02%
+8/20
+
+--- PAGE 10 ---
+What can we observe from the data?
+•Blue-chip stocks:Returns are mostly between -0.5% and +0.5%
+•Cryptocurrency:Returns show extreme values (sometimes +5% or -5%)
+•Utility stocks:Returns are very consistent, rarely exceeding±0.5%
+But is it enough to just look at the numbers?
+No! We need to visualize the data to understand theshapeof the distribution.
+This is wherekurtosiscomes in.
+4.3 Visualizing Stock Returns - The Power of Histograms
+By plotting histograms of the daily returns, we can visually identify the type of kurtosis:
+4.3.1 Figure 1: Composite Histogram of All Three Stock Types
+Figure 1: Comparison of Daily Returns for Three Stock Types
+Observations:
+•Left Panel (Blue-chip):Bell-shaped curve, normal distribution (Mesokurtic)
+•Middle Panel (Cryptocurrency):High peak with fat tails (Leptokurtic)
+•Right Panel (Utility):Flat, uniform distribution (Platykurtic)
+9/20
+
+--- PAGE 11 ---
+4.3.2 Figure 2: Blue-chip Stock Returns (Mesokurtic)
+Figure 2: Blue-chip Stock Returns - Mesokurtic Distribution (β2 ≈3)
+Key Features:
+•Mean:0.10%
+•Standard Deviation:0.80%
+•Skewness:≈0(Symmetric)
+•Kurtosis:≈3.0(Mesokurtic)
+•Interpretation:Predictable, moderate risk. Most days close to the mean.
+•Examples:S&P 500, Reliance, TCS, Infosys
+10/20
+
+--- PAGE 12 ---
+4.3.3 Figure 3: Cryptocurrency/Small-cap Returns (Leptokurtic)
+Figure 3: Cryptocurrency Returns - Leptokurtic Distribution (β2 >3)
+Key Features:
+•Mean:0.05%
+•Standard Deviation:2.50%
+•Skewness:≈0(Symmetric)
+•Kurtosis:>3.0(Leptokurtic)
+•Interpretation:High risk, high reward. Fat tails mean more extreme events.
+•Examples:Bitcoin, Ethereum, Small-cap stocks, Penny stocks
+11/20
+
+--- PAGE 13 ---
+4.3.4 Figure 4: Utility Stock Returns (Platykurtic)
+Figure 4: Utility Stock Returns - Platykurtic Distribution (β2 <3)
+Key Features:
+•Mean:0.02%
+•Standard Deviation:0.30%
+•Skewness:≈0(Symmetric)
+•Kurtosis:<3.0(Platykurtic)
+•Interpretation:Very consistent, minimal volatility. Safe investment.
+•Examples:PowerGrid, NTPC, Tata Power, Other utilities
+5 Concept of Kurtosis
+Skewnesstellsusabouttheleaningofadistribution.Kurtosistellsusaboutitstailedness
+andpeakedness—is the data tall and sharp with a high potential for outliers, or short
+and flat with most data clustered in the center?
+Definition:Kurtosis is a statistical measure that describes the shape of a distribu-
+tion’s tails in relation to its overall shape. It tells us how heavy or light the tails are
+compared to a normal distribution.
+We use theCoefficient of Kurtosis(β2), measured by Pearson:
+β2 = µ4
+µ2
+2
+Whereµ 4 isthefourthcentralmomentandµ 2 isthevariance(thesecondcentralmoment).
+12/20
+
+--- PAGE 14 ---
+5.1 Types of Kurtosis
+There are three main types of kurtosis:
+5.1.1 Mesokurtic (β 2 = 3)
+•Meaning:"Meso" means middle. This is the baseline—a normal bell-shaped
+distribution.
+•Tails:Medium tails. Extreme events happen at an "expected" rate.
+•Stock Market Application:Blue-chip stocks like Reliance, TCS, S&P 500
+•Investment Decision:Moderate risk, predictable returns. Suitable for long-term
+investors.
+Investment Insight: Mesokurtic Stocks
+•Who should invest?Conservative investors seeking steady growth
+•Expected Returns:8-12% per annum (moderate)
+•Risk:Low to moderate
+•Strategy:Buy and hold, long-term investment
+•Kurtosis Value:β 2 ≈3.0
+5.1.2 Leptokurtic (β 2 >3)
+•Meaning:"Lepto" means thin and slender. The distribution has a higher, sharper
+peak andfatter tails.
+•Tails:Heavy tails. Higher probability of extreme values.
+•Stock Market Application:Cryptocurrency, Small-cap stocks, Penny stocks
+•Investment Decision:High risk, high reward. Potential for massive gains or
+devastating losses.
+Investment Insight: Leptokurtic Stocks
+•Who should invest?Aggressive investors with high risk tolerance
+•Expected Returns:Very high potential (50-100%+), but also high loss po-
+tential
+•Risk:Very high
+•Strategy:Short-term trading, stop-loss orders, diversification
+•Warning:Not suitable for risk-averse investors or retirement funds
+•Kurtosis Value:β 2 >3.0
+13/20
+
+--- PAGE 15 ---
+5.1.3 Platykurtic (β 2 <3)
+•Meaning:"Platy" means broad and flat. The distribution has a lower, flatter
+peak andthinner tails.
+•Tails:Light tails. Fewer extreme values than expected.
+•Stock Market Application:Utility stocks like PowerGrid, NTPC
+•Investment Decision:Low risk, consistent returns. Safe investment.
+Investment Insight: Platykurtic Stocks
+•Who should invest?Risk-averse investors, retirees, income seekers
+•Expected Returns:5-8% per annum (low but steady)
+•Risk:Very low
+•Strategy:Dividend investing, long-term holding
+•Advantage:Minimal volatility, predictable income
+•Kurtosis Value:β 2 <3.0
+5.2 Comparative Analysis of Kurtosis Types in Stock Market
+Table 3: Comparative Analysis of Kurtosis in Stock Market Contexts
+Aspect Mesokurtic (β2 ≈3) Leptokurtic (β 2 >
+3)
+Platykurtic (β2 <3)
+Peak Shape Moderate bell curve High, sharp peak Low, flat distribution
+Tail Behavior Medium thickness Fat, heavy tails Thin, light tails
+Stock Exam-
+ples
+Reliance, TCS, S&P
+500
+Bitcoin, Small-caps,
+Penny stocks
+PowerGrid, NTPC,
+Utilities
+Volatility Moderate Very High Very Low
+Risk Level Moderate High Low
+Return Poten-
+tial
+8-12% Potentially 100%+ 5-8%
+Extreme
+Events
+Expected frequency More frequent than
+expected
+Less frequent than ex-
+pected
+Investor Pro-
+file
+Long-term investors Aggressive traders Risk-averse investors
+Investment
+Strategy
+Buy and hold Short-term trading Dividend investing
+14/20
+
+--- PAGE 16 ---
+5.3 How to Identify Kurtosis from Data
+Step-by-Step Guide to Identify Kurtosis in Stock Data:
+1.Collect Data:Get daily returns for at least 252 trading days (1 year)
+2.Calculate Statistics:Mean, Standard Deviation, Skewness, Kurtosis
+3.Check Kurtosis Value:
+•β 2 ≈3.0→Mesokurtic (Normal)
+•β 2 >3.0→Leptokurtic (Fat tails - More risk)
+•β 2 <3.0→Platykurtic (Light tails - Less risk)
+4.Visualize:Create a histogram to see the shape
+5.Make Decision:Based on your risk tolerance and investment goals
+Python Code to Calculate Kurtosis
+import numpy as np
+from scipy.stats import kurtosis
+# Example: Calculate kurtosis for stock returns
+returns = [0.12, -0.08, 0.15, -0.22, 0.18] # Sample returns
+# Calculate kurtosis (fisher=False gives Pearson’s beta2)
+kurt_value = kurtosis(returns, fisher=False)
+print(f"Kurtosis: {kurt_value:.2f}")
+# If kurtosis $\approx$ 3.0: Mesokurtic
+# If kurtosis > 3.0: Leptokurtic
+# If kurtosis < 3.0: Platykurtic
+6 Python Code to Generate Stock Market Kurtosis Vi-
+sualizations
+The following Python code generates the histograms shown in Figures 1-4:
+Full Python Code for Kurtosis Visualization
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
+from scipy.stats import skew, kurtosis
+15/20
+
+--- PAGE 17 ---
+# Set up the style
+plt.style.use(’default’)
+plt.rcParams[’figure.figsize’] = (15, 5)
+# Generate realistic stock market data for each type
+# 1. MESOKURTIC: Blue-chip Stock Returns
+np.random.seed(42)
+bluechip_returns = np.random.normal(0.001, 0.008, 1000) * 100
+bluechip_returns = bluechip_returns[np.abs(bluechip_returns) < 3]
+# 2. LEPTOKURTIC: Cryptocurrency Returns
+crypto_returns = np.concatenate([
+np.random.normal(0, 0.5, 850),
+np.random.normal(5, 3, 75),
+np.random.normal(-5, 3, 75)
+])
+# 3. PLATYKURTIC: Utility Stock Returns
+utility_returns = np.random.uniform(-0.5, 0.5, 1000)
+# Create the composite figure
+fig, axes = plt.subplots(1, 3, figsize=(18, 6))
+# Plot each distribution
+# ... (full plotting code as shown earlier)
+plt.tight_layout()
+plt.savefig(’stock_market_kurtosis_examples.png’, dpi=300)
+plt.show()
+16/20
+
+--- PAGE 18 ---
+7 Summary of Kurtosis and Investment Decisions
+Kurtosis Type Beta2
+Value
+Stock Examples Investment Decision
+Mesokurtic ≈3 Reliance, TCS, S&P 500 Long-term investment
+Leptokurtic >3 Bitcoin, Small-caps Short-term trading (High
+risk)
+Platykurtic <3 PowerGrid, NTPC Dividend investing (Low
+risk)
+8 Central Moments (Moments about Mean)
+Central moments are measures that describe the shape of a distribution relative to its
+mean. They are fundamental to understanding various statistical properties.
+8.1 Definition of Central Moments
+Ther-th central moment (µr) is defined as:
+µr =
+PN
+i=1(xi − x)r
+N
+For Ungrouped Data:
+µr =
+P(xi − x)r
+N
+For Grouped Data:
+µr =
+P fi(xi − x)r
+P fi
+8.2 First Four Central Moments and Their Significance
+1.First Central Moment (µ1):
+µ1 =
+P(xi − x)
+N = 0
+Significance:Always zero. It confirms that the mean is the balancing point.
+2.Second Central Moment (µ2):
+µ2 =
+P(xi − x)2
+N =Variance
+17/20
+
+--- PAGE 19 ---
+Significance:Measures the spread/volatility of returns.
+3.Third Central Moment (µ3):
+µ3 =
+P(xi − x)3
+N
+Significance:Measures skewness (asymmetry) of returns.
+4.Fourth Central Moment (µ4):
+µ4 =
+P(xi − x)4
+N
+Significance:Measures kurtosis (tailedness) of returns.
+8.3 Using Moments to Calculate Skewness and Kurtosis
+8.3.1 Skewness using Moments
+The coefficient of skewness can be calculated using the third central moment:
+Skewness= µ3
+µ3/2
+2
+Where:
+•µ 3 = Third central moment
+•µ 2 = Second central moment (Variance)
+Interpretation:
+•If µ3
+µ3/2
+2
+= 0: Symmetric distribution
+•If µ3
+µ3/2
+2
+>0: Positively skewed (right-skewed)
+•If µ3
+µ3/2
+2
+<0: Negatively skewed (left-skewed)
+8.3.2 Kurtosis using Moments
+The coefficient of kurtosis (β2) is calculated using the fourth central moment:
+β2 = µ4
+µ2
+2
+Interpretation:
+•β 2 = 3: Mesokurtic (Normal distribution)
+•β 2 >3: Leptokurtic (Heavy tails, more outliers)
+•β 2 <3: Platykurtic (Light tails, fewer outliers)
+18/20
+
+--- PAGE 20 ---
+8.4 Summary of Moments and Their Applications
+Moment Formula Application
+µ1 (First)
+P(x−x)
+N Always 0 (check)
+µ2 (Second)
+P(x−x)2
+N Variance, Volatility
+µ3 (Third)
+P(x−x)3
+N Skewness = µ3
+µ3/2
+2
+µ4 (Fourth)
+P(x−x)4
+N Kurtosis = µ4
+µ2
+2
+9 Practice Exercises
+Exercise 1: Karl Pearson’s Skewness
+Calculate Karl Pearson’s coefficient of skewness for:
+Data:2,4,6,8,10,12,14,16,18,20,100
+Exercise 2: Bowley’s Skewness
+For the following data, calculate Bowley’s coefficient of skewness:
+Data:5,10,15,20,25,30,35,40,45,50
+10 Key Takeaways for CSE Students
+•Karl Pearson’s Skewness:
+–Sk = (Mean - Mode)/SD
+–Alternative: 3(Mean - Median)/SD
+–Sk > 0: Right-skewed, Sk < 0: Left-skewed, Sk = 0: Symmetric
+•Bowley’s Skewness:
+–Based on quartiles
+–Range: -1 to +1
+–More robust to outliers
+•Kurtosis in Stock Market:
+– Mesokurtic (β2 = 3):Blue-chip stocks, moderate risk
+– Leptokurtic (β2 >3):Cryptocurrency, high risk
+– Platykurtic (β2 <3):Utility stocks, low risk
+19/20
+
+--- PAGE 21 ---
+•Central Moments:
+–µ1 = 0: Always zero
+–µ2: Variance (Volatility)
+–µ3: Skewness (Asymmetry)
+–µ4: Kurtosis (Tailedness)
+•Formulas using Moments:
+–Skewness = µ3
+µ3/2
+2
+–Kurtosis = µ4
+µ2
+2
+•Investment Decision Framework:
+–Low risk tolerance→Platykurtic (Utility stocks)
+–Moderate risk tolerance→Mesokurtic (Blue-chip stocks)
+–High risk tolerance→Leptokurtic (Cryptocurrency, Small-caps)
+Remember:
+•Skewnesstells you about symmetry/asymmetry
+•Kurtosistells you about risk (tailedness)
+•Mesokurtic:Moderate risk (Blue-chip stocks)
+•Leptokurtic:High risk (Cryptocurrency)
+•Platykurtic:Low risk (Utility stocks)
+•Investment Decision:Match your risk tolerance with the right kurtosis
+type!
+20/20

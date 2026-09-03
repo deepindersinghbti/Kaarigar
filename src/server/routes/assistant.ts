@@ -328,7 +328,7 @@ function fallbackProcessVoiceInput(
     return {
       replyText: lang === 'hi'
         ? `${workerName} ji, maine ye details samjhi hain:\n• Kaam: ${trade}\n• Anubhav: ${exp} saal\n• Skills: ${skillList.join(', ')}\nSab sahi hai?`
-        : `${workerName} ji, I have verified these details:\n• Trade: ${trade}\n• Experience: ${exp} Years\n• Skills: ${skillList.join(', ')}\nIs everything correct?`,
+        : `${workerName} ji, I have noted these details:\n• Trade: ${trade}\n• Experience: ${exp} Years\n• Skills: ${skillList.join(', ')}\nIs everything correct?`,
       extractedData: {
         trade,
         experienceYears: exp,

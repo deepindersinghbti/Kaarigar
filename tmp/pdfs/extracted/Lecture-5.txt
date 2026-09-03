@@ -1,0 +1,317 @@
+--- PAGE 1 ---
+Data Science Foundations
+Lecture 5: Mode, Skewness & Intro to Measures of
+Dispersion
+Comprehensive Notes for B.Tech CSE Students
+
+
+--- PAGE 2 ---
+Table of Contents
+1 Mode: The Most Frequent Value 2
+1.1 Why Mode Matters in CSE . . . . . . . . . . . . . . . . . . . . . . . . . 2
+1.2 Mode for Ungrouped Data . . . . . . . . . . . . . . . . . . . . . . . . . . 2
+1.3 Mode for Discrete Grouped Data . . . . . . . . . . . . . . . . . . . . . . 2
+1.4 Mode for Continuous Grouped Data . . . . . . . . . . . . . . . . . . . . . 3
+2 Understanding Data Distribution: Symmetric vs. Skewed Data 4
+2.1 Example 1: Symmetric Distribution . . . . . . . . . . . . . . . . . . . . . 5
+2.1.1 Graph of Symmetric Distribution . . . . . . . . . . . . . . . . . . 6
+2.2 Example 2: Positively Skewed (Right-Skewed) Distribution . . . . . . . . 6
+2.2.1 Graph of Positively Skewed Distribution . . . . . . . . . . . . . . 7
+2.3 Example 3: Negatively Skewed (Left-Skewed) Distribution . . . . . . . . 7
+2.3.1 Graph of Negatively Skewed Distribution . . . . . . . . . . . . . . 8
+2.4 Summary of Skewness . . . . . . . . . . . . . . . . . . . . . . . . . . . . 8
+3 Why We Need Measures of Dispersion 8
+4 Types of Measures of Dispersion 9
+4.1 1. Absolute Measures of Dispersion . . . . . . . . . . . . . . . . . . . . . 9
+4.2 2. Relative Measures of Dispersion . . . . . . . . . . . . . . . . . . . . . 9
+5 Key Takeaways for CSE Students 10
+1/10
+
+--- PAGE 3 ---
+1 Mode: The Most Frequent Value
+The mode is the value that appears most frequently in a dataset. Unlike mean and
+median, the mode can be used with categorical data.
+1.1 Why Mode Matters in CSE
+Real-World Applications
+•Error Analysis:Most common error code indicates the most frequent problem
+•User Behavior:Most common user action helps in UI/UX design
+•Caching:Most frequently accessed data should be cached
+•Recommendation Systems:Most popular items to recommend
+•Network Traffic:Most common packet size or protocol
+•Database Queries:Most frequently executed query for optimization
+1.2 Mode for Ungrouped Data
+For ungrouped data, the mode is simply the value that occurs most frequently.
+Finding Mode in Ungrouped Data
+Example 1 (Single Mode):Data: 2, 3, 4, 5, 2, 3, 2
+•2 occurs 3 times
+•3 occurs 2 times
+•4, 5 occur 1 time each
+•Mode = 2
+Example 2 (Multi-modal):Data: 1, 2, 2, 3, 3, 4
+•2 occurs 2 times
+•3 occurs 2 times
+•Mode = 2 and 3(Bimodal)
+Example 3 (No Mode):Data: 1, 2, 3, 4, 5
+•All values occur once
+•No mode exists
+1.3 Mode for Discrete Grouped Data
+For discrete grouped data, the mode is the value with the highest frequency.
+2/10
+
+--- PAGE 4 ---
+Mode in Discrete Grouped Data
+Number of software bugs per release:
+Bugs (x) Frequency (f)
+0 5
+1 8
+2 12
+3 10
+4 5
+The highest frequency is 12, which corresponds tox= 2.
+Mode= 2bugs
+Interpretation:Most releases had 2 bugs.
+1.4 Mode for Continuous Grouped Data
+For continuous grouped data, we use the following formula:
+Mode=L+ f1 −f 0
+2f1 −f 0 −f 2
+×h
+Where:
+•L= Lower limit of modal class
+•f 1 = Frequency of modal class
+•f 0 = Frequency of class before modal class
+•f 2 = Frequency of class after modal class
+•h= Class width
+Mode in Continuous Grouped Data
+Response times (in ms) of 50 network requests:
+3/10
+
+--- PAGE 5 ---
+Response Time (ms) Frequency
+10 - 20 3
+20 - 30 5
+30 - 40 5
+40 - 50 7
+50 - 60 7
+60 - 70 6
+70 - 80 5
+80 - 90 7
+90 - 100 5
+Step 1: Find the modal class- Highest frequency is 7 (occurs in 40-50, 50-60,
+and 80-90 classes) - This is multimodal! Choose the first modal class: 40-50
+Step 2: Extract values
+•L= 40(Lower limit of 40-50 class)
+•f 1 = 7(Frequency of 40-50 class)
+•f 0 = 5(Frequency of 30-40 class)
+•f 2 = 7(Frequency of 50-60 class)
+•h= 10(Class width)
+Step 3: Apply the formula
+Mode= 40 + 7−5
+2(7)−5−7 ×10
+Mode= 40 + 2
+14−12 ×10 = 40 + 2
+2 ×10 = 40 + 10 = 50ms
+Interpretation:The most common response time is approximately 50 ms.
+2 Understanding Data Distribution: Symmetric vs. Skewed
+Data
+4/10
+
+--- PAGE 6 ---
+2.1 Example 1: Symmetric Distribution
+Symmetric Data - Heights of 100 Students (in cm)
+Raw Data (sorted): 150, 152, 155, 157, 158, 160, 160, 161, 162, 162, 163, 164, 164,
+165, 165, 166, 166, 167, 167, 168, 168, 168, 169, 169, 170, 170, 170, 170, 171, 171, 171,
+172, 172, 172, 173, 173, 174, 174, 174, 175, 175, 175, 176, 176, 176, 177, 177, 177,
+178, 178, 178, 179, 179, 179, 180, 180, 180, 181, 181, 181, 182, 182, 182, 183, 183,
+183, 184, 184, 184, 185, 185, 185, 186, 186, 186, 187, 187, 187, 188, 188, 188, 189,
+189, 189, 190, 190, 190, 191, 191, 192, 193, 194, 195, 196, 197, 198, 199, 200, 201, 202
+Frequency Distribution:
+Height (cm) Frequency
+150 - 155 3
+155 - 160 5
+160 - 165 8
+165 - 170 12
+170 - 175 18
+175 - 180 22
+180 - 185 18
+185 - 190 12
+190 - 195 8
+195 - 200 5
+200 - 205 3
+Calculated Values:
+•Mean = 177.5
+•Median = 177.5
+•Mode = 177.5
+Conclusion:Mean = Median = Mode, data is perfectly symmetric.
+5/10
+
+--- PAGE 7 ---
+2.1.1 Graph of Symmetric Distribution
+150 160 170 180 190 200
+5
+10
+15
+20
+Mean = Median = Mode
+Left Tail Right Tail
+Height (cm)
+Frequency
+2.2 Example 2: Positively Skewed (Right-Skewed) Distribution
+Positively Skewed Data - Monthly Household Income (in Rs)
+Raw Data of 100 households: 20000, 22000, 25000, 28000, 30000, 32000, 35000,
+38000, 40000, 42000, 45000, 48000, 50000, 52000, 55000, 58000, 60000, 62000, 65000,
+68000, 70000, 72000, 75000, 78000, 80000, 82000, 85000, 88000, 90000, 92000, 95000,
+98000, 100000, 105000, 110000, 115000, 120000, 125000, 130000, 135000, 140000,
+145000, 150000, 155000, 160000, 165000, 170000, 175000, 180000, 185000, 190000,
+195000, 200000, 210000, 220000, 230000, 240000, 250000, 260000, 270000, 280000,
+290000, 300000, 320000, 340000, 360000, 380000, 400000, 420000, 450000, 480000,
+500000, 550000, 600000, 650000, 700000, 750000, 800000, 850000, 900000, 950000,
+1000000, 1100000, 1200000, 1300000, 1400000, 1500000, 1600000, 1700000, 1800000,
+1900000, 2000000, 2200000, 2500000, 2800000, 3000000, 3500000, 4000000, 4500000,
+5000000
+Frequency Distribution:
+Income (Rs) Frequency
+0 - 500000 50
+500000 - 1000000 20
+1000000 - 1500000 10
+1500000 - 2000000 8
+2000000 - 2500000 5
+2500000 - 3000000 4
+3000000 - 3500000 2
+3500000 - 4000000 1
+4000000 - 5000000 0
+5000000+ 0
+6/10
+
+--- PAGE 8 ---
+Calculated Values:
+•Mean = 7,50,000 Rs
+•Median = 3,00,000 Rs
+•Mode = 50,000 - 80,000 Rs
+Conclusion:Mean > Median > Mode, data is positively skewed.
+2.2.1 Graph of Positively Skewed Distribution
+1 2 3 4 5
+·106
+10
+20
+30
+40
+50
+Median
+Mode
+Mean
+Long Right Tail
+Monthly Income (Rs)
+Frequency
+2.3 Example 3: Negatively Skewed (Left-Skewed) Distribution
+Negatively Skewed Data - Exam Scores of 100 Students (Out of 100)
+Raw Data (sorted): 35, 40, 45, 48, 50, 52, 55, 58, 60, 62, 65, 68, 70, 72, 75, 78, 80,
+81, 82, 83, 84, 85, 85, 86, 86, 87, 87, 88, 88, 88, 89, 89, 89, 90, 90, 90, 90, 91, 91, 91,
+91, 92, 92, 92, 92, 92, 93, 93, 93, 93, 93, 94, 94, 94, 94, 94, 94, 95, 95, 95, 95, 95, 95,
+96, 96, 96, 96, 96, 96, 96, 97, 97, 97, 97, 97, 97, 97, 98, 98, 98, 98, 98, 98, 98, 98, 99,
+99, 99, 99, 99, 99, 99, 99, 100, 100, 100, 100, 100, 100, 100
+Frequency Distribution:
+Score Range Frequency
+30 - 40 2
+40 - 50 3
+50 - 60 4
+60 - 70 5
+70 - 80 6
+80 - 90 18
+90 - 100 62
+Calculated Values:
+7/10
+
+--- PAGE 9 ---
+•Mean = 88.5
+•Median = 94.0
+•Mode = 97.0
+Conclusion:Mean < Median < Mode, data is negatively skewed.
+2.3.1 Graph of Negatively Skewed Distribution
+30 40 50 60 70 80 90 100
+10
+20
+30
+40
+50
+60
+MedianMode
+Mean
+Left Tail
+Exam Scores
+Frequency
+2.4 Summary of Skewness
+Type Relationship Example
+Symmetric Mean = Median =
+Mode
+Height, IQ scores
+Positively Skewed Mean > Median >
+Mode
+Income, response times
+Negatively Skewed Mean < Median <
+Mode
+Easy exam scores
+3 Why We Need Measures of Dispersion
+Central tendency measures alone are insufficient. Consider this:
+The Problem with Only Averages
+Two datasets representing API response times (in ms):
+Dataset A:100, 101, 102, 103, 104 (Mean = 102)
+Dataset B:50, 75, 102, 129, 154 (Mean = 102)
+8/10
+
+--- PAGE 10 ---
+Statistic Dataset A Dataset B
+Mean 102 102
+Median 102 102
+Mode No mode No mode
+Question:Are these datasets similar?
+Answer:No! Dataset A is consistent (100-104 ms). Dataset B is highly variable
+(50-154 ms).
+This is why we needmeasures of dispersion- they tell us how spread out the
+data is.
+4 Types of Measures of Dispersion
+Measures of dispersion are broadly classified into two categories:
+4.1 1. Absolute Measures of Dispersion
+Absolute measures are expressed in the same units as the original data. They
+provide the actual spread of data.
+Absolute Measures Include:
+•Range- Maximum - Minimum
+•Mean Deviation- Average of absolute deviations from mean
+•Variance- Average of squared deviations from mean
+•Standard Deviation- Square root of variance
+•Quartile Deviation- (Q 3 - Q1)/2
+4.2 2. Relative Measures of Dispersion
+Relative measures are expressed as ratios or percentages. They allow comparison
+between different datasets regardless of their units or magnitudes.
+Relative Measures Include:
+•Coefficient of Range- Range / (Max + Min)
+•Coefficient of Mean Deviation- MD / Mean
+•Coefficient of Variation (CV)- (SD / Mean)×100
+•Coefficient of Quartile Deviation- (Q3 - Q1) / (Q3 + Q1)
+Note: Absolute and Relative measures will be covered in detail in the next lecture.
+9/10
+
+--- PAGE 11 ---
+5 Key Takeaways for CSE Students
+•Mode:Only measure that works with categorical data; useful for finding most
+common values
+•Skewness:Important for choosing between mean and median
+–Symmetric: Mean = Median = Mode
+–Right-skewed: Mean > Median > Mode
+–Left-skewed: Mean < Median < Mode
+•Absolute Measures of Dispersion:
+–Range: Simple but sensitive to outliers
+–Mean Deviation: Easy to interpret but fails to distinguish extreme deviations
+–Variance: Squared units, good mathematical properties
+–Standard Deviation: Most widely used; penalizes extreme deviations
+–Quartile Deviation: Robust to outliers
+•Algorithm Complexity:
+–Mode: O(N) time, O(N) memory
+–Range: O(N) time, O(1) memory
+–Mean Deviation: O(N) time, O(1) memory
+–Standard Deviation: O(N) time, O(1) memory
+–Quartile Deviation: O(N log N) time (sorting required)
+Remember:
+•Meanalone is not enough - always check spread!
+•Skewnesstells you which average to use
+•Modeis the only measure for categorical data
+10/10
