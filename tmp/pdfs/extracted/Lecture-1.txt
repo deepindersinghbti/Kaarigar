@@ -1,0 +1,290 @@
+--- PAGE 1 ---
+Theory of Probability & Stats
+Lecture 1: Measures of Central Tendency
+Comprehensive Notes for B.Tech CSE Students
+
+
+--- PAGE 2 ---
+B.tech CSE
+Table of Contents
+1 Introduction: The Central Tendency Problem 2
+1.1 Why it matters for CSE Students . . . . . . . . . . . . . . . . . . . . . . 2
+1.2 The Core Example . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 2
+2 Types of Averages 2
+3 The Arithmetic Mean: Different Strategies 3
+3.1 Data Preparation: Ungrouped vs. Grouped Data . . . . . . . . . . . . . 3
+4 Calculating the Arithmetic Mean (Using Our API Example) 4
+4.1 Direct Method . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 4
+4.1.1 Ungrouped Data . . . . . . . . . . . . . . . . . . . . . . . . . . . 4
+4.1.2 Grouped/Frequency Data . . . . . . . . . . . . . . . . . . . . . . 4
+4.2 Short-Cut (Assumed Mean) Method . . . . . . . . . . . . . . . . . . . . . 5
+4.2.1 Ungrouped Data . . . . . . . . . . . . . . . . . . . . . . . . . . . 5
+4.2.2 Grouped Data . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 6
+4.3 Step-Deviation Method . . . . . . . . . . . . . . . . . . . . . . . . . . . . 6
+4.3.1 Ungrouped Data . . . . . . . . . . . . . . . . . . . . . . . . . . . 7
+4.3.2 Grouped Data . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 7
+5 Summary: Choosing the Right Tool 8
+6 Conclusion and Key Takeaways 8
+1/9
+
+--- PAGE 3 ---
+B.tech CSE
+1 Introduction: The Central Tendency Problem
+In computer science and data engineering, we constantly deal with large datasets—sensor
+readings, network logs, user engagement metrics, and performance benchmarks. Amea-
+sure of central tendencyis a single value that represents the "center" of a dataset.
+1.1 Why it matters for CSE Students
+•Data Summarization:In Big Data, we need concise descriptions. A single num-
+ber (average) can summarize millions of records.
+•Performance Analysis:Evaluating algorithm runtime, memory usage, or model
+accuracy often relies on averages.
+•Anomaly Detection:Deviations from the average can signal outliers, system
+faults, or security breaches.
+•Feature Engineering:In machine learning, central tendency metrics are used to
+impute missing values and scale features.
+1.2 The Core Example
+We will use asingle examplethroughout this lecture to demonstrate all mean calcula-
+tion strategies:
+API Response Time Dataset
+You are a data engineer at a cloud service provider. You are monitoring the
+response time (in milliseconds) of an API endpoint over 10 requests. The data is:
+100, 102, 101, 100, 103, 102, 101, 100, 102, 101
+This is your "raw data." We’ll use this single example to learn ALL the methods
+for calculating the mean.
+2 Types of Averages
+Different problems require different averages:
+2/9
+
+--- PAGE 4 ---
+B.tech CSE
+Average Best Used For Relevance to CSE
+Arithmetic
+Mean
+General purpose; typical
+value
+Average response time, av-
+erage CPU load.
+Geometric Mean Growth rates, ratios Average growth of a metric
+over time (e.g., request rate
+increase).
+Harmonic Mean Averaging rates Calculating average speed
+of a network packet, or F1-
+score in ML.
+Median Data with outliers (skewed
+data)
+Income analysis, or re-
+sponse time when there are
+network spikes.
+Mode Categorical data, most fre-
+quent value
+Most common error code,
+most frequent user action.
+Table 1: Types of Averages and Their Applications
+Focus:We will primarily focus on theArithmetic Mean, and then briefly discuss
+Median, Mode, and their computational implications.
+3 The Arithmetic Mean: Different Strategies
+The arithmetic mean is the sum of all values divided by the count of values.
+3.1 Data Preparation: Ungrouped vs. Grouped Data
+•Ungrouped Data:Raw, individual data points. (Our API response example:
+100, 102, ...)
+•Grouped Data (Frequency Distribution):Data is aggregated. We often do
+this for large datasets to save memory and speed up computation. It lists values
+and how often they occur.
+From our example:
+3/9
+
+--- PAGE 5 ---
+B.tech CSE
+Response Time (xi) Frequency (fi)
+100 3
+101 3
+102 3
+103 1
+N= 10
+Table 2: Frequency Distribution of API Response Times
+4 Calculating the Arithmetic Mean (Using Our API
+Example)
+We will now calculate the mean response time using different strategies. This will show
+you why certain methods are computationally more efficient or useful in specific scenarios.
+4.1 Direct Method
+This is the most intuitive method. You sum everything and divide.
+4.1.1 Ungrouped Data
+Formula:
+x=
+PN
+i=1 xi
+N
+Calculation:
+x= 100 + 102 + 101 + 100 + 103 + 102 + 101 + 100 + 102 + 101
+10 = 1012
+10 = 101.2ms
+4.1.2 Grouped/Frequency Data
+Formula:
+x=
+P fixiP fi
+Calculation:
+xi fi fixi
+100 3 300
+101 3 303
+102 3 306
+103 1 103
+N= 10 P fixi = 1012
+4/9
+
+--- PAGE 6 ---
+B.tech CSE
+x= 1012
+10 = 101.2ms
+Algorithm: Direct Method
+def compute_mean(data):
+total = sum(data)
+n = len(data)
+return total / n
+# Example usage
+api_times = [100, 102, 101, 100, 103, 102, 101, 100, 102, 101]
+mean = compute_mean(api_times)
+print(mean) # Output: 101.2
+Time Complexity:O(N). This is the standard way to compute the mean in pro-
+gramming.
+4.2 Short-Cut (Assumed Mean) Method
+This is useful when numbers are large, to avoid big multiplications. It’s a trick to reduce
+arithmetic complexity.
+Logic:We assume a meanA(usually a value in the center), and then calculate the
+deviations (di =x i −A). The average of the deviations is added toA.
+4.2.1 Ungrouped Data
+Formula:
+x=A+
+P di
+N whered i =x i −A
+Calculation:Let’s assumeA= 101.
+5/9
+
+--- PAGE 7 ---
+B.tech CSE
+xi di =x i −101
+100 -1
+102 +1
+101 0
+100 -1
+103 +2
+102 +1
+101 0
+100 -1
+102 +1
+101 0P di = +2
+x= 101 + 2
+10 = 101 + 0.2 = 101.2ms
+4.2.2 Grouped Data
+Formula:
+x=A+
+P fidiP fi
+Calculation:Let’s assumeA= 101.
+xi fi di =x i −101 fidi
+100 3 -1 -3
+101 3 0 0
+102 3 +1 +3
+103 1 +2 +2
+N= 10 P fidi = +2
+x= 101 + 2
+10 = 101.2ms
+Advantage:Reduces the magnitude of numbers, which was historically useful for
+manual calculation. This is less relevant in modern programming but is a good conceptual
+exercise.
+4.3 Step-Deviation Method
+This is an extension of the Short-Cut method. It’s useful when all data points or class
+intervals have a common factor.
+6/9
+
+--- PAGE 8 ---
+B.tech CSE
+Logic:We divide the deviations by a common factorh. This is equivalent to scaling
+the data.
+4.3.1 Ungrouped Data
+Formula:
+x=A+
+P ui
+N ×hwhereu i = xi −A
+h
+Calculation:Let’s assumeA= 101and a common factorh= 1. This becomes
+identical to the Short-Cut method.
+4.3.2 Grouped Data
+Formula:
+x=A+
+P fiuiP fi
+×h
+Calculation:Let’s assumeA= 101andh= 1.
+xi fi di =x i −101 ui =d i/1 fiui
+100 3 -1 -1 -3
+101 3 0 0 0
+102 3 +1 +1 +3
+103 1 +2 +2 +2
+N= 10 P fiui = +2
+x= 101 + 2
+10 ×1 = 101.2ms
+When is this useful?Imagine you’re dealing with response times like 1000, 2000,
+3000. You could useA= 2000andh= 1000. Theu i values would be−1,0,1—very
+simple numbers to process.
+Algorithm: Step-Deviation Method
+def compute_mean_step_deviation(data, assumed_mean, h):
+deviations = [(x - assumed_mean) // h for x in data]
+sum_dev = sum(deviations)
+n = len(data)
+return assumed_mean + (sum_dev / n) * h
+# Example usage
+api_times = [100, 102, 101, 100, 103, 102, 101, 100, 102, 101]
+mean = compute_mean_step_deviation(api_times, 101, 1)
+7/9
+
+--- PAGE 9 ---
+B.tech CSE
+print(mean) # Output: 101.2
+Computational Note:The Direct, Short-Cut, and Step-Deviation methods are
+mathematicallyidentical. Inprogramming, theDirectMethodisthemoststraightforward
+and is what you would code. The other methods are historical artifacts from the days
+of manual calculation, but they help you understand the mathematical properties of the
+mean.
+5 Summary: Choosing the Right Tool
+Data Characteris-
+tic
+Best Measure Why
+Clean, normally dis-
+tributed data
+Mean Most efficient and informative.
+Data with outliers /
+anomalies
+Median Robust and not skewed by extremes.
+Categorical data (e.g.,
+error codes)
+Mode Gives the most common category.
+Data where rates are
+involved (e.g., storage
+costs)
+Harmonic Mean Works for rates and ratios.
+Data showing growth
+(e.g., metrics)
+Geometric Mean More accurate for percentage changes.
+Table 3: Choosing the Right Measure of Central Tendency
+6 Conclusion and Key Takeaways
+•Multiple Methods, Same Result:The Direct, Short-Cut, and Step-Deviation
+methods all yield the same arithmetic mean. Choose based on computational effi-
+ciency and data structure.
+•Context Matters:The choice of average depends on the data’s characteristics
+and the problem’s requirements.
+•Algorithms and Data Structures:Understanding these concepts is crucial for
+implementing efficient data processing pipelines, real-time monitoring systems, and
+machine learning models.
+8/9
+
+--- PAGE 10 ---
+B.tech CSE
+•Key Applications in CSE:
+–Performance monitoring and alerting
+–Anomaly detection systems
+–Data preprocessing for ML models
+–Algorithm benchmarking and optimization
+–Network and system performance analysis
+Remember:Measures of central tendency are not abstract statistics—they are
+practical tools for data engineering and software development. From monitoring
+APIresponsetimestooptimizingmachinelearningmodels, thesemetricsprovide
+efficient, scalable solutions to complex data problems.
+9/9

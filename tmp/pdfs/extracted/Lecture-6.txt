@@ -1,0 +1,443 @@
+--- PAGE 1 ---
+Data Science Foundations
+Lecture 6: Absolute Measures of Dispersion
+Comprehensive Notes for B.Tech CSE Students
+
+
+--- PAGE 2 ---
+Table of Contents
+1 Why We Need Measures of Dispersion 2
+1.1 Why Dispersion Matters in CSE . . . . . . . . . . . . . . . . . . . . . . . 2
+2 Types of Measures of Dispersion 2
+2.1 1. Absolute Measures of Dispersion . . . . . . . . . . . . . . . . . . . . . 3
+2.2 2. Relative Measures of Dispersion . . . . . . . . . . . . . . . . . . . . . 3
+3 Absolute Measures of Dispersion in Detail 3
+3.1 Measure 1: Range . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 3
+3.1.1 Example 1: Ungrouped Data . . . . . . . . . . . . . . . . . . . . . 3
+3.1.2 Example 2: Grouped Data . . . . . . . . . . . . . . . . . . . . . . 4
+3.1.3 Limitations of Range . . . . . . . . . . . . . . . . . . . . . . . . . 4
+3.2 Measure 2: Mean Deviation (Average Deviation) . . . . . . . . . . . . . . 4
+3.2.1 Why Use Absolute Values? . . . . . . . . . . . . . . . . . . . . . . 4
+3.2.2 Example 1: Ungrouped Data . . . . . . . . . . . . . . . . . . . . . 5
+3.2.3 Example 2: Grouped Data . . . . . . . . . . . . . . . . . . . . . . 6
+3.3 Why Standard Deviation is Preferred over Mean Deviation . . . . . . . . 6
+3.3.1 Additional Reasons Why Standard Deviation is Preferred . . . . . 7
+3.4 Measure 3: Variance and Standard Deviation . . . . . . . . . . . . . . . . 7
+3.4.1 Variance for Ungrouped Data . . . . . . . . . . . . . . . . . . . . 7
+3.4.2 Example 1: Ungrouped Data . . . . . . . . . . . . . . . . . . . . . 8
+3.4.3 Example 2: Grouped Data . . . . . . . . . . . . . . . . . . . . . . 9
+3.5 Measure 4: Quartile Deviation . . . . . . . . . . . . . . . . . . . . . . . . 9
+3.5.1 Example 1: Ungrouped Data . . . . . . . . . . . . . . . . . . . . . 9
+3.5.2 Example 2: Grouped Data . . . . . . . . . . . . . . . . . . . . . . 9
+4 Comparison of Absolute Dispersion Measures 11
+5 Summary: When to Use Which Measure 11
+6 Practice Exercises 12
+7 Key Takeaways for CSE Students 13
+1/13
+
+--- PAGE 3 ---
+1 Why We Need Measures of Dispersion
+Central tendency measures (Mean, Median, Mode) alone are insufficient. Consider this:
+The Problem with Only Averages
+Two datasets representing API response times (in ms):
+Dataset A:100, 101, 102, 103, 104 (Mean = 102)
+Dataset B:50, 75, 102, 129, 154 (Mean = 102)
+Statistic Dataset A Dataset B
+Mean 102 102
+Median 102 102
+Mode No mode No mode
+Question:Are these datasets similar?
+Answer:No! Dataset A is consistent (100-104 ms). Dataset B is highly variable
+(50-154 ms).
+This is why we needmeasures of dispersion- they tell us how spread out the
+data is.
+1.1 Why Dispersion Matters in CSE
+Real-World Importance
+•Performance Monitoring:High variance means unreliable performance
+•Capacity Planning:Need to account for variability in resource usage
+•Quality Assurance:Low variance means consistent quality
+•Anomaly Detection:Unusual values are outside normal spread
+•Risk Assessment:Higher spread means higher risk
+•Network Engineering:Jitter (variation in latency) affects QoS
+2 Types of Measures of Dispersion
+Measures of dispersion are broadly classified into two categories:
+2/13
+
+--- PAGE 4 ---
+2.1 1. Absolute Measures of Dispersion
+Absolute measures are expressed in the same units as the original data. They
+provide the actual spread of data.
+Absolute Measures Include:
+•Range- Maximum - Minimum
+•Mean Deviation- Average of absolute deviations from mean
+•Variance- Average of squared deviations from mean
+•Standard Deviation- Square root of variance
+•Quartile Deviation- (Q 3 - Q1)/2
+2.2 2. Relative Measures of Dispersion
+Relative measures are expressed as ratios or percentages. They allow comparison
+between different datasets regardless of their units or magnitudes.
+Relative Measures Include:
+•Coefficient of Range- Range / (Max + Min)
+•Coefficient of Mean Deviation- MD / Mean
+•Coefficient of Variation (CV)- (SD / Mean)×100
+•Coefficient of Quartile Deviation- (Q3 - Q1) / (Q3 + Q1)
+Note: Relative measures will be covered in detail in Lecture 7.
+3 Absolute Measures of Dispersion in Detail
+3.1 Measure 1: Range
+The range is the simplest measure of dispersion.
+Range=Maximum Value−Minimum Value
+3.1.1 Example 1: Ungrouped Data
+Dataset A:100, 101, 102, 103, 104
+Range= 104−100 = 4ms
+Dataset B:50, 75, 102, 129, 154
+Range= 154−50 = 104ms
+3/13
+
+--- PAGE 5 ---
+Interpretation:Dataset B has much higher variability (range = 104) compared to
+Dataset A (range = 4).
+3.1.2 Example 2: Grouped Data
+Class Interval Frequency
+10 - 20 3
+20 - 30 5
+30 - 40 5
+40 - 50 7
+50 - 60 7
+60 - 70 6
+70 - 80 5
+80 - 90 7
+90 - 100 5
+Range= 100−10 = 90
+3.1.3 Limitations of Range
+Disadvantages:
+•Sensitive to Outliers:A single extreme value can drastically change the range
+•Uses Only Two Values:Ignores the distribution of intermediate values
+•Not Stable:Different samples can have very different ranges
+•Not Suitable for Open-ended Classes:Cannot calculate if no maxi-
+mum/minimum
+3.2 Measure 2: Mean Deviation (A verage Deviation)
+Mean deviation measures the average absolute distance of each value from the mean.
+Mean Deviation=
+P |xi − x|
+N
+3.2.1 Why Use Absolute Values?
+The sum of deviations from the mean is always zero:
+X
+(xi − x) = 0
+4/13
+
+--- PAGE 6 ---
+Example:For data: 100, 101, 102, 103, 104
+X
+(xi −102) = (−2) + (−1) + 0 + 1 + 2 = 0
+So we use absolute deviations to get a meaningful measure.
+3.2.2 Example 1: Ungrouped Data
+Dataset A:100, 101, 102, 103, 104 (Mean = 102)
+xi xi − x |xi − x|
+100 -2 2
+101 -1 1
+102 0 0
+103 1 1
+104 2 2
+Sum = 6
+Mean Deviation= 6
+5 = 1.2
+Dataset B:50, 75, 102, 129, 154 (Mean = 102)
+xi xi − x |xi − x|
+50 -52 52
+75 -27 27
+102 0 0
+129 27 27
+154 52 52
+Sum = 158
+Mean Deviation= 158
+5 = 31.6
+Interpretation:Dataset B (MD = 31.6) is much more spread out than Dataset A
+(MD = 1.2).
+5/13
+
+--- PAGE 7 ---
+3.2.3 Example 2: Grouped Data
+Class fi xi |xi − x| fi|xi − x|
+10 - 20 3 15 -42.6 127.8
+20 - 30 5 25 -32.6 163.0
+30 - 40 5 35 -22.6 113.0
+40 - 50 7 45 -12.6 88.2
+50 - 60 7 55 -2.6 18.2
+60 - 70 6 65 7.4 44.4
+70 - 80 5 75 17.4 87.0
+80 - 90 7 85 27.4 191.8
+90 - 100 5 95 37.4 187.0
+N= 50 P = 1020.4
+Mean x= 57.4(calculated earlier)
+Mean Deviation= 1020.4
+50 = 20.41
+3.3 Why Standard Deviation is Preferred over Mean Deviation
+The Key Problem with Mean Deviation
+Consider two datasets:
+Dataset R:0, 10, 10, 10, 20
+•Mean = 10
+•Deviations: -10, 0, 0, 0, 10
+•Absolute Deviations: 10, 0, 0, 0, 10
+•Mean Deviation = 20/5 = 4.0
+Dataset S:2, 6, 10, 14, 18
+•Mean = 10
+•Deviations: -8, -4, 0, 4, 8
+•Absolute Deviations: 8, 4, 0, 4, 8
+•Mean Deviation = 24/5 = 4.8
+Mean Deviation says:Dataset S is more spread out (4.8 > 4.0)
+Now let’s check Standard Deviation:
+Dataset R:
+σ2 = 100 + 0 + 0 + 0 + 100
+5 = 40⇒σ= 6.32
+6/13
+
+--- PAGE 8 ---
+Dataset S:
+σ2 = 64 + 16 + 0 + 16 + 64
+5 = 32⇒σ= 5.66
+Dataset Mean Deviation Standard Deviation
+R 4.0 6.32
+S 4.8 5.66
+Standard Deviation says:Dataset R is more spread out (6.32 > 5.66)
+Why the Difference?
+Mean Deviation treats all deviations equally. Standard Deviation gives MORE
+WEIGHT to larger deviations by squaring them.
+In Dataset R: Deviations are -10, 0, 0, 0, 10 (two extreme values) In Dataset S:
+Deviations are -8, -4, 0, 4, 8 (moderate spread)
+The correct answer:Dataset R is more spread out because it has two values (0
+and 20) far from the mean.
+3.3.1 Additional Reasons Why Standard Deviation is Preferred
+Why Standard Deviation is Superior:
+1.Gives More Weight to Large Deviations:Squaring amplifies the effect of
+outliers
+2.Mathematically Differentiable:Allows for calculus-based optimization
+3.Algebraic Properties:Variances add, making it useful for combining datasets
+4.Foundation for Statistics:Used in z-scores, confidence intervals, hypothesis
+testing
+5.Standardization:Allows comparison across different scales
+6.Normal Distribution:Standard deviation has special meaning in normal
+distribution (68-95-99.7 rule)
+3.4 Measure 3: Variance and Standard Deviation
+Variance and standard deviation are the most widely used measures of dispersion.
+3.4.1 Variance for Ungrouped Data
+Variance(σ2) =
+P(xi − x)2
+N
+7/13
+
+--- PAGE 9 ---
+Population Variance:
+σ2 =
+PN
+i=1(xi −µ) 2
+N
+Sample Variance:
+s2 =
+Pn
+i=1(xi − x)2
+n−1
+3.4.2 Example 1: Ungrouped Data
+Dataset A:100, 101, 102, 103, 104 (Mean = 102)
+xi xi − x (xi − x)2
+100 -2 4
+101 -1 1
+102 0 0
+103 1 1
+104 2 4
+Sum = 10
+σ2 = 10
+5 = 2
+σ=
+√
+2 = 1.41
+Dataset B:50, 75, 102, 129, 154 (Mean = 102)
+xi xi − x (xi − x)2
+50 -52 2704
+75 -27 729
+102 0 0
+129 27 729
+154 52 2704
+Sum = 6866
+σ2 = 6866
+5 = 1373.2
+σ=
+√
+1373.2 = 37.06
+8/13
+
+--- PAGE 10 ---
+3.4.3 Example 2: Grouped Data
+Class fi xi (xi − x) fi(xi − x)2
+10 - 20 3 15 -42.4 5393.28
+20 - 30 5 25 -32.4 5248.80
+30 - 40 5 35 -22.4 2508.80
+40 - 50 7 45 -12.4 1076.32
+50 - 60 7 55 -2.4 40.32
+60 - 70 6 65 7.6 346.56
+70 - 80 5 75 17.6 1548.80
+80 - 90 7 85 27.6 5332.32
+90 - 100 5 95 37.6 7068.80
+N= 50 P = 33564.00
+σ=
+r
+33564
+50 =
+√
+671.28 = 25.91
+3.5 Measure 4: Quartile Deviation
+Quartile deviation is half of the interquartile range.
+Quartile Deviation= Q3 −Q 1
+2
+3.5.1 Example 1: Ungrouped Data
+Data:10, 12, 15, 18, 20, 22, 25, 28, 30 (N = 9)
+Calculate Q1:
+Q1 position= 9 + 1
+4 = 2.5⇒Q 1 = 12 + 0.5(15−12) = 13.5
+Calculate Q3:
+Q3 position= 3(9 + 1)
+4 = 7.5⇒Q 3 = 25 + 0.5(28−25) = 26.5
+Quartile Deviation= 26.5−13.5
+2 = 13
+2 = 6.5
+3.5.2 Example 2: Grouped Data
+Using the response time data:
+9/13
+
+--- PAGE 11 ---
+Class Frequency CF
+10 - 20 3 3
+20 - 30 5 8
+30 - 40 5 13
+40 - 50 7 20
+50 - 60 7 27
+60 - 70 6 33
+70 - 80 5 38
+80 - 90 7 45
+90 - 100 5 50
+Calculate Q1:
+Q1 position= 50
+4 = 12.5
+Q1 class: 30-40 (CF 13)
+Q1 = 30 + 12.5−8
+5 ×10 = 30 + 4.5
+5 ×10 = 30 + 9 = 39
+Calculate Q3:
+Q3 position= 3×50
+4 = 37.5
+Q3 class: 70-80 (CF 38)
+Q3 = 70 + 37.5−33
+5 ×10 = 70 + 4.5
+5 ×10 = 70 + 9 = 79
+Quartile Deviation= 79−39
+2 = 40
+2 = 20
+10/13
+
+--- PAGE 12 ---
+4 Comparison of Absolute Dispersion Measures
+Measure Formula Pros & Cons
+Range Max - Min Simple but sensitive to outliers
+Mean Deviation
+P |xi−x|
+N Easy to interpret but not differ-
+entiable
+Variance
+P(xi−x)2
+N Good mathematical properties
+but units squared
+Standard Deviation
+√
+Variance Most widely used, same units as
+data
+Quartile Deviation Q3−Q1
+2 Robust to outliers, ignores ex-
+tremes
+5 Summary: When to Use Which Measure
+Use Range when:
+•Need quick, rough estimate of spread
+•Data has no outliers
+•For quick comparison
+Use Mean Deviation when:
+•Need easy interpretation
+•Data has moderate outliers
+•All deviations are considered
+Use Standard Deviation when:
+•Need most reliable measure
+•Data is roughly symmetric
+•For further statistical analysis
+•Comparing variability between datasets
+•Need to detect extreme values
+Use Quartile Deviation when:
+•Data has outliers
+•Need robust measure of spread
+•For skewed distributions
+11/13
+
+--- PAGE 13 ---
+6 Practice Exercises
+Exercise 1: Calculate Range and Mean Deviation
+Calculate range and mean deviation for:
+Data:5,10,15,20,25,30
+Exercise 2: Calculate Variance and Standard Deviation
+Calculate variance and standard deviation for:
+Data:2,4,6,8,10
+Exercise 3: Compare Dispersion
+Two datasets:
+•Dataset X: 0, 5, 10, 15, 20
+•Dataset Y: 0, 0, 10, 20, 20
+Calculate:
+1. Mean Deviation for both
+2. Standard Deviation for both
+3. Which dataset is more spread out according to each measure?
+4. Which measure correctly identifies the more spread out dataset?
+Exercise 4: Quartile Deviation
+Calculate Quartile Deviation for:
+Data:12,15,18,20,22,25,28,30,32,35
+Exercise 5: Grouped Data
+Class Frequency
+0 - 10 4
+10 - 20 6
+20 - 30 8
+30 - 40 5
+40 - 50 7
+Calculate:
+1. Mean
+12/13
+
+--- PAGE 14 ---
+2. Mean Deviation
+3. Standard Deviation
+4. Quartile Deviation
+7 Key Takeaways for CSE Students
+•Absolute Measures of Dispersion:
+–Range: Simple but sensitive to outliers
+–Mean Deviation: Easy to interpret but not differentiable
+–Variance: Squared units, good mathematical properties
+–Standard Deviation: Most widely used; same units as data
+–Quartile Deviation: Robust to outliers
+•Why Standard Deviation over Mean Deviation:
+–Gives more weight to extreme deviations
+–Differentiable and has nice algebraic properties
+–Foundation for advanced statistics
+–Allows standardization (z-scores)
+–Used in hypothesis testing and confidence intervals
+•Algorithm Complexity:
+–Range: O(N) time, O(1) memory
+–Mean Deviation: O(N) time, O(1) memory
+–Standard Deviation: O(N) time, O(1) memory
+–Quartile Deviation: O(N log N) time (sorting required)
+•Real-World Applications:
+–Performance monitoring: Standard deviation of response times
+–Anomaly detection: Values beyond 3 standard deviations
+–Capacity planning: Use mean + 3 standard deviations
+–Quality control: Keep variability low
+Remember:
+•Meanalone is not enough - always check spread!
+•Standard deviationis the most commonly used measure of dispersion
+•Standard Deviationis preferred over Mean Deviation because it gives
+more weight to extreme deviations
+•In performance monitoring: Low mean + low standard deviation = reliable
+system
+•UseQuartile Deviationwhen data has outliers
+13/13

@@ -3,10 +3,12 @@ import type { Request, Response } from 'express';
 import { getDb, isDbConnected } from '../db';
 import { requireAuth } from '../middleware/auth';
 import { getProfileIdForUser } from '../data/profiles';
+import { findDisplayNameByUserId } from '../data/profiles';
 import { uuidv7 } from '../../lib/ids';
 import type { KamaiEntry, LedgerDirection } from '../../types';
 import { ENTRIES, createEntry, ensureLedgerIndexes } from '../data/ledger';
 import { queryString } from '../lib/query';
+import { buildIncomeStatementPdf } from '../lib/incomeStatementPdf';
 
 /**
  * ledger-svc - append-only earnings, expenses and udhaar.
@@ -187,6 +189,78 @@ ledgerRouter.get('/summary', requireAuth, async (req: Request, res: Response) =>
   } catch (err) {
     console.error('[ledger] GET /summary failed:', err);
     return res.status(500).json({ error: 'summary_failed', message: 'Could not compute the summary.' });
+  }
+});
+
+/**
+ * POST /api/ledger/export/income-statement
+ *
+ * Produces a lender-friendly summary from the same append-only rows as the
+ * summary endpoint. `months` is deliberately limited to the two periods in
+ * the architecture demo loop, so the export cannot become an unbounded query.
+ */
+ledgerRouter.post('/export/income-statement', requireAuth, async (req: Request, res: Response) => {
+  if (!dbGuard(res)) return;
+
+  const requested = Number((req.body ?? {}).months ?? 6);
+  if (requested !== 6 && requested !== 12) {
+    return res.status(400).json({
+      error: 'invalid_period',
+      field: 'months',
+      message: 'months must be 6 or 12.',
+    });
+  }
+  const months = requested as 6 | 12;
+
+  try {
+    const profileId = await requireProfile(req, res);
+    if (!profileId) return;
+
+    const now = new Date();
+    const iso = (date: Date) =>
+      `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    const from = iso(new Date(now.getFullYear(), now.getMonth() - (months - 1), 1));
+    const to = iso(now);
+    const docs = await getDb()
+      .collection(ENTRIES)
+      .find({ profileId, date: { $gte: from, $lte: to } })
+      .toArray();
+
+    let earned = 0;
+    let owed = 0;
+    let outstanding = 0;
+    for (const doc of docs) {
+      const amount = Number(doc.amount) || 0;
+      if (doc.direction === 'in') {
+        earned += amount;
+      } else {
+        owed += amount;
+        if (!doc.settledAt) outstanding += amount;
+      }
+    }
+
+    const pdf = buildIncomeStatementPdf({
+      workerName: await findDisplayNameByUserId(req.user!.uid),
+      periodMonths: months,
+      from,
+      to,
+      earned,
+      owed,
+      net: earned - owed,
+      outstanding,
+      entryCount: docs.length,
+      generatedAt: now.toISOString(),
+    });
+
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="kaarigar-income-statement-${months}m.pdf"`,
+      'Content-Length': String(pdf.length),
+    });
+    return res.status(200).send(pdf);
+  } catch (err) {
+    console.error('[ledger] income statement export failed:', err);
+    return res.status(500).json({ error: 'income_statement_failed', message: 'Could not generate the income statement.' });
   }
 });
 

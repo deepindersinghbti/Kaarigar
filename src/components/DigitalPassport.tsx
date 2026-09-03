@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import {
   ShieldCheck,
@@ -20,6 +20,7 @@ import {
 import { WorkerProfile, SupportedLanguage } from '../types';
 import { TRANSLATIONS } from '../data/translations';
 import { passportUrl } from '../lib/passportLink';
+import QRCode from 'qrcode';
 
 interface DigitalPassportProps {
   profile: WorkerProfile;
@@ -35,6 +36,44 @@ export const DigitalPassport: React.FC<DigitalPassportProps> = ({
   const t = TRANSLATIONS[currentLanguage];
   const [isFlipped, setIsFlipped] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [qrDataUrl, setQrDataUrl] = useState('');
+
+  const publicPassportUrl = passportUrl(profile.passportHandle);
+  const verificationLabel =
+    profile.verifiedStatus === 'verified'
+      ? 'IDENTITY VERIFIED'
+      : profile.verifiedStatus === 'pending'
+        ? 'VERIFICATION PENDING'
+        : 'PROFILE NOT VERIFIED';
+  // Credential claims are deliberately separate from phone identity. This
+  // prototype has no authorised government lookup, so listed certificates
+  // never become verified merely because a worker entered them.
+  const credentialStatus = 'Not linked';
+  const credentialDemoStatus = 'Sandbox demo';
+  const trustRows = profile.trustScore
+    ? [
+        { label: 'Phone identity', value: profile.trustScore.components.identityVerification, max: 20 },
+        { label: 'Skill credentials', value: profile.trustScore.components.skillCredentials, max: 15 },
+        { label: 'Job-linked work history', value: profile.trustScore.components.verifiedWorkHistory, max: 25 },
+        { label: 'Customer ratings', value: profile.trustScore.components.customerRatings, max: 25 },
+        { label: 'Reliability record', value: profile.trustScore.components.reliabilityRecord, max: 0 },
+        { label: 'Skilling engagement', value: profile.trustScore.components.skillingEngagement, max: 5 },
+      ]
+    : [];
+
+  useEffect(() => {
+    let active = true;
+    void QRCode.toDataURL(publicPassportUrl, {
+      errorCorrectionLevel: 'Q',
+      margin: 1,
+      width: 128,
+    }).then((dataUrl) => {
+      if (active) setQrDataUrl(dataUrl);
+    }).catch(() => {
+      if (active) setQrDataUrl('');
+    });
+    return () => { active = false; };
+  }, [publicPassportUrl]);
 
   /**
    * Share the PUBLIC passport page.
@@ -51,13 +90,13 @@ export const DigitalPassport: React.FC<DigitalPassportProps> = ({
    * QR may end up printed.
    */
   const handleShare = () => {
-    const url = passportUrl(profile.passportHandle);
+    const url = publicPassportUrl;
 
     if (navigator.share) {
       navigator
         .share({
-          title: `${profile.name} - Verified Digital Kaarigar Passport`,
-          text: `View ${profile.name}'s verified ${profile.trade} work history and reviews.`,
+          title: `${profile.name} - Digital Kaarigar Passport`,
+          text: `View ${profile.name}'s job-linked work history and customer reviews.`,
           url,
         })
         .catch(() => {});
@@ -129,7 +168,7 @@ export const DigitalPassport: React.FC<DigitalPassportProps> = ({
 
           <div className="text-right">
             <span className="inline-flex items-center gap-1 bg-green-500/20 text-green-400 text-xs font-black px-3 py-1 rounded-full border border-green-500/40">
-              <CheckCircle className="w-3.5 h-3.5 stroke-[3]" /> VERIFIED
+              <CheckCircle className="w-3.5 h-3.5 stroke-[3]" /> {verificationLabel}
             </span>
             <div className="text-[10px] text-gray-400 font-mono mt-1">
               ID: {profile.id.toUpperCase()}
@@ -199,11 +238,11 @@ export const DigitalPassport: React.FC<DigitalPassportProps> = ({
               </div>
             </div>
 
-            {/* Verified Skills */}
+            {/* Skills listed by worker */}
             <div>
               <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5 flex items-center justify-between">
-                <span>Verified Skills (सत्यापित हुनर)</span>
-                <span className="text-[10px] text-orange-400">AI Verified</span>
+                <span>Skills (worker-entered)</span>
+                <span className="text-[10px] text-orange-400">Evidence builds over time</span>
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {profile.skills.map((skill, idx) => (
@@ -221,7 +260,7 @@ export const DigitalPassport: React.FC<DigitalPassportProps> = ({
             {/* Certifications */}
             <div>
               <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">
-                Accreditations & Training
+                Credentials listed by worker
               </div>
               <div className="space-y-1">
                 {profile.certifications.map((cert, idx) => (
@@ -235,6 +274,25 @@ export const DigitalPassport: React.FC<DigitalPassportProps> = ({
                 ))}
               </div>
             </div>
+
+            <div id="passport-credential-status" className="rounded-2xl border border-amber-400/30 bg-amber-500/10 p-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-[10px] font-extrabold uppercase tracking-wider text-amber-300">
+                    Government credential link
+                  </div>
+                  <div className="text-xs font-bold text-gray-200 mt-0.5">
+                    Status: {credentialStatus}
+                  </div>
+                </div>
+                <span className="shrink-0 rounded-full border border-amber-400/40 bg-amber-400/10 px-2 py-1 text-[10px] font-black text-amber-200">
+                  DigiLocker: {credentialDemoStatus}
+                </span>
+              </div>
+              <p className="text-[11px] text-amber-100/80 mt-2">
+                Demo-only mock state. No live government lookup or certificate verification is performed here.
+              </p>
+            </div>
           </div>
         </div>
 
@@ -242,8 +300,12 @@ export const DigitalPassport: React.FC<DigitalPassportProps> = ({
         <div className="relative z-10 mt-6 pt-5 border-t border-gray-800/80 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             {/* Real Visual QR Code simulation */}
-            <div className="bg-white p-2 rounded-2xl shadow-md shrink-0 flex items-center justify-center">
-              <QrCode className="w-14 h-14 text-gray-950" />
+              <div className="bg-white p-2 rounded-2xl shadow-md shrink-0 flex items-center justify-center w-[76px] h-[76px]">
+                {qrDataUrl ? (
+                  <img src={qrDataUrl} alt="Scan to open the public passport" className="w-full h-full" />
+                ) : (
+                  <QrCode className="w-14 h-14 text-gray-950" />
+                )}
             </div>
             <div>
               <div className="text-xs font-bold text-white">
@@ -253,7 +315,7 @@ export const DigitalPassport: React.FC<DigitalPassportProps> = ({
                 Instant digital proof for builders, homeowners & companies.
               </div>
               <div className="text-[10px] text-orange-400 font-mono mt-0.5">
-                Blood Group: {profile.bloodGroup || 'O+'} • Joined {profile.joinedDate}
+                Public passport • Joined {new Date(profile.joinedDate).toLocaleDateString('en-IN')}
               </div>
             </div>
           </div>
@@ -279,6 +341,44 @@ export const DigitalPassport: React.FC<DigitalPassportProps> = ({
         </div>
       </motion.div>
 
+      {profile.trustScore && (
+        <div id="passport-trust-score" className="bg-white p-5 sm:p-6 rounded-3xl border border-gray-200 shadow-sm">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h3 className="font-extrabold text-gray-900">Trust evidence</h3>
+              <p className="text-xs text-gray-500 mt-1 max-w-xl">
+                A transparent rubric from phone OTP, completed jobs and customer feedback. Skills and certificates are worker-entered until an authorised verification is linked.
+              </p>
+            </div>
+            <div className="text-right shrink-0">
+              <div className="text-3xl font-black text-orange-500">{profile.trustScore.value}</div>
+              <div className="text-[10px] font-bold uppercase tracking-wider text-gray-400">out of 100</div>
+            </div>
+          </div>
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+            {trustRows.map((row) => {
+              const positiveMax = row.max || 10;
+              const positiveValue = Math.max(0, row.value);
+              const width = Math.min(100, Math.round((positiveValue / positiveMax) * 100));
+              const isPenalty = row.value < 0;
+              return (
+                <div key={row.label}>
+                  <div className="flex items-center justify-between gap-3 text-[11px] font-bold text-gray-600">
+                    <span>{row.label}</span>
+                    <span className={isPenalty ? 'text-red-500' : 'text-gray-500'}>
+                      {row.value}{row.max ? ` / ${row.max}` : ''}
+                    </span>
+                  </div>
+                  <div className="h-1.5 mt-1 bg-gray-100 rounded-full overflow-hidden">
+                    <div className={`h-full rounded-full ${isPenalty ? 'bg-red-400' : 'bg-orange-400'}`} style={{ width: `${width}%` }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Trust Guarantee & Benefits for Blue Collar Workers */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
         <div className="bg-white p-5 rounded-3xl border border-gray-200 shadow-sm flex items-start gap-3.5">
@@ -287,10 +387,10 @@ export const DigitalPassport: React.FC<DigitalPassportProps> = ({
           </div>
           <div>
             <h4 className="font-extrabold text-gray-900 text-xs sm:text-sm">
-              Direct Client Trust
+              Evidence that travels
             </h4>
             <p className="text-gray-500 text-xs mt-0.5">
-              100% verified work history boosts customer confidence.
+              Completed jobs and customer feedback build a portable record.
             </p>
           </div>
         </div>
@@ -301,10 +401,10 @@ export const DigitalPassport: React.FC<DigitalPassportProps> = ({
           </div>
           <div>
             <h4 className="font-extrabold text-gray-900 text-xs sm:text-sm">
-              Voice-Updated Portfolio
+              Voice-logged work
             </h4>
             <p className="text-gray-500 text-xs mt-0.5">
-              Speak after every job to automatically update your passport.
+              Speak after a job to record the work and payment details.
             </p>
           </div>
         </div>
@@ -315,10 +415,10 @@ export const DigitalPassport: React.FC<DigitalPassportProps> = ({
           </div>
           <div>
             <h4 className="font-extrabold text-gray-900 text-xs sm:text-sm">
-              Better Rates & Loans
+              Fair rates & records
             </h4>
             <p className="text-gray-500 text-xs mt-0.5">
-              Verified income proof helps unlock micro-credit & bank loans.
+              Transparent bands and a structured ledger support future finance.
             </p>
           </div>
         </div>

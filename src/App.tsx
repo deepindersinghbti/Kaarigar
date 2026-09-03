@@ -11,6 +11,7 @@ import { DigitalPassport } from './components/DigitalPassport';
 import { JobsView } from './components/JobsView';
 import { KamaiView } from './components/KamaiView';
 import { ProfileView } from './components/ProfileView';
+import { QuoteBuilder } from './components/QuoteBuilder';
 import { VoiceAssistantModal } from './components/VoiceAssistantModal';
 import { LanguageSelectorModal } from './components/LanguageSelectorModal';
 import { LoginScreen } from './components/LoginScreen';
@@ -150,10 +151,16 @@ export default function App() {
 
     (async () => {
       try {
-        // Fetched together rather than in sequence: three round trips on 2G is
-        // the difference between a usable open and an abandoned one.
-        const [p, j, k] = await Promise.all([
-          profileOnApi ? api.getProfile() : Promise.resolve(null),
+        /**
+         * A first-time worker has no server passport until getProfile() creates
+         * it. The ledger endpoint correctly rejects reads without that owner
+         * profile, so starting all three requests together made first sign-in
+         * race: the ledger could win and turn a healthy onboarding into an
+         * error screen. Create/read the profile first, then keep the independent
+         * jobs and ledger reads parallel for the remaining two network trips.
+         */
+        const p = profileOnApi ? await api.getProfile() : null;
+        const [j, k] = await Promise.all([
           jobsOnApi ? api.listJobs() : Promise.resolve(null),
           kamaiOnApi ? api.listEntries() : Promise.resolve(null),
         ]);
@@ -226,7 +233,15 @@ export default function App() {
    */
   const handleSaveProfile = (updatedProfile: WorkerProfile) => {
     const previous = profile;
-    setProfile(updatedProfile);
+    // Verification is server-derived evidence, never a side effect of the
+    // voice onboarding confirmation. Older clients may still send
+    // verifiedStatus: "verified" here, so clamp that attempted elevation at
+    // the shared write boundary before it can reach local state or the API.
+    const safeProfile =
+      profile.verifiedStatus !== 'verified' && updatedProfile.verifiedStatus === 'verified'
+        ? { ...updatedProfile, verifiedStatus: profile.verifiedStatus }
+        : updatedProfile;
+    setProfile(safeProfile);
     if (!profileOnApi) return;
 
     void (async () => {
@@ -234,7 +249,7 @@ export default function App() {
         // Only the server's patchable fields are sent; rating, totalJobsCount
         // and verifiedStatus are derived from verified events and a PATCH that
         // moved them would make the passport worthless as evidence.
-        setProfile(await api.patchProfile(updatedProfile));
+        setProfile(await api.patchProfile(safeProfile));
       } catch (e) {
         if (e instanceof ApiError && e.status === 401) return;
         setProfile(previous);
@@ -294,6 +309,25 @@ export default function App() {
     // Queued in order. The ledger is append-only, and the outbox preserves the
     // order entries were created in rather than racing them.
     for (const entry of newEntries) enqueue('ledger_entry', entry);
+  };
+
+  const handleDownloadIncomeStatement = () => {
+    void (async () => {
+      try {
+        const blob = await api.downloadIncomeStatement(6);
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'kaarigar-income-statement-6m.pdf';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 0);
+      } catch (e) {
+        if (e instanceof ApiError && e.status === 401) return;
+        setDataError(e instanceof Error ? e.message : 'Could not download the income statement.');
+      }
+    })();
   };
 
   /**
@@ -438,9 +472,11 @@ export default function App() {
                 syncStateOf={outbox.stateOf}
                 currentLanguage={currentLanguage}
                 onAddJobVoice={() => handleOpenVoiceAssistant('add_job')}
+                onOpenQuote={() => goToTab('quote')}
               />
             }
           />
+          <Route path="/quote" element={<QuoteBuilder profile={profile} />} />
           <Route
             path="/kamai"
             element={
@@ -449,6 +485,7 @@ export default function App() {
                 syncStateOf={outbox.stateOf}
                 currentLanguage={currentLanguage}
                 onAddKamaiVoice={() => handleOpenVoiceAssistant('add_kamai')}
+                onDownloadIncomeStatement={handleDownloadIncomeStatement}
               />
             }
           />

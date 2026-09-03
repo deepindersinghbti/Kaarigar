@@ -295,7 +295,6 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
           draftProfile.certifications.length > 0
             ? draftProfile.certifications
             : ['ITI Electrician Certified'],
-        verifiedStatus: 'verified',
       };
 
       onSaveProfile(updated);
@@ -463,8 +462,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
                 {workerProfile.name} जी, आपका पासपोर्ट तैयार है! 🎉
               </h3>
               <p className="text-gray-600 text-sm max-w-md mx-auto">
-                आपकी आवाज़ से आपका सरकारी व उद्योग मानकों के अनुरूप डिजिटल
-                कारीगर पासपोर्ट सफलतापूर्वक बना दिया गया है।
+                Your digital passport is ready. Government certificate verification is not connected in this demo.
               </p>
             </div>
 
@@ -474,14 +472,14 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
               <div className="flex justify-between items-start">
                 <div>
                   <div className="text-xs font-semibold text-orange-400 uppercase tracking-wider">
-                    Official Kaarigar ID
+                    Passport preview
                   </div>
                   <div className="text-lg font-bold text-white">
                     {workerProfile.id.toUpperCase()}
                   </div>
                 </div>
                 <span className="bg-green-500/20 text-green-400 text-xs font-bold px-2.5 py-1 rounded-full border border-green-500/30 flex items-center gap-1">
-                  <Check className="w-3 h-3 stroke-[3]" /> Verified
+                  <Sparkles className="w-3 h-3" /> Demo only
                 </span>
               </div>
 
@@ -502,7 +500,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
 
               <div>
                 <span className="text-gray-400 text-xs block mb-1">
-                  Verified Skills
+                  Skills listed by worker
                 </span>
                 <div className="flex flex-wrap gap-1.5">
                   {(draftProfile.skills && draftProfile.skills.length > 0
@@ -518,6 +516,9 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
                   ))}
                 </div>
               </div>
+              <p className="text-[11px] text-amber-200/80">
+                DigiLocker sandbox/mock: demo only. This preview is not a government verification.
+              </p>
             </div>
 
             <button

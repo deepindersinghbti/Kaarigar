@@ -92,7 +92,10 @@ export async function connectDb(): Promise<Db | null> {
 
     db = client.db(process.env.MONGODB_DB_NAME || DEFAULT_DB_NAME);
     lastError = null;
-    console.log(`[db] connected to MongoDB Atlas — database "${db.databaseName}"`);
+    const connectionLabel = /^(mongodb(?:\+srv)?:\/\/)(127\.0\.0\.1|localhost)([:/]|$)/i.test(uri)
+      ? 'local MongoDB'
+      : 'MongoDB Atlas';
+    console.log(`[db] connected to ${connectionLabel} — database "${db.databaseName}"`);
     return db;
   } catch (err) {
     lastError = err instanceof Error ? err : new Error(String(err));

@@ -30,6 +30,11 @@
 #   Central sphere minimum wages   clc.gov.in/clc/min-wages
 #   State PWD schedules            per-state PWD site
 #
+# The SIH MVP intentionally publishes only five job-sized electrician tasks and
+# five job-sized plumber tasks. Other trades and per-unit work stay out until
+# the frozen RateBand contract has an explicit unit field and the team has
+# observations for those tasks.
+#
 # `unit` is carried here but NOT yet written to the database: RateBand has no
 # unit field and types.ts is frozen (see section 6.2 - wageFloor is a DAILY wage
 # and was being applied to per-sqft tasks). When that contract change is agreed,
@@ -37,35 +42,13 @@
 # documents which rows are per-unit so the distinction is at least visible.
 #
 trade,task_code,unit,p25,p50,p75,wage_floor,source
-electrician,fan_install,job,400,600,850,350,UNSOURCED
-electrician,fan_repair,job,250,400,600,350,UNSOURCED
-electrician,switchboard_install,job,800,1200,1800,350,UNSOURCED
-electrician,mcb_replace,job,600,900,1400,350,UNSOURCED
-electrician,house_wiring_point,point,250,350,500,350,UNSOURCED
-electrician,inverter_install,job,1200,1800,2600,350,UNSOURCED
-electrician,geyser_point,point,700,1000,1500,350,UNSOURCED
-electrician,earthing_check,job,500,800,1200,350,UNSOURCED
-electrician,light_fitting,job,200,300,450,350,UNSOURCED
-electrician,fault_diagnosis,job,300,500,800,350,UNSOURCED
-plumber,tap_replace,job,200,350,500,350,UNSOURCED
-plumber,leak_repair,job,300,500,800,350,UNSOURCED
-plumber,toilet_install,job,1200,1800,2500,350,UNSOURCED
-plumber,pipe_replace_metre,metre,150,250,400,350,UNSOURCED
-plumber,water_tank_clean,job,600,900,1400,350,UNSOURCED
-plumber,motor_install,job,800,1200,1800,350,UNSOURCED
-plumber,drain_unblock,job,400,650,1000,350,UNSOURCED
-plumber,geyser_plumbing,job,700,1000,1500,350,UNSOURCED
-carpenter,door_repair,job,400,700,1100,350,UNSOURCED
-carpenter,lock_install,job,250,400,600,350,UNSOURCED
-carpenter,furniture_repair,job,500,900,1500,350,UNSOURCED
-carpenter,window_frame,job,1000,1600,2400,350,UNSOURCED
-carpenter,shelf_install,job,400,650,1000,350,UNSOURCED
-carpenter,modular_fitting_day,day,1000,1400,2000,350,UNSOURCED
-painter,wall_paint_sqft,sqft,8,14,22,350,UNSOURCED
-painter,putty_sqft,sqft,6,10,16,350,UNSOURCED
-painter,wood_polish_sqft,sqft,15,25,40,350,UNSOURCED
-painter,day_rate,day,700,1000,1500,350,UNSOURCED
-mason,brickwork_sqft,sqft,35,55,80,350,UNSOURCED
-mason,plaster_sqft,sqft,18,28,45,350,UNSOURCED
-mason,tile_laying_sqft,sqft,30,50,75,350,UNSOURCED
-mason,day_rate,day,800,1100,1600,350,UNSOURCED
+electrician,fan_install,job,900,1200,1600,862,CPWD DSR E&M BLDC fan item 1 full supply and installation Rs 2688; service band calibrated with Delhi Labour Dept order F.No.(142)/02/MW/VII/Part file/211-241 skilled Rs 862 per day effective 01/04/2025
+electrician,fan_repair,job,862,1000,1400,862,Delhi Labour Dept order F.No.(142)/02/MW/VII/Part file/211-241 skilled Rs 862 per day effective 01/04/2025; service band is a transparent MVP estimate not an official tariff
+electrician,switchboard_install,job,900,1250,1800,862,CPWD DSR E&M 2016 item 2.18 industrial socket with connections Rs 980; service band calibrated with Delhi Labour Dept order F.No.(142)/02/MW/VII/Part file/211-241 skilled Rs 862 per day
+electrician,mcb_replace,job,862,1000,1400,862,CPWD DSR E&M 2016 item 1706 SP MCB material Rs 117; service band includes skilled labour floor from Delhi Labour Dept order F.No.(142)/02/MW/VII/Part file/211-241 Rs 862 per day
+electrician,light_fitting,job,862,1000,1500,862,Delhi Labour Dept order F.No.(142)/02/MW/VII/Part file/211-241 skilled Rs 862 per day effective 01/04/2025; service band is a transparent MVP estimate not an official tariff
+plumber,tap_replace,job,862,1050,1500,862,CPWD DSR 2021 Vol II item 18.49.1 CP brass bib cock Rs 459.50; service band calibrated with Delhi Labour Dept order F.No.(142)/02/MW/VII/Part file/211-241 skilled Rs 862 per day
+plumber,leak_repair,job,862,1100,1800,862,Delhi Labour Dept order F.No.(142)/02/MW/VII/Part file/211-241 skilled Rs 862 per day effective 01/04/2025; service band is a transparent MVP estimate not an official tariff
+plumber,toilet_install,job,1800,2600,3600,862,CPWD DSR 2021 Vol II item 17.1.1 Indian type WC pan with cistern Rs 3392.80; service band is installation labour and consumables calibrated with Delhi skilled wage floor Rs 862 per day
+plumber,water_tank_clean,job,862,1200,2000,862,Delhi Labour Dept order F.No.(142)/02/MW/VII/Part file/211-241 skilled Rs 862 per day effective 01/04/2025; service band is a transparent MVP estimate not an official tariff
+plumber,drain_unblock,job,862,1100,1800,862,Delhi Labour Dept order F.No.(142)/02/MW/VII/Part file/211-241 skilled Rs 862 per day effective 01/04/2025; service band is a transparent MVP estimate not an official tariff

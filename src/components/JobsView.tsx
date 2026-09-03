@@ -13,11 +13,18 @@ import {
   ChevronRight,
   Filter,
 } from 'lucide-react';
-import { JobItem, SupportedLanguage, SyncState } from '../types';
+import { JOB_BADGE, JobBadge, JobItem, SupportedLanguage, SyncState } from '../types';
 import { SyncBadge } from './SyncBadge';
 import { SendReviewLink } from './SendReviewLink';
 import { TRANSLATIONS } from '../data/translations';
 import { todayIso } from '../utils/date';
+
+const JOB_BADGE_PRESENTATION: Record<JobBadge, { label: string; className: string }> = {
+  scheduled: { label: 'Scheduled', className: 'text-blue-700 bg-blue-50 border-blue-200' },
+  in_progress: { label: 'In progress', className: 'text-amber-700 bg-amber-50 border-amber-200' },
+  completed: { label: 'Completed', className: 'text-green-700 bg-green-50 border-green-200' },
+  cancelled: { label: 'Cancelled', className: 'text-red-700 bg-red-50 border-red-200' },
+};
 
 interface JobsViewProps {
   jobs: JobItem[];
@@ -25,6 +32,7 @@ interface JobsViewProps {
   workerName: string;
   currentLanguage: SupportedLanguage;
   onAddJobVoice: () => void;
+  onOpenQuote: () => void;
   /**
    * Sync state per record (section 9.1). A function rather than a field on the
    * job because the outbox is the authority on what has actually reached the
@@ -40,6 +48,7 @@ export const JobsView: React.FC<JobsViewProps> = ({
   syncStateOf,
   currentLanguage,
   onAddJobVoice,
+  onOpenQuote,
 }) => {
   const t = TRANSLATIONS[currentLanguage];
   const [filter, setFilter] = useState<'all' | 'today' | 'week'>('all');
@@ -85,14 +94,19 @@ export const JobsView: React.FC<JobsViewProps> = ({
         </div>
 
         {/* Large Prominent 🎙️ Add Job Button */}
-        <button
-          id="jobs-view-voice-add-btn"
-          onClick={onAddJobVoice}
-          className="w-full sm:w-auto shrink-0 flex items-center justify-center gap-3 px-6 py-4 rounded-full bg-orange-500 hover:bg-orange-600 text-white font-extrabold text-base shadow-xl shadow-orange-200 transition-all active:scale-95 group"
-        >
-          <Mic className="w-5 h-5 group-hover:scale-110 transition-transform" />
-          <span>{t.addJobByVoice}</span>
-        </button>
+        <div className="w-full sm:w-auto flex flex-col gap-2 shrink-0">
+          <button
+            id="jobs-view-voice-add-btn"
+            onClick={onAddJobVoice}
+            className="w-full flex items-center justify-center gap-3 px-6 py-4 rounded-full bg-orange-500 hover:bg-orange-600 text-white font-extrabold text-base shadow-xl shadow-orange-200 transition-all active:scale-95 group"
+          >
+            <Mic className="w-5 h-5 group-hover:scale-110 transition-transform" />
+            <span>{t.addJobByVoice}</span>
+          </button>
+          <button type="button" onClick={onOpenQuote} className="w-full flex items-center justify-center gap-2 px-5 py-2.5 rounded-full bg-white border border-orange-300 text-orange-700 font-extrabold text-xs hover:bg-orange-50 transition-colors">
+            Create itemised quote
+          </button>
+        </div>
       </div>
 
       {/* Summary Chips & Filter Tabs */}
@@ -186,8 +200,10 @@ export const JobsView: React.FC<JobsViewProps> = ({
               <div className="flex items-start justify-between gap-3">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-[11px] font-extrabold uppercase text-green-700 bg-green-50 px-2.5 py-0.5 rounded-full border border-green-200">
-                      Completed
+                    <span
+                      className={`text-[11px] font-extrabold uppercase px-2.5 py-0.5 rounded-full border ${JOB_BADGE_PRESENTATION[JOB_BADGE[job.status]].className}`}
+                    >
+                      {JOB_BADGE_PRESENTATION[JOB_BADGE[job.status]].label}
                     </span>
                     <span className="text-xs text-gray-400 font-medium">
                       {job.date} • {job.time || '11:00 AM'}
