@@ -6,9 +6,9 @@ import { isDbConnected } from '../db';
 import { findPublicProfileByHandle, findDisplayNameByUserId, findOwnerIdByHandle } from '../data/profiles';
 import { resolveOrigin } from '../lib/origin';
 import type { PublicProfile } from '../data/profiles';
-import { createReview, summariseFor } from '../data/reviews';
+import { createReview } from '../data/reviews';
 import type { ReviewSummary } from '../data/reviews';
-import { calculateTrustScore } from '../data/trustScore';
+import { calculateTrustEvidence } from '../data/trustScore';
 import { gateReviewToken } from './reputation';
 import type { ReviewRatings, TrustScore } from '../../types';
 
@@ -300,6 +300,7 @@ function renderPassport(
   url: string,
   qrSvg: string,
   reviews: ReviewSummary,
+  completedJobs: number,
   trustScore?: TrustScore
 ): string {
   const verified = p.verifiedStatus === 'verified';
@@ -337,8 +338,8 @@ function renderPassport(
 
   <div class="stats">
     <div><span class="k">Experience</span><span class="v v-o">${esc(p.experienceYears ?? 0)} yrs</span></div>
-    <div><span class="k">Jobs Done</span><span class="v v-g">${esc(p.totalJobsCount ?? 0)}</span></div>
-    <div><span class="k">Rating</span><span class="v v-a">&#9733; ${esc(p.rating ?? '—')}</span></div>
+    <div><span class="k">Jobs Done</span><span class="v v-g">${esc(completedJobs)}</span></div>
+    <div><span class="k">Rating</span><span class="v v-a">&#9733; ${esc(reviews.average?.toFixed(1) ?? '—')}</span></div>
   </div>
 
   ${
@@ -379,7 +380,7 @@ function renderPassport(
 
   const desc = `${p.name} — ${p.trade}${p.location ? ` in ${p.location}` : ''}. ${
     p.experienceYears ?? 0
-  } years experience, ${p.totalJobsCount ?? 0} jobs recorded. Digital Kaarigar Passport with job-linked evidence.`;
+  } years experience, ${completedJobs} completed jobs recorded. Digital Kaarigar Passport with job-linked evidence.`;
 
   return shell(`${p.name} — ${p.trade} | Kaarigar Passport`, desc, body, url);
 }
@@ -454,10 +455,11 @@ publicRouter.get('/p/:handle', async (req: Request, res: Response) => {
     // renders: a passport that 500s because its review count could not be read
     // is worse than a passport with no review block.
     const ownerId = await findOwnerIdByHandle(profile.passportHandle);
-    const reviews = ownerId
-      ? await summariseFor(ownerId)
-      : { count: 0, average: null, axes: null, recent: [] };
-    const trustScore = ownerId ? await calculateTrustScore(ownerId) : undefined;
+    const evidence = ownerId ? await calculateTrustEvidence(ownerId) : undefined;
+    const reviews = evidence?.reviews
+      ?? { count: 0, average: null, axes: null, recent: [] };
+    const completedJobs = evidence?.jobs.completed ?? 0;
+    const trustScore = evidence?.score;
 
     // Error correction level Q (~25%) rather than the M default. This QR is
     // scanned off a phone screen, a printed card, and - per the demo plan - a
@@ -474,7 +476,7 @@ publicRouter.get('/p/:handle', async (req: Request, res: Response) => {
     // Short public cache: a passport changes rarely, but "rarely" is not
     // "never", and a stale trust signal is worse than an extra request.
     res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
-    res.status(200).send(renderPassport(profile, url, qrSvg, reviews, trustScore));
+    res.status(200).send(renderPassport(profile, url, qrSvg, reviews, completedJobs, trustScore));
   } catch (err) {
     console.error('[public] /p/:handle failed', err);
     res.status(500).send(

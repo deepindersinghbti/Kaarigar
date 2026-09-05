@@ -56,7 +56,27 @@ services:
         sync: false
       - key: MONGODB_URI
         sync: false
+      # Keep the rehearsal isolated from any default/production database.
+      # The demo seed scripts and DEMO_RUNBOOK.md use this exact database name.
+      - key: MONGODB_DB_NAME
+        value: kaarigar_sih_demo
       - key: GEMINI_API_KEY
+        sync: false
+      - key: REVIEW_LINK_SECRET
+        sync: false
+
+      # Pin every printed QR and signed customer-review link to the demo origin.
+      - key: PUBLIC_ORIGIN
+        value: https://kaarigar.onrender.com
+
+      # Stage-only login fallback. Render prompts for these values rather than
+      # storing them in source. All three must be configured for the bypass to
+      # activate, and the server scopes it to the one demo phone.
+      - key: DEMO_OTP_ENABLED
+        sync: false
+      - key: DEMO_OTP_PHONE
+        sync: false
+      - key: DEMO_OTP_CODE
         sync: false
 
       # Firebase web config. Not secret - these ship in the browser bundle by

@@ -1,5 +1,5 @@
 import { authHeader } from './authToken';
-import type { JobItem, KamaiEntry, RateBand, WorkerProfile } from '../types';
+import type { JobItem, JobState, KamaiEntry, RateBand, WorkerProfile } from '../types';
 
 export interface PricingBandResult extends Partial<RateBand> {
   trade: string;
@@ -155,6 +155,18 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(job),
     });
+    return body.job;
+  },
+
+  /** Advance a job through the server-owned lifecycle state machine. */
+  async transitionJob(jobId: string, state: JobState): Promise<JobItem> {
+    const body = await request<{ job: JobItem }>(
+      `/api/jobs/${encodeURIComponent(jobId)}/transition`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ state }),
+      }
+    );
     return body.job;
   },
 

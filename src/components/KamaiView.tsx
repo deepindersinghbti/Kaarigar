@@ -2,25 +2,29 @@ import React, { useState } from 'react';
 import {
   Mic,
   TrendingUp,
-  IndianRupee,
   Calendar,
   CreditCard,
   Banknote,
-  ArrowUpRight,
   Sparkles,
-  PieChart,
   Download,
-  Share2,
+  Keyboard,
 } from 'lucide-react';
 import { KamaiEntry, SupportedLanguage, SyncState } from '../types';
 import { SyncBadge } from './SyncBadge';
 import { TRANSLATIONS } from '../data/translations';
-import { todayIso } from '../utils/date';
+import { daysAgoIso, todayIso } from '../utils/date';
+
+export interface ManualKamaiInput {
+  amount: number;
+  description: string;
+  paymentType: 'cash' | 'upi';
+}
 
 interface KamaiViewProps {
   kamaiList: KamaiEntry[];
   currentLanguage: SupportedLanguage;
   onAddKamaiVoice: () => void;
+  onAddKamaiManual: (input: ManualKamaiInput) => void;
   onDownloadIncomeStatement: () => void;
   /** Sync state per record (section 9.1). See JobsView for why it is a function. */
   syncStateOf: (recordId: string) => SyncState;
@@ -31,32 +35,72 @@ export const KamaiView: React.FC<KamaiViewProps> = ({
   syncStateOf,
   currentLanguage,
   onAddKamaiVoice,
+  onAddKamaiManual,
   onDownloadIncomeStatement,
 }) => {
   const t = TRANSLATIONS[currentLanguage];
   const [activeTab, setActiveTab] = useState<'today' | 'week' | 'month'>('today');
+  const [manualOpen, setManualOpen] = useState(false);
+  const [manualAmount, setManualAmount] = useState('');
+  const [manualDescription, setManualDescription] = useState('');
+  const [manualPaymentType, setManualPaymentType] = useState<'cash' | 'upi'>('cash');
+  const [manualError, setManualError] = useState('');
 
   const todayStr = todayIso();
-
-  // Calculations
+  const weekStart = daysAgoIso(6);
+  const monthStart = `${todayStr.slice(0, 7)}-01`;
   const todayEntries = kamaiList.filter((k) => k.date === todayStr);
-  const todayTotal = todayEntries.reduce((sum, k) => sum + k.amount, 0);
+  const weekEntries = kamaiList.filter((k) => k.date >= weekStart && k.date <= todayStr);
+  const monthEntries = kamaiList.filter((k) => k.date >= monthStart && k.date <= todayStr);
 
-  const totalAll = kamaiList.reduce((sum, k) => sum + k.amount, 0);
-  const cashTotal = kamaiList
-    .filter((k) => k.paymentType === 'cash')
-    .reduce((sum, k) => sum + k.amount, 0);
-  const upiTotal = kamaiList
-    .filter((k) => k.paymentType === 'upi')
-    .reduce((sum, k) => sum + k.amount, 0);
+  const effect = (entry: KamaiEntry) => entry.direction === 'in' ? entry.amount : -entry.amount;
+  const net = (entries: KamaiEntry[]) => entries.reduce((sum, entry) => sum + effect(entry), 0);
+  const incomeByPayment = (paymentType: 'cash' | 'upi') => monthEntries
+    .filter((entry) => entry.direction === 'in' && entry.paymentType === paymentType)
+    .reduce((sum, entry) => sum + entry.amount, 0);
 
-  const currentDisplayList =
-    activeTab === 'today' ? todayEntries : kamaiList;
+  const todayTotal = net(todayEntries);
+  const weekTotal = net(weekEntries);
+  const monthTotal = net(monthEntries);
+  const cashTotal = incomeByPayment('cash');
+  const upiTotal = incomeByPayment('upi');
+  const outstandingTotal = monthEntries
+    .filter((entry) => entry.direction === 'out' && !entry.settledAt)
+    .reduce((sum, entry) => sum + entry.amount, 0);
 
-  const currentDisplayTotal = currentDisplayList.reduce(
-    (sum, k) => sum + k.amount,
-    0
-  );
+  const currentDisplayList = activeTab === 'today'
+    ? todayEntries
+    : activeTab === 'week'
+      ? weekEntries
+      : monthEntries;
+  const currentDisplayTotal = net(currentDisplayList);
+
+  const formatAmount = (value: number) =>
+    `${value < 0 ? '-' : ''}₹${Math.abs(value).toLocaleString('en-IN')}`;
+  const amountClass = (value: number) => value < 0 ? 'text-red-600' : 'text-green-600';
+
+  const submitManualEntry = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const amount = Number(manualAmount);
+    const description = manualDescription.trim();
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setManualError('Enter an amount greater than zero.');
+      return;
+    }
+    if (!description) {
+      setManualError('Describe the work or payment.');
+      return;
+    }
+
+    onAddKamaiManual({ amount, description, paymentType: manualPaymentType });
+    setManualAmount('');
+    setManualDescription('');
+    setManualPaymentType('cash');
+    setManualError('');
+    setManualOpen(false);
+    setActiveTab('today');
+  };
 
   return (
     <div id="kamai-view-container" className="space-y-6 max-w-2xl mx-auto pb-10">
@@ -77,14 +121,29 @@ export const KamaiView: React.FC<KamaiViewProps> = ({
         </div>
 
         {/* 🎙️ Add Earnings Voice Button */}
-        <div className="w-full sm:w-auto flex flex-col sm:flex-row gap-2 shrink-0">
+        <div className="w-full sm:w-auto grid gap-2 shrink-0">
           <button
             id="kamai-view-voice-add-btn"
+            type="button"
             onClick={onAddKamaiVoice}
             className="flex items-center justify-center gap-3 px-6 py-4 rounded-full bg-orange-500 hover:bg-orange-600 text-white font-extrabold text-base shadow-xl shadow-orange-200 transition-all active:scale-95 group"
           >
             <Mic className="w-5 h-5 group-hover:scale-110 transition-transform" />
             <span>{t.addEarnings} (बोलकर)</span>
+          </button>
+          <button
+            id="kamai-view-manual-add-btn"
+            type="button"
+            onClick={() => {
+              setManualOpen((open) => !open);
+              setManualError('');
+            }}
+            aria-expanded={manualOpen}
+            aria-controls="kamai-manual-entry-form"
+            className="flex items-center justify-center gap-2 px-5 py-3 rounded-full bg-gray-900 text-white font-extrabold text-sm hover:bg-gray-800 transition-all active:scale-95"
+          >
+            <Keyboard className="w-4 h-4" aria-hidden="true" />
+            <span>Type payment</span>
           </button>
           <button
             id="kamai-view-income-statement-btn"
@@ -98,6 +157,83 @@ export const KamaiView: React.FC<KamaiViewProps> = ({
         </div>
       </div>
 
+      {manualOpen ? (
+        <form
+          id="kamai-manual-entry-form"
+          onSubmit={submitManualEntry}
+          className="bg-white rounded-3xl border border-gray-200 shadow-sm p-5 space-y-4"
+        >
+          <div>
+            <h3 className="font-extrabold text-gray-900">Add received payment</h3>
+            <p className="text-xs text-gray-500 mt-1">
+              Fast fallback when voice or venue internet is unreliable. This records income received today.
+            </p>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-3">
+            <label className="text-xs font-bold text-gray-700">
+              Amount (₹)
+              <input
+                id="kamai-manual-amount"
+                inputMode="decimal"
+                type="number"
+                min="1"
+                step="1"
+                value={manualAmount}
+                onChange={(event) => setManualAmount(event.target.value)}
+                className="mt-1 w-full min-h-11 rounded-xl border border-gray-300 px-3 text-base font-semibold focus:outline-none focus:ring-2 focus:ring-orange-400"
+                required
+              />
+            </label>
+            <label className="text-xs font-bold text-gray-700">
+              Payment method
+              <select
+                id="kamai-manual-payment-type"
+                value={manualPaymentType}
+                onChange={(event) => setManualPaymentType(event.target.value as 'cash' | 'upi')}
+                className="mt-1 w-full min-h-11 rounded-xl border border-gray-300 px-3 text-base font-semibold bg-white focus:outline-none focus:ring-2 focus:ring-orange-400"
+              >
+                <option value="cash">Cash</option>
+                <option value="upi">UPI / online</option>
+              </select>
+            </label>
+          </div>
+          <label className="text-xs font-bold text-gray-700 block">
+            Work or payment description
+            <input
+              id="kamai-manual-description"
+              type="text"
+              maxLength={120}
+              value={manualDescription}
+              onChange={(event) => setManualDescription(event.target.value)}
+              placeholder="Example: Fan installation payment"
+              className="mt-1 w-full min-h-11 rounded-xl border border-gray-300 px-3 text-base font-semibold focus:outline-none focus:ring-2 focus:ring-orange-400"
+              required
+            />
+          </label>
+          {manualError ? (
+            <p role="alert" className="text-xs font-bold text-red-600">{manualError}</p>
+          ) : null}
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              className="min-h-11 flex-1 rounded-full bg-orange-500 text-white font-extrabold hover:bg-orange-600"
+            >
+              Save payment
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setManualOpen(false);
+                setManualError('');
+              }}
+              className="min-h-11 px-5 rounded-full border border-gray-300 text-gray-700 font-bold hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      ) : null}
+
       {/* Main Stats Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5">
         {/* Today's Kamai */}
@@ -110,11 +246,11 @@ export const KamaiView: React.FC<KamaiViewProps> = ({
               <TrendingUp className="w-4 h-4" />
             </span>
           </div>
-          <div className="text-2xl sm:text-3xl font-black text-green-600 mt-2">
-            ₹{todayTotal.toLocaleString('en-IN')}
+          <div className={`text-2xl sm:text-3xl font-black mt-2 ${amountClass(todayTotal)}`}>
+            {formatAmount(todayTotal)}
           </div>
           <div className="text-[11px] text-gray-500 font-medium mt-0.5">
-            {todayEntries.length} काम आज पूरे हुए
+            {todayEntries.length} ledger entries today
           </div>
         </div>
 
@@ -128,29 +264,29 @@ export const KamaiView: React.FC<KamaiViewProps> = ({
               <Calendar className="w-4 h-4" />
             </span>
           </div>
-          <div className="text-xl sm:text-2xl font-black text-gray-900 mt-2">
-            ₹{(totalAll).toLocaleString('en-IN')}
+          <div className={`text-xl sm:text-2xl font-black mt-2 ${amountClass(weekTotal)}`}>
+            {formatAmount(weekTotal)}
           </div>
           <div className="text-[11px] text-gray-500 font-medium mt-0.5">
-            Avg. ₹1,800/दिन
+            Actual net for the last 7 days
           </div>
         </div>
 
-        {/* Monthly Estimate */}
+        {/* Monthly actual */}
         <div className="bg-white p-5 rounded-3xl border border-gray-200 shadow-sm">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
-              इस महीने (अनुमान)
+              इस महीने (Actual)
             </span>
             <span className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
               <Sparkles className="w-4 h-4" />
             </span>
           </div>
-          <div className="text-xl sm:text-2xl font-black text-blue-600 mt-2">
-            ₹{(totalAll * 3.5).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+          <div className={`text-xl sm:text-2xl font-black mt-2 ${amountClass(monthTotal)}`}>
+            {formatAmount(monthTotal)}
           </div>
           <div className="text-[11px] text-gray-500 font-medium mt-0.5">
-            लक्ष्य का 84% पूरा
+            Income minus outgoing entries
           </div>
         </div>
       </div>
@@ -159,9 +295,9 @@ export const KamaiView: React.FC<KamaiViewProps> = ({
       <div className="bg-white rounded-3xl p-6 border border-gray-200 shadow-sm space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="font-extrabold text-gray-900 text-sm">
-            भुगतान माध्यम (Payment Method Split)
+            भुगतान माध्यम (Income received this month)
           </h3>
-          <span className="text-xs text-gray-400 font-medium">कुल हिसाब</span>
+          <span className="text-xs text-gray-400 font-medium">Actual ledger data</span>
         </div>
 
         <div className="grid grid-cols-2 gap-3.5">
@@ -197,11 +333,20 @@ export const KamaiView: React.FC<KamaiViewProps> = ({
         </div>
       </div>
 
+      <div className="bg-amber-50 rounded-2xl px-5 py-4 border border-amber-200 flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-extrabold text-amber-900 uppercase">Outstanding this month</p>
+          <p className="text-[11px] text-amber-800">Outgoing/owed entries without a settlement date</p>
+        </div>
+        <strong className="text-lg font-black text-amber-900">{formatAmount(outstandingTotal)}</strong>
+      </div>
+
       {/* Ledger History List */}
       <div className="space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div className="flex bg-gray-100 p-1.5 rounded-full border border-gray-200 text-xs font-bold text-gray-700">
             <button
+              type="button"
               onClick={() => setActiveTab('today')}
               className={`px-4 py-2 rounded-full transition-all ${
                 activeTab === 'today'
@@ -212,6 +357,7 @@ export const KamaiView: React.FC<KamaiViewProps> = ({
               आज (Today)
             </button>
             <button
+              type="button"
               onClick={() => setActiveTab('week')}
               className={`px-4 py-2 rounded-full transition-all ${
                 activeTab === 'week'
@@ -219,20 +365,45 @@ export const KamaiView: React.FC<KamaiViewProps> = ({
                   : 'hover:text-gray-900'
               }`}
             >
-              सभी प्रविष्टियां ({kamaiList.length})
+              7 दिन ({weekEntries.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('month')}
+              className={`px-4 py-2 rounded-full transition-all ${
+                activeTab === 'month'
+                  ? 'bg-white text-gray-900 shadow-xs font-extrabold'
+                  : 'hover:text-gray-900'
+              }`}
+            >
+              महीना ({monthEntries.length})
             </button>
           </div>
 
           <div className="text-xs text-gray-500 font-semibold">
             दिखाई गई राशि:{' '}
             <strong className="text-gray-900 font-black">
-              ₹{currentDisplayTotal.toLocaleString('en-IN')}
+              {formatAmount(currentDisplayTotal)}
             </strong>
           </div>
         </div>
 
         <div className="space-y-2.5">
-          {currentDisplayList.map((item) => (
+          {currentDisplayList.length === 0 ? (
+            <div className="bg-white p-6 rounded-3xl border border-dashed border-gray-300 text-center text-sm text-gray-500">
+              No ledger entries in this period.
+            </div>
+          ) : currentDisplayList.map((item) => {
+            const value = effect(item);
+            const entryLabel = item.reversesId
+              ? 'Correction'
+              : item.direction === 'in'
+                ? 'Income received'
+                : item.settledAt
+                  ? 'Settled outgoing'
+                  : 'Outstanding / outgoing';
+
+            return (
             <div
               key={item.id}
               className="bg-white p-4 sm:p-5 rounded-3xl border border-gray-200 shadow-sm flex items-center justify-between gap-3 hover:border-green-300 transition-colors"
@@ -240,9 +411,11 @@ export const KamaiView: React.FC<KamaiViewProps> = ({
               <div className="flex items-center gap-3.5">
                 <div
                   className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 font-bold ${
-                    item.paymentType === 'upi'
-                      ? 'bg-purple-100 text-purple-700'
-                      : 'bg-green-100 text-green-700'
+                    value < 0
+                      ? 'bg-red-100 text-red-700'
+                      : item.paymentType === 'upi'
+                        ? 'bg-purple-100 text-purple-700'
+                        : 'bg-green-100 text-green-700'
                   }`}
                 >
                   {item.paymentType === 'upi' ? 'UPI' : '₹'}
@@ -253,14 +426,15 @@ export const KamaiView: React.FC<KamaiViewProps> = ({
                   </h4>
                   <div className="text-xs text-gray-400 font-medium flex items-center gap-1.5 flex-wrap">
                     <span>{item.date} {item.customerName ? `• ${item.customerName}` : ''}</span>
+                    <span>• {entryLabel}</span>
                     <SyncBadge state={syncStateOf(item.id)} currentLanguage={currentLanguage} compact />
                   </div>
                 </div>
               </div>
 
               <div className="text-right">
-                <div className="text-base sm:text-lg font-black text-green-600">
-                  +₹{item.amount.toLocaleString('en-IN')}
+                <div className={`text-base sm:text-lg font-black ${amountClass(value)}`}>
+                  {value >= 0 ? '+' : '-'}₹{Math.abs(value).toLocaleString('en-IN')}
                 </div>
                 <span
                   className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase ${
@@ -273,7 +447,8 @@ export const KamaiView: React.FC<KamaiViewProps> = ({
                 </span>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>

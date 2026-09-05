@@ -6,3 +6,15 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Generated artifacts and temporary working files
+/output/
+/tmp/
+**/__pycache__/
+*.py[cod]
+
+# Unrelated local PDF-generation utilities accidentally added to this repository
+/scripts/generate_cheat_sheet_pdf.py
+/scripts/generate_probability_statistics_textbook.py
+/scripts/worksheet_question_texts.py
+/scripts/worksheet_solutions.py
