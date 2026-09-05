@@ -7,6 +7,7 @@ platform for India's skilled trade workers. Smart India Hackathon 2026.
 - `MIGRATION_PLAN.md` — the authoritative 10-day build plan. **This governs.**
 - `AUDIT_REPORT.md` / `GAP_MATRIX.md` — prototype audit against the architecture
 - `TYPES_PROPOSAL.md` — record of the `src/types.ts` freeze decisions
+- `DEMO_RUNBOOK.md` — frozen, repeatable SIH demo setup and rehearsal flow
 
 ## Run locally
 
@@ -68,6 +69,8 @@ Network Access allowlist, not that the URI or password is wrong.
 | `npm run build` | Client bundle to `dist/`, server to `dist/server.cjs` |
 | `npm start` | Run the production build |
 | `npm run lint` | `tsc --noEmit` |
+| `npm run test:regressions` | API integrity regressions against a disposable database |
+| `npm run check:demo-seed` | Read-only account/profile/job/ledger ownership check |
 
 ## Layout
 
@@ -266,41 +269,25 @@ or placed in an error.
 
 Enable it in the Render dashboard for the demo; leave it unset everywhere else.
 
-## Temporary: `otp-test.html` is in the production build
+## OTP test harness
 
-**REMOVE BEFORE THE FINAL DEMO BUILD.**
-
-`vite.config.ts` builds `otp-test.html` as a second entry point, so the Firebase
-phone-OTP harness is reachable on the deploy at `/otp-test.html`. It is there for
-one reason: the §6.4 go/no-go has only ever been run from `localhost`, which
-Firebase authorises by default, so it has never exercised the real deployed
-origin — the confound that retest was supposed to remove.
-
-**What it costs while it is there.** The page is public and unauthenticated, and
-pressing its button spends SMS quota against our Firebase billing. It is
-rate-limited by Firebase, not by us. That is acceptable for a few days on an
-unadvertised URL. It is not acceptable in the build that ships to a demo.
-
-**To remove it:** delete the `build.rollupOptions.input` block in
-`vite.config.ts` (the `main` entry is the default), and delete `otp-test.html`
-and `otp-test.ts` once the go/no-go is recorded — the harness itself says it is
-throwaway.
+The temporary public `otp-test.html` Firebase harness and its additional Vite
+build entry have been removed. Do not reintroduce a public SMS-quota test page
+into the demo build. Use the normal login screen or the one-number, server-side
+`DEMO_OTP_*` fallback described above.
 
 ## Rate bands: sourcing the fair-price data
 
 The Mol-Bhav engine (§4C) serves bands from `rate_bands`, seeded from
 **`data/rate-bands.csv`** — one row per band, with a mandatory `source` column.
 
-### The rates are currently NOT sourced
+### Current MVP dataset
 
-Every band still carries the placeholder sentinel, and the API reports
-`seededFrom` as `"PLACEHOLDER - not sourced, replace before demo"`, so an
-unsourced band announces itself rather than passing as authoritative.
-
-**This is deliberate, and it is not the same as being finished.** §14.1 is
-explicit that claiming a source you do not have is the fastest way to lose a
-panel — so a plausible number under a fabricated *"CPWD DSR 2024"* citation
-would be strictly worse than an obvious placeholder.
+The CSV contains ten job-sized bands: five electrician tasks and five plumber
+tasks. Every row states either the applicable Delhi skilled-wage floor, a
+specific CPWD DSR reference, or both, and explicitly labels calibrated service
+bands as prototype estimates rather than official consumer tariffs. Per-metre
+and per-square-foot work remains outside the MVP.
 
 ```bash
 npm run check:rates
@@ -344,11 +331,6 @@ Note that published secondary sources **disagree** on the current Delhi skilled
 rate. Read the figure from the Labour Department notification PDF itself and
 cite the order number and effective date.
 
-### One known-bad row
-
-`electrician/unsupported_task` sits in the database with an **empty**
-`seededFrom` and does not appear in the CSV. It is referenced nowhere in the
-repo — likely a leftover from manual testing. `check:rates` flags it as
-`NO CITATION AT ALL`. It has been left in place rather than deleted, because it
-is not this change's data to remove; delete it deliberately when someone
-confirms nothing depends on it.
+The database remains the final authority during rehearsal. Run
+`npm run check:rates` after seeding and stop if it reports anything other than
+10 sourced rows and zero unsourced rows.

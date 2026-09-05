@@ -77,6 +77,12 @@ async function main() {
 
   const aCreate = await fetch(`${BASE}/api/jobs`, { method: 'POST', headers: auth(a), body: mk('A job') });
   check('owner can create', aCreate.status === 201, `got ${aCreate.status}`);
+  const aCreateBody = await aCreate.json();
+  check('new job starts at REQUESTED',
+    aCreateBody.job?.status === 'REQUESTED'
+      && aCreateBody.job?.stateHistory?.length === 1
+      && aCreateBody.job?.stateHistory?.[0]?.state === 'REQUESTED',
+    JSON.stringify(aCreateBody.job));
 
   const aReplay = await fetch(`${BASE}/api/jobs`, { method: 'POST', headers: auth(a), body: mk('A job') });
   const aReplayBody = await aReplay.json();
@@ -91,6 +97,105 @@ async function main() {
     !/another user|owned by|belongs to/i.test(JSON.stringify(bBody)),
     JSON.stringify(bBody));
 
+  // ---------------------------------------------------------------------
+  // Lifecycle integrity. Creating completed evidence is forbidden; every
+  // happy-path state must be accepted exactly one legal edge at a time.
+  // ---------------------------------------------------------------------
+  console.log('\njob lifecycle integrity');
+
+  const bypassId = `01a05000-0000-7000-8000-${stamp}0003`;
+  const bypass = await fetch(`${BASE}/api/jobs`, {
+    method: 'POST',
+    headers: auth(a),
+    body: JSON.stringify({ id: bypassId, title: 'Forged completed job', amount: 900, status: 'COMPLETED' }),
+  });
+  check('cannot create completed-work evidence', bypass.status === 400, `got ${bypass.status}`);
+
+  const afterBypass = await (await fetch(`${BASE}/api/jobs`, { headers: auth(a) })).json();
+  check('rejected completed job was not inserted',
+    !afterBypass.jobs?.some((job: { id: string }) => job.id === bypassId));
+
+  const illegalJump = await fetch(`${BASE}/api/jobs/${encodeURIComponent(jobId)}/transition`, {
+    method: 'POST',
+    headers: auth(a),
+    body: JSON.stringify({ state: 'COMPLETED' }),
+  });
+  check('cannot jump REQUESTED directly to COMPLETED', illegalJump.status === 409, `got ${illegalJump.status}`);
+
+  for (const state of ['QUOTED', 'ACCEPTED', 'SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'SETTLED']) {
+    const response = await fetch(`${BASE}/api/jobs/${encodeURIComponent(jobId)}/transition`, {
+      method: 'POST',
+      headers: auth(a),
+      body: JSON.stringify({ state }),
+    });
+    const body = await response.json();
+    check(`accepts legal transition to ${state}`,
+      response.status === 200 && body.job?.status === state,
+      `got ${response.status} ${JSON.stringify(body).slice(0, 120)}`);
+  }
+
+  // The passport headline must use the same server-owned evidence as the
+  // trust rubric. Editable/seeded profile counters once showed "248 jobs" and
+  // "4.9" beside a score computed from the real one-job/no-review history.
+  const passportResponse = await fetch(`${BASE}/api/passport/me`, { headers: auth(a) });
+  const passportBody = await passportResponse.json();
+  check('passport job count is derived from completed jobs',
+    passportResponse.status === 200 && passportBody.profile?.totalJobsCount === 1,
+    JSON.stringify(passportBody.profile));
+  check('passport rating is derived from reviews',
+    passportBody.profile?.rating === 0,
+    JSON.stringify(passportBody.profile));
+
+  const passportHandle = passportBody.profile?.passportHandle;
+  const publicPassport = await fetch(`${BASE}/p/${encodeURIComponent(passportHandle)}`);
+  const publicPassportHtml = await publicPassport.text();
+  check('public passport renders the derived evidence counters',
+    publicPassport.status === 200
+      && /Jobs Done<\/span><span class="v v-g">1<\/span>/.test(publicPassportHtml)
+      && /Rating<\/span><span class="v v-a">&#9733; —<\/span>/.test(publicPassportHtml),
+    `got ${publicPassport.status}`);
+
+  const reviewLinkResponse = await fetch(`${BASE}/api/reviews/link`, {
+    method: 'POST',
+    headers: auth(a),
+    body: JSON.stringify({ jobId }),
+  });
+  const reviewLinkBody = await reviewLinkResponse.json();
+  const reviewToken = reviewLinkBody.url
+    ? new URL(reviewLinkBody.url).pathname.split('/').filter(Boolean).pop()
+    : undefined;
+  check('owner can create a customer review link',
+    reviewLinkResponse.status === 201 && Boolean(reviewToken),
+    JSON.stringify(reviewLinkBody));
+
+  const reviewResponse = await fetch(`${BASE}/api/reviews`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      token: reviewToken,
+      ratings: { workmanship: 5, punctuality: 5, priceHonesty: 5, cleanliness: 5 },
+      text: 'Regression review evidence',
+    }),
+  });
+  check('customer review is accepted without a customer account',
+    reviewResponse.status === 201,
+    `got ${reviewResponse.status}`);
+
+  const reviewedPassport = await (
+    await fetch(`${BASE}/api/passport/me`, { headers: auth(a) })
+  ).json();
+  check('submitted review updates the derived passport rating',
+    reviewedPassport.profile?.rating === 5,
+    JSON.stringify(reviewedPassport.profile));
+
+  const reviewedPublicHtml = await (
+    await fetch(`${BASE}/p/${encodeURIComponent(passportHandle)}?after-review=1`)
+  ).text();
+  check('public passport updates its headline and review evidence',
+    /Rating<\/span><span class="v v-a">&#9733; 5\.0<\/span>/.test(reviewedPublicHtml)
+      && /1 review<\/div>/.test(reviewedPublicHtml),
+    'expected a 5.0 headline and one review');
+
   const entryId = `01a05000-0000-7000-8000-${stamp}0002`;
   const mkEntry = (d: string) => JSON.stringify({
     id: entryId, direction: 'in', amount: 100, description: d,
@@ -99,6 +204,64 @@ async function main() {
   await fetch(`${BASE}/api/ledger/entries`, { method: 'POST', headers: auth(a), body: mkEntry('a') });
   const bEntry = await fetch(`${BASE}/api/ledger/entries`, { method: 'POST', headers: auth(b), body: mkEntry('b') });
   check('ledger collision is 409, not 500', bEntry.status === 409, `got ${bEntry.status}`);
+
+  // ---------------------------------------------------------------------
+  // Ledger truthfulness. The UI and income statement depend on these
+  // algebraic values: outgoing rows reduce net income, and an append-only
+  // reversal cancels both owed and outstanding without editing history.
+  // ---------------------------------------------------------------------
+  console.log('\nledger summary and reversal');
+
+  const outgoingId = `01a05000-0000-7000-8000-${stamp}0004`;
+  const outgoing = await fetch(`${BASE}/api/ledger/entries`, {
+    method: 'POST',
+    headers: auth(a),
+    body: JSON.stringify({
+      id: outgoingId,
+      direction: 'out',
+      amount: 80,
+      description: 'Outstanding material amount',
+      paymentType: 'upi',
+      date: new Date().toISOString().slice(0, 10),
+    }),
+  });
+  check('outgoing ledger entry is created', outgoing.status === 201, `got ${outgoing.status}`);
+
+  const beforeReversal = await (
+    await fetch(`${BASE}/api/ledger/summary?period=all`, { headers: auth(a) })
+  ).json();
+  check('summary subtracts outgoing from net',
+    beforeReversal.earned === 100
+      && beforeReversal.owed === 80
+      && beforeReversal.net === 20,
+    JSON.stringify(beforeReversal));
+  check('unsettled outgoing amount is outstanding',
+    beforeReversal.outstanding === 80,
+    JSON.stringify(beforeReversal));
+  check('payment split counts received income only',
+    beforeReversal.byPaymentType?.cash === 100
+      && beforeReversal.byPaymentType?.upi === 0,
+    JSON.stringify(beforeReversal.byPaymentType));
+
+  const reversal = await fetch(
+    `${BASE}/api/ledger/entries/${encodeURIComponent(outgoingId)}/reverse`,
+    {
+      method: 'POST',
+      headers: auth(a),
+      body: JSON.stringify({ reason: 'Regression cancellation' }),
+    }
+  );
+  check('outgoing entry can be reversed append-only', reversal.status === 201, `got ${reversal.status}`);
+
+  const afterReversal = await (
+    await fetch(`${BASE}/api/ledger/summary?period=all`, { headers: auth(a) })
+  ).json();
+  check('reversal cancels owed, net and outstanding correctly',
+    afterReversal.earned === 100
+      && afterReversal.owed === 0
+      && afterReversal.net === 100
+      && afterReversal.outstanding === 0,
+    JSON.stringify(afterReversal));
 
   // ---------------------------------------------------------------------
   // Retry classification. A permanent failure reported as retryable is an

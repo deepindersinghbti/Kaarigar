@@ -1,6 +1,14 @@
 import type { TrustScore } from '../../types';
 import { summariseFor } from './reviews';
+import type { ReviewSummary } from './reviews';
 import { countJobOutcomes } from './jobs';
+import type { JobOutcomeCounts } from './jobs';
+
+export interface TrustEvidence {
+  jobs: JobOutcomeCounts;
+  reviews: ReviewSummary;
+  score: TrustScore;
+}
 
 /**
  * Compute the public trust rubric from evidence the prototype really owns.
@@ -11,9 +19,10 @@ import { countJobOutcomes } from './jobs';
  * misleading full score. Work history is capped at 15/25 because the MVP cut
  * photos and independent customer accounts; the UI names those limitations.
  */
-export async function calculateTrustScore(userId: string): Promise<TrustScore> {
-  const [jobs, reviews] = await Promise.all([countJobOutcomes(userId), summariseFor(userId)]);
-
+export function calculateTrustScoreFromEvidence(
+  jobs: JobOutcomeCounts,
+  reviews: ReviewSummary
+): TrustScore {
   const identityVerification = 10;
   const skillCredentials = 0;
   const verifiedWorkHistory = Math.min(15, jobs.completed * 3);
@@ -51,4 +60,17 @@ export async function calculateTrustScore(userId: string): Promise<TrustScore> {
   );
 
   return { value, components, computedAt: new Date().toISOString() };
+}
+
+/**
+ * Return the evidence and score together so passport callers cannot display
+ * editable profile counters beside a server-derived trust score.
+ */
+export async function calculateTrustEvidence(userId: string): Promise<TrustEvidence> {
+  const [jobs, reviews] = await Promise.all([countJobOutcomes(userId), summariseFor(userId)]);
+  return { jobs, reviews, score: calculateTrustScoreFromEvidence(jobs, reviews) };
+}
+
+export async function calculateTrustScore(userId: string): Promise<TrustScore> {
+  return (await calculateTrustEvidence(userId)).score;
 }

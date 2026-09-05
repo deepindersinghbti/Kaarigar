@@ -53,8 +53,12 @@ export async function createJob(kaarigarId: string, input: unknown): Promise<Cre
   if (!Number.isFinite(amount) || amount < 0) {
     return { status: 'rejected', field: 'amount', message: 'amount must be a non-negative number.' };
   }
-  if (body.status !== undefined && !isJobState(body.status)) {
-    return { status: 'rejected', field: 'status', message: 'status is not a known JobState.' };
+  if (body.status !== undefined && body.status !== 'REQUESTED') {
+    return {
+      status: 'rejected',
+      field: 'status',
+      message: 'New jobs must start in REQUESTED. Use the transition endpoint to advance the lifecycle.',
+    };
   }
   if (body.date !== undefined && (typeof body.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(body.date))) {
     return { status: 'rejected', field: 'date', message: 'date must be YYYY-MM-DD.' };
@@ -84,7 +88,9 @@ export async function createJob(kaarigarId: string, input: unknown): Promise<Cre
   }
 
   const now = new Date().toISOString();
-  const status: JobState = body.status ?? 'REQUESTED';
+  // Creation is a trust boundary. Accepting COMPLETED here would let a client
+  // manufacture verified-work evidence without traversing the state machine.
+  const status: JobState = 'REQUESTED';
   const stateHistory: JobStateTransition[] = [{ state: status, at: now, by: kaarigarId }];
 
   const job: Omit<JobItem, 'id'> = {

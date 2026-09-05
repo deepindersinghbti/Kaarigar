@@ -67,7 +67,10 @@ async function main() {
       {
         $set: {
           ...rest,
-          kaarigarId: profileId,
+          // Authenticated job reads and transitions are owner-scoped by user id,
+          // not passport/profile id. Keep the demo rows visible to the account
+          // created above and usable by the same lifecycle endpoints.
+          kaarigarId: DEMO_UID,
           // Seed rows are on the server by definition.
           syncState: 'synced',
           // initialData ships an empty history; give it one entry that matches

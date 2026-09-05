@@ -318,15 +318,18 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
     } else if (context === 'add_job') {
       const newJob: JobItem = {
         id: uuidv7(),
-        kaarigarId: workerProfile.id,
+        kaarigarId: workerProfile.userId,
         title: draftJob?.title || 'Fan Installation',
         customerName: draftJob?.customerName || 'Neha Sharma',
         location: draftJob?.location || 'Sector 35, Chandigarh',
         amount: draftJob?.amount || 1100,
-        paymentMethod: (draftJob?.paymentMethod as any) || 'cash',
-        status: 'COMPLETED',
+        // Payment is logged separately after the job reaches COMPLETED. Keeping
+        // it pending here prevents voice entry from asserting both work and
+        // earnings before the lifecycle provides evidence for either.
+        paymentMethod: 'pending',
+        status: 'REQUESTED',
         stateHistory: [
-          { state: 'COMPLETED', at: new Date().toISOString(), by: workerProfile.userId },
+          { state: 'REQUESTED', at: new Date().toISOString(), by: workerProfile.userId },
         ],
         syncState: 'pending',
         date: todayIso(),
@@ -830,7 +833,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
                       onClick={() => handleQuickDemoClick('18 saal.')}
                       className="p-3 rounded-2xl bg-gray-50 hover:bg-orange-50 text-gray-800 text-xs font-bold text-left border border-gray-200 hover:border-orange-200 transition-colors flex items-center gap-2"
                     >
-                      <span>Ì†ΩÌ∑£Ô∏è</span>
+                      <span>üó£Ô∏è</span>
                       <span>"18 saal."</span>
                     </button>
                     <button

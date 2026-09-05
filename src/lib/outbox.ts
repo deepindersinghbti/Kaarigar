@@ -128,6 +128,7 @@ export function enqueue(kind: OutboxKind, payload: JobItem | KamaiEntry): void {
   });
   write(items);
   notify();
+  scheduleFlush();
 }
 
 /**
@@ -157,6 +158,26 @@ export interface FlushOutcome {
 }
 
 let flushing = false;
+let flushScheduled = false;
+let flushRequestedWhileBusy = false;
+
+/**
+ * Coalesce synchronous enqueues into one immediate batch. The write still
+ * succeeds locally first; this only removes the avoidable 30-second wait when
+ * the device is already online.
+ */
+function scheduleFlush(): void {
+  if (flushScheduled) return;
+  flushScheduled = true;
+  queueMicrotask(() => {
+    flushScheduled = false;
+    if (flushing) {
+      flushRequestedWhileBusy = true;
+      return;
+    }
+    void flush();
+  });
+}
 
 /**
  * Send the queue to /api/sync/batch and apply the per-item verdicts.
@@ -261,6 +282,10 @@ export async function flush(): Promise<FlushOutcome> {
     };
   } finally {
     flushing = false;
+    if (flushRequestedWhileBusy) {
+      flushRequestedWhileBusy = false;
+      scheduleFlush();
+    }
   }
 }
 

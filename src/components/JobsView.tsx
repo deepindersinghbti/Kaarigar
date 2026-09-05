@@ -13,7 +13,14 @@ import {
   ChevronRight,
   Filter,
 } from 'lucide-react';
-import { JOB_BADGE, JobBadge, JobItem, SupportedLanguage, SyncState } from '../types';
+import {
+  JOB_BADGE,
+  JobBadge,
+  JobItem,
+  JobState,
+  SupportedLanguage,
+  SyncState,
+} from '../types';
 import { SyncBadge } from './SyncBadge';
 import { SendReviewLink } from './SendReviewLink';
 import { TRANSLATIONS } from '../data/translations';
@@ -26,6 +33,47 @@ const JOB_BADGE_PRESENTATION: Record<JobBadge, { label: string; className: strin
   cancelled: { label: 'Cancelled', className: 'text-red-700 bg-red-50 border-red-200' },
 };
 
+const JOB_STATE_LABEL: Record<JobState, string> = {
+  REQUESTED: 'Requested',
+  QUOTED: 'Quoted',
+  ACCEPTED: 'Accepted',
+  SCHEDULED: 'Scheduled',
+  IN_PROGRESS: 'In progress',
+  COMPLETED: 'Completed',
+  SETTLED: 'Payment settled',
+  REVIEWED: 'Reviewed',
+  CANCELLED: 'Cancelled',
+  DISPUTED: 'Disputed',
+};
+
+/** The single judge-demo path. Cancellation remains available through the API. */
+const HAPPY_PATH_NEXT: Partial<Record<JobState, JobState>> = {
+  REQUESTED: 'QUOTED',
+  QUOTED: 'ACCEPTED',
+  ACCEPTED: 'SCHEDULED',
+  SCHEDULED: 'IN_PROGRESS',
+  IN_PROGRESS: 'COMPLETED',
+  COMPLETED: 'SETTLED',
+};
+
+const NEXT_ACTION_LABEL: Partial<Record<JobState, string>> = {
+  QUOTED: 'Mark quote sent',
+  ACCEPTED: 'Customer accepted',
+  SCHEDULED: 'Schedule job',
+  IN_PROGRESS: 'Start work',
+  COMPLETED: 'Mark work completed',
+  SETTLED: 'Mark payment received',
+};
+
+const PAYMENT_PRESENTATION: Record<
+  JobItem['paymentMethod'],
+  { label: string; className: string }
+> = {
+  upi: { label: '⚡ UPI', className: 'bg-purple-100 text-purple-800' },
+  cash: { label: '💵 Cash', className: 'bg-green-100 text-green-800' },
+  pending: { label: 'Payment pending', className: 'bg-amber-100 text-amber-800' },
+};
+
 interface JobsViewProps {
   jobs: JobItem[];
   /** Shown in the share text the customer receives, so it names a person. */
@@ -33,6 +81,7 @@ interface JobsViewProps {
   currentLanguage: SupportedLanguage;
   onAddJobVoice: () => void;
   onOpenQuote: () => void;
+  onTransitionJob?: (jobId: string, state: JobState) => Promise<void>;
   /**
    * Sync state per record (section 9.1). A function rather than a field on the
    * job because the outbox is the authority on what has actually reached the
@@ -49,10 +98,13 @@ export const JobsView: React.FC<JobsViewProps> = ({
   currentLanguage,
   onAddJobVoice,
   onOpenQuote,
+  onTransitionJob,
 }) => {
   const t = TRANSLATIONS[currentLanguage];
   const [filter, setFilter] = useState<'all' | 'today' | 'week'>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [transitioningJobId, setTransitioningJobId] = useState<string | null>(null);
+  const [transitionError, setTransitionError] = useState('');
 
   const todayStr = todayIso();
 
@@ -74,6 +126,19 @@ export const JobsView: React.FC<JobsViewProps> = ({
   });
 
   const totalAmount = filteredJobs.reduce((sum, j) => sum + j.amount, 0);
+
+  const advanceJob = async (jobId: string, state: JobState) => {
+    if (!onTransitionJob) return;
+    setTransitioningJobId(jobId);
+    setTransitionError('');
+    try {
+      await onTransitionJob(jobId, state);
+    } catch (error) {
+      setTransitionError(error instanceof Error ? error.message : 'Could not update the job.');
+    } finally {
+      setTransitioningJobId(null);
+    }
+  };
 
   return (
     <div id="jobs-view-container" className="space-y-6 max-w-2xl mx-auto pb-10">
@@ -172,6 +237,11 @@ export const JobsView: React.FC<JobsViewProps> = ({
 
       {/* Jobs List */}
       <div className="space-y-3">
+        {transitionError && (
+          <p role="alert" className="text-sm font-bold text-red-700 bg-red-50 border border-red-200 rounded-2xl px-4 py-3">
+            {transitionError}
+          </p>
+        )}
         {filteredJobs.length === 0 ? (
           <div className="p-8 text-center bg-white rounded-3xl border border-dashed border-gray-300 space-y-3">
             <div className="w-12 h-12 rounded-2xl bg-orange-50 text-orange-600 flex items-center justify-center mx-auto">
@@ -191,7 +261,14 @@ export const JobsView: React.FC<JobsViewProps> = ({
             </button>
           </div>
         ) : (
-          filteredJobs.map((job) => (
+          filteredJobs.map((job) => {
+            const nextState = HAPPY_PATH_NEXT[job.status];
+            const syncState = syncStateOf(job.id);
+            const payment = PAYMENT_PRESENTATION[job.paymentMethod];
+            const isTransitioning = transitioningJobId === job.id;
+            const canTransition = Boolean(onTransitionJob && nextState && syncState === 'synced');
+
+            return (
             <div
               key={job.id}
               id={`job-card-${job.id}`}
@@ -208,7 +285,7 @@ export const JobsView: React.FC<JobsViewProps> = ({
                     <span className="text-xs text-gray-400 font-medium">
                       {job.date} • {job.time || '11:00 AM'}
                     </span>
-                    <SyncBadge state={syncStateOf(job.id)} currentLanguage={currentLanguage} compact />
+                    <SyncBadge state={syncState} currentLanguage={currentLanguage} compact />
                   </div>
                   <h3 className="font-extrabold text-base sm:text-lg text-gray-900">
                     {job.title}
@@ -220,13 +297,9 @@ export const JobsView: React.FC<JobsViewProps> = ({
                     ₹{job.amount.toLocaleString('en-IN')}
                   </div>
                   <span
-                    className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase ${
-                      job.paymentMethod === 'upi'
-                        ? 'bg-purple-100 text-purple-800'
-                        : 'bg-green-100 text-green-800'
-                    }`}
+                    className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase ${payment.className}`}
                   >
-                    {job.paymentMethod === 'upi' ? '⚡ UPI' : '💵 Cash'}
+                    {payment.label}
                   </span>
                 </div>
               </div>
@@ -290,6 +363,30 @@ export const JobsView: React.FC<JobsViewProps> = ({
                 </div>
               )}
 
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-gray-100">
+                <p className="text-xs text-gray-500">
+                  Lifecycle: <span className="font-extrabold text-gray-800">{JOB_STATE_LABEL[job.status]}</span>
+                </p>
+                {nextState && (
+                  <button
+                    type="button"
+                    onClick={() => void advanceJob(job.id, nextState)}
+                    disabled={!canTransition || isTransitioning}
+                    className="inline-flex items-center justify-center gap-1.5 min-h-10 px-4 py-2 rounded-full bg-gray-900 text-white text-xs font-extrabold disabled:opacity-45 disabled:cursor-not-allowed active:scale-[0.98] transition"
+                    title={
+                      !onTransitionJob
+                        ? 'Enable API demo mode to use lifecycle controls.'
+                        : syncState !== 'synced'
+                          ? 'Wait for this job to sync before changing its state.'
+                          : undefined
+                    }
+                  >
+                    {isTransitioning ? 'Updating…' : NEXT_ACTION_LABEL[nextState]}
+                    {!isTransitioning && <ChevronRight className="w-3.5 h-3.5" aria-hidden="true" />}
+                  </button>
+                )}
+              </div>
+
               {/* Renders nothing unless the job is COMPLETED or SETTLED. */}
               <SendReviewLink
                 job={job}
@@ -297,7 +394,8 @@ export const JobsView: React.FC<JobsViewProps> = ({
                 currentLanguage={currentLanguage}
               />
             </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>

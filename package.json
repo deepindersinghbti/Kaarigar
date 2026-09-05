@@ -14,6 +14,7 @@
     "seed:rates": "tsx scripts/seedRateBands.ts",
     "check:rates": "tsx scripts/check-rates.ts",
     "test:regressions": "tsx scripts/test-regressions.ts",
+    "check:demo-seed": "tsx scripts/check-demo-seed.ts",
     "check:tree": "tsx scripts/check-tree.ts",
     "prepare": "git config core.hooksPath .githooks || exit 0"
   },

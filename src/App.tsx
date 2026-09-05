@@ -19,13 +19,16 @@ import { useAuth } from './auth/AuthProvider';
 import { api, ApiError } from './lib/api';
 import { useApiForDomain, anyDomainOnApi } from './lib/dataSource';
 import { enqueue } from './lib/outbox';
+import { uuidv7 } from './lib/ids';
 import { useOutbox } from './hooks/useOutbox';
 import { SyncSummary } from './components/SyncBadge';
+import { todayIso } from './utils/date';
 
 import {
   WorkerProfile,
   JobItem,
   KamaiEntry,
+  JobState,
   SupportedLanguage,
   AssistantContext,
 } from './types';
@@ -34,7 +37,6 @@ import {
   INITIAL_JOBS,
   INITIAL_KAMAI,
 } from './data/initialData';
-import { uuidv7 } from './lib/ids';
 
 export default function App() {
   const navigate = useNavigate();
@@ -261,33 +263,9 @@ export default function App() {
   const handleSaveJob = (newJob: JobItem) => {
     setJobs((prev) => [newJob, ...prev]);
 
-    // Also automatically create corresponding Kamai entry as required by prompt!
-    const newKamai: KamaiEntry = {
-      id: uuidv7(),
-      profileId: profile.id,
-      direction: 'in',
-      syncState: 'pending',
-      date: newJob.date,
-      amount: newJob.amount,
-      description: `${newJob.title} (Customer: ${newJob.customerName})`,
-      customerName: newJob.customerName,
-      paymentType: newJob.paymentMethod === 'upi' ? 'upi' : 'cash',
-      jobId: newJob.id,
-    };
-    setKamaiList((prev) => [newKamai, ...prev]);
-
     /**
-     * Both writes carry the client-generated UUIDv7 already on the objects, and
-     * both endpoints are idempotent on it, so a retry after a timeout returns
-     * the existing record instead of creating a second one. That property is
-     * what makes an optimistic write safe to repeat.
-     *
-     * The job is posted before its ledger entry - causal order (section 9.2),
-     * so the entry never references a jobId the server has not seen.
-     */
-    /**
-     * QUEUED, NOT POSTED. Section 9.1: the write already succeeded locally and
-     * the UI must not block on the network.
+     * QUEUED, NOT POSTED. Section 9.1: job entry succeeds locally and must not
+     * block on the network.
      *
      * This replaces an optimistic post that ROLLED BACK on failure. That was
      * correct online and wrong offline - it deleted a job the worker had just
@@ -295,11 +273,45 @@ export default function App() {
      * what a money record must never do. Nothing is removed now; the item sits
      * in the outbox with a visible badge until the server confirms it.
      *
-     * The job is enqueued before its ledger entry, so causal order (9.2 step 3)
-     * holds even if the two land in different batches.
+     * Income is deliberately NOT created here. A new job starts at REQUESTED;
+     * money is logged separately after completion, so neither work history nor
+     * earnings can be manufactured by the creation action.
      */
     if (jobsOnApi) enqueue('job', newJob);
-    if (kamaiOnApi) enqueue('ledger_entry', newKamai);
+  };
+
+  /**
+   * State changes are never simulated locally. The server validates each edge
+   * against JOB_TRANSITIONS and returns the authoritative updated history.
+   */
+  const handleTransitionJob = async (jobId: string, state: JobState): Promise<void> => {
+    if (!jobsOnApi) {
+      throw new Error('Job lifecycle controls require API demo mode.');
+    }
+
+    setDataError('');
+    try {
+      const updated = await api.transitionJob(jobId, state);
+      setJobs((prev) => prev.map((job) => (job.id === updated.id ? updated : job)));
+
+      // Completed-work evidence affects the server-derived trust breakdown.
+      // Refresh it after the authoritative transition so the passport does not
+      // retain a stale score for the rest of the session.
+      if (profileOnApi) {
+        try {
+          setProfile(await api.getProfile());
+        } catch (e) {
+          if (!(e instanceof ApiError && e.status === 401)) {
+            setDataError(e instanceof Error ? e.message : 'Could not refresh the trust score.');
+          }
+        }
+      }
+    } catch (e) {
+      if (!(e instanceof ApiError && e.status === 401)) {
+        setDataError(e instanceof Error ? e.message : 'Could not update the job.');
+      }
+      throw e;
+    }
   };
 
   const handleSaveKamai = (newEntries: KamaiEntry[]) => {
@@ -309,6 +321,23 @@ export default function App() {
     // Queued in order. The ledger is append-only, and the outbox preserves the
     // order entries were created in rather than racing them.
     for (const entry of newEntries) enqueue('ledger_entry', entry);
+  };
+
+  const handleAddKamaiManual = (input: {
+    amount: number;
+    description: string;
+    paymentType: 'cash' | 'upi';
+  }) => {
+    handleSaveKamai([{
+      id: uuidv7(),
+      profileId: profile.id,
+      direction: 'in',
+      syncState: 'pending',
+      date: todayIso(),
+      amount: input.amount,
+      description: input.description,
+      paymentType: input.paymentType,
+    }]);
   };
 
   const handleDownloadIncomeStatement = () => {
@@ -473,6 +502,7 @@ export default function App() {
                 currentLanguage={currentLanguage}
                 onAddJobVoice={() => handleOpenVoiceAssistant('add_job')}
                 onOpenQuote={() => goToTab('quote')}
+                onTransitionJob={jobsOnApi ? handleTransitionJob : undefined}
               />
             }
           />
@@ -485,6 +515,7 @@ export default function App() {
                 syncStateOf={outbox.stateOf}
                 currentLanguage={currentLanguage}
                 onAddKamaiVoice={() => handleOpenVoiceAssistant('add_kamai')}
+                onAddKamaiManual={handleAddKamaiManual}
                 onDownloadIncomeStatement={handleDownloadIncomeStatement}
               />
             }

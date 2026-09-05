@@ -4,7 +4,7 @@ import { getDb, isDbConnected } from '../db';
 import { requireAuth } from '../middleware/auth';
 import { uuidv7 } from '../../lib/ids';
 import type { WorkerProfile } from '../../types';
-import { calculateTrustScore } from '../data/trustScore';
+import { calculateTrustEvidence } from '../data/trustScore';
 
 /**
  * passport-svc - worker profile, credentials, portfolio.
@@ -103,8 +103,16 @@ passportRouter.get('/me', requireAuth, async (req: Request, res: Response) => {
     const existing = await db.collection(PROFILES).findOne({ userId: uid });
     if (existing) {
       const { _id, ...profile } = existing;
-      const trustScore = await calculateTrustScore(uid);
-      return res.json({ profile: { ...profile, id: String(_id), trustScore } });
+      const evidence = await calculateTrustEvidence(uid);
+      return res.json({
+        profile: {
+          ...profile,
+          id: String(_id),
+          rating: evidence.reviews.average ?? 0,
+          totalJobsCount: evidence.jobs.completed,
+          trustScore: evidence.score,
+        },
+      });
     }
 
     const name = 'Kaarigar';
@@ -128,8 +136,16 @@ passportRouter.get('/me', requireAuth, async (req: Request, res: Response) => {
 
     const { id, ...rest } = profile;
     await db.collection(PROFILES).insertOne({ _id: id as never, ...rest });
-    const trustScore = await calculateTrustScore(uid);
-    return res.status(201).json({ profile: { ...profile, trustScore }, isNew: true });
+    const evidence = await calculateTrustEvidence(uid);
+    return res.status(201).json({
+      profile: {
+        ...profile,
+        rating: evidence.reviews.average ?? 0,
+        totalJobsCount: evidence.jobs.completed,
+        trustScore: evidence.score,
+      },
+      isNew: true,
+    });
   } catch (err) {
     console.error('[passport] GET /me failed:', err);
     return res.status(500).json({ error: 'passport_read_failed', message: 'Could not load the passport.' });
@@ -197,8 +213,16 @@ passportRouter.patch('/me', requireAuth, async (req: Request, res: Response) => 
     }
 
     const { _id, ...profile } = result;
-    const trustScore = await calculateTrustScore(req.user!.uid);
-    return res.json({ profile: { ...profile, id: String(_id), trustScore } });
+    const evidence = await calculateTrustEvidence(req.user!.uid);
+    return res.json({
+      profile: {
+        ...profile,
+        id: String(_id),
+        rating: evidence.reviews.average ?? 0,
+        totalJobsCount: evidence.jobs.completed,
+        trustScore: evidence.score,
+      },
+    });
   } catch (err) {
     console.error('[passport] PATCH /me failed:', err);
     return res.status(500).json({ error: 'passport_update_failed', message: 'Could not update the passport.' });
