@@ -25,6 +25,7 @@ import {
   AssistantContext,
 } from '../types';
 import { TRANSLATIONS } from '../data/translations';
+import { getScreenCopy, localizeDisplayValue, localizeWorkerName } from '../data/uiCopy';
 import { todayIso } from '../utils/date';
 
 interface HomeDashboardProps {
@@ -47,11 +48,13 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
   onNavigateTab,
 }) => {
   const t = TRANSLATIONS[currentLanguage];
+  const copy = getScreenCopy(currentLanguage).home;
+  const displayName = localizeWorkerName(profile.name, currentLanguage);
   const identityLabel = profile.verifiedStatus === 'verified'
-    ? 'Identity verified'
+    ? copy.identityVerified
     : profile.verifiedStatus === 'pending'
-      ? 'Verification pending'
-      : 'Profile not verified';
+      ? copy.verificationPending
+      : copy.profileNotVerified;
   const identityClass = profile.verifiedStatus === 'verified'
     ? 'bg-green-100 text-green-700'
     : 'bg-gray-100 text-gray-600';
@@ -59,7 +62,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
   const todayStr = todayIso();
   const todayKamai = kamaiList
     .filter((k) => k.date === todayStr)
-    .reduce((sum, k) => sum + k.amount, 0);
+    .reduce((sum, k) => sum + (k.direction === 'in' ? k.amount : -k.amount), 0);
 
   const recentJobs = jobs.slice(0, 2);
 
@@ -70,7 +73,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
         <div className="flex items-center gap-3.5">
           <div className="w-13 h-13 rounded-2xl bg-orange-500 p-0.5 shadow-lg shadow-orange-200">
             <div className="w-full h-full bg-white rounded-[14px] flex items-center justify-center text-orange-600 font-extrabold text-xl">
-              {profile.name
+              {displayName
                 .split(' ')
                 .map((n) => n[0])
                 .join('')}
@@ -79,14 +82,14 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-xl sm:text-2xl font-extrabold text-gray-900 leading-tight">
-                नमस्ते {profile.name.split(' ')[0]} जी 👋
+              {copy.greeting(displayName.split(' ')[0])}
               </h1>
               <span className={`${identityClass} text-[10px] font-extrabold px-2.5 py-0.5 rounded-full flex items-center gap-1`}>
                 <CheckCircle2 className="w-3 h-3 stroke-[3]" /> {identityLabel}
               </span>
             </div>
             <p className="text-xs text-gray-500 font-medium">
-              {profile.trade} • {profile.location}
+              {localizeDisplayValue(profile.trade, currentLanguage)} • {localizeDisplayValue(profile.location, currentLanguage)}
             </p>
           </div>
         </div>
@@ -98,7 +101,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
           className="flex items-center gap-2 px-4 py-2 rounded-full bg-white hover:bg-gray-50 text-gray-700 text-xs font-bold border border-gray-200 shadow-xs transition-all active:scale-95"
         >
           <Globe className="w-4 h-4 text-orange-500" />
-          <span>{t.changeLanguage}</span>
+              <span>{t.changeLanguage}</span>
         </button>
       </div>
 
@@ -118,10 +121,10 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
               <span>{t.assistantName}</span>
             </div>
             <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-gray-900 leading-tight">
-              बोलिए, हम आपका काम आसान बनाएंगे!
+              {copy.heroTitle}
             </h2>
             <p className="text-xs sm:text-sm text-gray-600 font-medium max-w-sm">
-              कुछ भी टाइप करने की ज़रूरत नहीं है। बस माइक दबाइए और बोलिए।
+              {copy.heroDescription}
             </p>
           </div>
 
@@ -159,13 +162,13 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
           </div>
           <div>
             <span className="text-xs font-extrabold uppercase text-orange-600 block">
-              Jobs
+              {copy.jobsCategory}
             </span>
             <span className="text-base font-extrabold text-gray-900 leading-snug block">
               {t.addJobByVoice}
             </span>
             <span className="text-[11px] text-gray-500 block mt-0.5">
-              "पंखा लगाया, ₹1100 मिले..."
+              {copy.jobsExample}
             </span>
           </div>
         </button>
@@ -181,13 +184,13 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
           </div>
           <div>
             <span className="text-xs font-extrabold uppercase text-green-600 block">
-              Kamai
+              {copy.kamaiCategory}
             </span>
             <span className="text-base font-extrabold text-gray-900 leading-snug block">
-              {t.addEarnings} (बोलकर)
+              {t.addEarnings}{copy.voiceSuffix}
             </span>
             <span className="text-[11px] text-gray-500 block mt-0.5">
-              "आज 2 काम, 1500 और 1200..."
+              {copy.kamaiExample}
             </span>
           </div>
         </button>
@@ -203,13 +206,13 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
           </div>
           <div>
             <span className="text-xs font-extrabold uppercase text-gray-400 block">
-              Passport
+              {copy.passportCategory}
             </span>
             <span className="text-base font-extrabold text-gray-900 leading-snug block">
               {t.digitalPassport}
             </span>
             <span className="text-[11px] text-gray-500 block mt-0.5">
-              QR सत्यापित पहचान पत्र
+              {copy.passportExample}
             </span>
           </div>
         </button>
@@ -225,13 +228,13 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
           </div>
           <div>
             <span className="text-xs font-extrabold uppercase text-blue-600 block">
-              Profile
+              {copy.profileCategory}
             </span>
             <span className="text-base font-extrabold text-gray-900 leading-snug block">
-              {t.updateProfile} (बोलकर)
+              {t.updateProfile}{copy.voiceSuffix}
             </span>
             <span className="text-[11px] text-gray-500 block mt-0.5">
-              हुनर या रेट कार्ड अपडेट करें
+              {copy.profileExample}
             </span>
           </div>
         </button>
@@ -254,7 +257,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
               onClick={() => onNavigateTab('kamai')}
               className="text-xs font-bold text-green-700 hover:underline flex items-center gap-0.5"
             >
-              <span>खाता देखें</span>
+              <span>{copy.viewLedger}</span>
               <ArrowRight className="w-3 h-3" />
             </button>
           </div>
@@ -263,7 +266,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
               ₹{todayKamai.toLocaleString('en-IN')}
             </span>
             <span className="text-xs font-bold text-gray-400">
-              {jobs.filter((j) => j.date === todayStr).length} काम आज पूरे
+              {copy.jobsToday(jobs.filter((j) => j.date === todayStr).length)}
             </span>
           </div>
         </div>
@@ -276,14 +279,14 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
                 <Star className="w-4 h-4 fill-orange-500 text-orange-500" />
               </div>
               <span className="font-extrabold text-gray-800 text-sm">
-                कारीगर रेटिंग व विश्वास
+                {copy.ratingTitle}
               </span>
             </div>
             <button
               onClick={() => onNavigateTab('passport')}
               className="text-xs font-bold text-orange-600 hover:underline flex items-center gap-0.5"
             >
-              <span>पासपोर्ट</span>
+                <span>{copy.passport}</span>
               <ArrowRight className="w-3 h-3" />
             </button>
           </div>
@@ -293,11 +296,11 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
                 {profile.rating}
               </span>
               <span className="text-xs text-gray-500 font-semibold">
-                ({profile.totalJobsCount}+ recorded jobs)
+                {copy.recordedJobs(profile.totalJobsCount)}
               </span>
             </div>
             <span className="bg-green-50 text-green-700 border border-green-200 text-xs font-extrabold px-3 py-1 rounded-full">
-              Evidence snapshot
+              {copy.evidenceSnapshot}
             </span>
           </div>
         </div>
@@ -313,7 +316,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
             onClick={() => onNavigateTab('jobs')}
             className="text-xs font-bold text-orange-600 hover:underline"
           >
-            सभी देखें ({jobs.length})
+            {copy.seeAll(jobs.length)}
           </button>
         </div>
 
@@ -326,11 +329,11 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
               <div>
                 <div className="flex items-center gap-2">
                   <span className="font-extrabold text-sm sm:text-base text-gray-900">
-                    {job.title}
+                    {localizeDisplayValue(job.title, currentLanguage)}
                   </span>
                 </div>
                 <div className="text-xs text-gray-500 mt-0.5">
-                  {job.customerName} • {job.location}
+                  {localizeDisplayValue(job.customerName, currentLanguage)} • {localizeDisplayValue(job.location, currentLanguage)}
                 </div>
               </div>
 
@@ -351,26 +354,26 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
       <div className="p-5 bg-white rounded-3xl border border-gray-200 shadow-sm space-y-3 text-xs">
         <div className="font-extrabold text-gray-900 flex items-center gap-2">
           <Sparkles className="w-4 h-4 text-orange-500" />
-          <span>Hackathon Demo Showcase (1-Tap Scenarios):</span>
+          <span>{copy.demoTitle}</span>
         </div>
         <div className="flex flex-wrap gap-2">
           <button
             onClick={() => onOpenVoiceAssistant('onboarding')}
             className="px-3.5 py-2 rounded-2xl bg-orange-50 hover:bg-orange-100 border border-orange-200 font-bold text-orange-900 transition-colors"
           >
-            🎙️ 1. Complete AI Profile Builder Demo
+            {copy.demoProfile}
           </button>
           <button
             onClick={() => onOpenVoiceAssistant('add_job')}
             className="px-3.5 py-2 rounded-2xl bg-orange-50 hover:bg-orange-100 border border-orange-200 font-bold text-orange-900 transition-colors"
           >
-            🎙️ 2. "Sector 35 fan..." Job Demo
+            {copy.demoJob}
           </button>
           <button
             onClick={() => onOpenVoiceAssistant('add_kamai')}
             className="px-3.5 py-2 rounded-2xl bg-orange-50 hover:bg-orange-100 border border-orange-200 font-bold text-orange-900 transition-colors"
           >
-            🎙️ 3. "Aj 2 kaam..." Kamai Demo
+            {copy.demoKamai}
           </button>
         </div>
       </div>

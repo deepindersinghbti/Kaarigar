@@ -12,6 +12,7 @@ import {
 import { KamaiEntry, SupportedLanguage, SyncState } from '../types';
 import { SyncBadge } from './SyncBadge';
 import { TRANSLATIONS } from '../data/translations';
+import { getScreenCopy, localizeDisplayValue } from '../data/uiCopy';
 import { daysAgoIso, todayIso } from '../utils/date';
 
 export interface ManualKamaiInput {
@@ -39,6 +40,7 @@ export const KamaiView: React.FC<KamaiViewProps> = ({
   onDownloadIncomeStatement,
 }) => {
   const t = TRANSLATIONS[currentLanguage];
+  const copy = getScreenCopy(currentLanguage).kamai;
   const [activeTab, setActiveTab] = useState<'today' | 'week' | 'month'>('today');
   const [manualOpen, setManualOpen] = useState(false);
   const [manualAmount, setManualAmount] = useState('');
@@ -85,11 +87,11 @@ export const KamaiView: React.FC<KamaiViewProps> = ({
     const description = manualDescription.trim();
 
     if (!Number.isFinite(amount) || amount <= 0) {
-      setManualError('Enter an amount greater than zero.');
+      setManualError(copy.enterAmount);
       return;
     }
     if (!description) {
-      setManualError('Describe the work or payment.');
+      setManualError(copy.describePayment);
       return;
     }
 
@@ -109,14 +111,13 @@ export const KamaiView: React.FC<KamaiViewProps> = ({
         <div className="space-y-2 text-center sm:text-left">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-orange-100 text-orange-800 text-xs font-extrabold shadow-xs">
             <Sparkles className="w-4 h-4 text-orange-600" />
-            <span>Voice Kamai Ledger</span>
+            <span>{copy.eyebrow}</span>
           </div>
           <h2 className="text-2xl sm:text-3xl font-extrabold text-gray-900">
-            {t.navKamai} (कमाई खाता)
+            {t.navKamai}{copy.titleSuffix}
           </h2>
           <p className="text-xs sm:text-sm text-gray-600 font-medium max-w-sm">
-            बस बोलिए — "आज दो काम किए, पहला 1500 का और दूसरा 1200 का" और हिसाब
-            तुरंत तैयार!
+            {copy.description}
           </p>
         </div>
 
@@ -129,7 +130,7 @@ export const KamaiView: React.FC<KamaiViewProps> = ({
             className="flex items-center justify-center gap-3 px-6 py-4 rounded-full bg-orange-500 hover:bg-orange-600 text-white font-extrabold text-base shadow-xl shadow-orange-200 transition-all active:scale-95 group"
           >
             <Mic className="w-5 h-5 group-hover:scale-110 transition-transform" />
-            <span>{t.addEarnings} (बोलकर)</span>
+            <span>{t.addEarnings}{copy.voiceSuffix}</span>
           </button>
           <button
             id="kamai-view-manual-add-btn"
@@ -143,7 +144,7 @@ export const KamaiView: React.FC<KamaiViewProps> = ({
             className="flex items-center justify-center gap-2 px-5 py-3 rounded-full bg-gray-900 text-white font-extrabold text-sm hover:bg-gray-800 transition-all active:scale-95"
           >
             <Keyboard className="w-4 h-4" aria-hidden="true" />
-            <span>Type payment</span>
+            <span>{copy.typePayment}</span>
           </button>
           <button
             id="kamai-view-income-statement-btn"
@@ -152,7 +153,7 @@ export const KamaiView: React.FC<KamaiViewProps> = ({
             className="flex items-center justify-center gap-2 px-5 py-3 rounded-full bg-white border border-orange-200 text-orange-800 font-extrabold text-sm hover:bg-orange-50 transition-all active:scale-95"
           >
             <Download className="w-4 h-4" />
-            <span>Income PDF</span>
+            <span>{copy.incomePdf}</span>
           </button>
         </div>
       </div>
@@ -164,14 +165,14 @@ export const KamaiView: React.FC<KamaiViewProps> = ({
           className="bg-white rounded-3xl border border-gray-200 shadow-sm p-5 space-y-4"
         >
           <div>
-            <h3 className="font-extrabold text-gray-900">Add received payment</h3>
+            <h3 className="font-extrabold text-gray-900">{copy.addReceivedPayment}</h3>
             <p className="text-xs text-gray-500 mt-1">
-              Fast fallback when voice or venue internet is unreliable. This records income received today.
+              {copy.manualHint}
             </p>
           </div>
           <div className="grid sm:grid-cols-2 gap-3">
             <label className="text-xs font-bold text-gray-700">
-              Amount (₹)
+              {copy.amount} (₹)
               <input
                 id="kamai-manual-amount"
                 inputMode="decimal"
@@ -185,27 +186,27 @@ export const KamaiView: React.FC<KamaiViewProps> = ({
               />
             </label>
             <label className="text-xs font-bold text-gray-700">
-              Payment method
+              {copy.paymentMethod}
               <select
                 id="kamai-manual-payment-type"
                 value={manualPaymentType}
                 onChange={(event) => setManualPaymentType(event.target.value as 'cash' | 'upi')}
                 className="mt-1 w-full min-h-11 rounded-xl border border-gray-300 px-3 text-base font-semibold bg-white focus:outline-none focus:ring-2 focus:ring-orange-400"
               >
-                <option value="cash">Cash</option>
-                <option value="upi">UPI / online</option>
+                <option value="cash">{copy.cash}</option>
+                <option value="upi">{copy.upiOnline}</option>
               </select>
             </label>
           </div>
           <label className="text-xs font-bold text-gray-700 block">
-            Work or payment description
+            {copy.descriptionLabel}
             <input
               id="kamai-manual-description"
               type="text"
               maxLength={120}
               value={manualDescription}
               onChange={(event) => setManualDescription(event.target.value)}
-              placeholder="Example: Fan installation payment"
+              placeholder={copy.descriptionPlaceholder}
               className="mt-1 w-full min-h-11 rounded-xl border border-gray-300 px-3 text-base font-semibold focus:outline-none focus:ring-2 focus:ring-orange-400"
               required
             />
@@ -218,7 +219,7 @@ export const KamaiView: React.FC<KamaiViewProps> = ({
               type="submit"
               className="min-h-11 flex-1 rounded-full bg-orange-500 text-white font-extrabold hover:bg-orange-600"
             >
-              Save payment
+              {copy.savePayment}
             </button>
             <button
               type="button"
@@ -228,7 +229,7 @@ export const KamaiView: React.FC<KamaiViewProps> = ({
               }}
               className="min-h-11 px-5 rounded-full border border-gray-300 text-gray-700 font-bold hover:bg-gray-50"
             >
-              Cancel
+              {copy.cancel}
             </button>
           </div>
         </form>
@@ -250,7 +251,7 @@ export const KamaiView: React.FC<KamaiViewProps> = ({
             {formatAmount(todayTotal)}
           </div>
           <div className="text-[11px] text-gray-500 font-medium mt-0.5">
-            {todayEntries.length} ledger entries today
+            {copy.ledgerEntriesToday(todayEntries.length)}
           </div>
         </div>
 
@@ -258,7 +259,7 @@ export const KamaiView: React.FC<KamaiViewProps> = ({
         <div className="bg-white p-5 rounded-3xl border border-gray-200 shadow-sm">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
-              इस हफ्ते
+              {copy.week}
             </span>
             <span className="w-8 h-8 rounded-xl bg-orange-50 text-orange-600 flex items-center justify-center">
               <Calendar className="w-4 h-4" />
@@ -268,7 +269,7 @@ export const KamaiView: React.FC<KamaiViewProps> = ({
             {formatAmount(weekTotal)}
           </div>
           <div className="text-[11px] text-gray-500 font-medium mt-0.5">
-            Actual net for the last 7 days
+            {copy.weekCaption}
           </div>
         </div>
 
@@ -276,7 +277,7 @@ export const KamaiView: React.FC<KamaiViewProps> = ({
         <div className="bg-white p-5 rounded-3xl border border-gray-200 shadow-sm">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
-              इस महीने (Actual)
+              {t.thisMonth} ({copy.actual})
             </span>
             <span className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
               <Sparkles className="w-4 h-4" />
@@ -286,7 +287,7 @@ export const KamaiView: React.FC<KamaiViewProps> = ({
             {formatAmount(monthTotal)}
           </div>
           <div className="text-[11px] text-gray-500 font-medium mt-0.5">
-            Income minus outgoing entries
+            {copy.monthCaption}
           </div>
         </div>
       </div>
@@ -295,9 +296,9 @@ export const KamaiView: React.FC<KamaiViewProps> = ({
       <div className="bg-white rounded-3xl p-6 border border-gray-200 shadow-sm space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="font-extrabold text-gray-900 text-sm">
-            भुगतान माध्यम (Income received this month)
+            {copy.paymentSplit} ({copy.receivedThisMonth})
           </h3>
-          <span className="text-xs text-gray-400 font-medium">Actual ledger data</span>
+          <span className="text-xs text-gray-400 font-medium">{copy.actualLedger}</span>
         </div>
 
         <div className="grid grid-cols-2 gap-3.5">
@@ -308,7 +309,7 @@ export const KamaiView: React.FC<KamaiViewProps> = ({
             </div>
             <div>
               <span className="text-[11px] font-bold text-purple-900 block">
-                UPI / Online
+                UPI / ऑनलाइन
               </span>
               <span className="text-base sm:text-lg font-black text-purple-950">
                 ₹{upiTotal.toLocaleString('en-IN')}
@@ -323,7 +324,7 @@ export const KamaiView: React.FC<KamaiViewProps> = ({
             </div>
             <div>
               <span className="text-[11px] font-bold text-green-900 block">
-                नकद (Cash)
+                {copy.cash}
               </span>
               <span className="text-base sm:text-lg font-black text-green-950">
                 ₹{cashTotal.toLocaleString('en-IN')}
@@ -335,8 +336,8 @@ export const KamaiView: React.FC<KamaiViewProps> = ({
 
       <div className="bg-amber-50 rounded-2xl px-5 py-4 border border-amber-200 flex items-center justify-between gap-3">
         <div>
-          <p className="text-xs font-extrabold text-amber-900 uppercase">Outstanding this month</p>
-          <p className="text-[11px] text-amber-800">Outgoing/owed entries without a settlement date</p>
+          <p className="text-xs font-extrabold text-amber-900 uppercase">{copy.outstanding}</p>
+          <p className="text-[11px] text-amber-800">{copy.outstandingCaption}</p>
         </div>
         <strong className="text-lg font-black text-amber-900">{formatAmount(outstandingTotal)}</strong>
       </div>
@@ -354,7 +355,7 @@ export const KamaiView: React.FC<KamaiViewProps> = ({
                   : 'hover:text-gray-900'
               }`}
             >
-              आज (Today)
+              {t.todayEarnings}
             </button>
             <button
               type="button"
@@ -365,7 +366,7 @@ export const KamaiView: React.FC<KamaiViewProps> = ({
                   : 'hover:text-gray-900'
               }`}
             >
-              7 दिन ({weekEntries.length})
+              {copy.week} ({weekEntries.length})
             </button>
             <button
               type="button"
@@ -376,12 +377,12 @@ export const KamaiView: React.FC<KamaiViewProps> = ({
                   : 'hover:text-gray-900'
               }`}
             >
-              महीना ({monthEntries.length})
+              {copy.month} ({monthEntries.length})
             </button>
           </div>
 
           <div className="text-xs text-gray-500 font-semibold">
-            दिखाई गई राशि:{' '}
+            {copy.shownAmount}{' '}
             <strong className="text-gray-900 font-black">
               {formatAmount(currentDisplayTotal)}
             </strong>
@@ -391,17 +392,17 @@ export const KamaiView: React.FC<KamaiViewProps> = ({
         <div className="space-y-2.5">
           {currentDisplayList.length === 0 ? (
             <div className="bg-white p-6 rounded-3xl border border-dashed border-gray-300 text-center text-sm text-gray-500">
-              No ledger entries in this period.
+              {copy.noEntries}
             </div>
           ) : currentDisplayList.map((item) => {
             const value = effect(item);
             const entryLabel = item.reversesId
-              ? 'Correction'
+              ? copy.correction
               : item.direction === 'in'
-                ? 'Income received'
+                ? copy.incomeReceived
                 : item.settledAt
-                  ? 'Settled outgoing'
-                  : 'Outstanding / outgoing';
+                  ? copy.settledOutgoing
+                  : copy.outstandingOutgoing;
 
             return (
             <div
@@ -422,10 +423,10 @@ export const KamaiView: React.FC<KamaiViewProps> = ({
                 </div>
                 <div>
                   <h4 className="font-extrabold text-sm sm:text-base text-gray-900">
-                    {item.description}
+                    {localizeDisplayValue(item.description, currentLanguage)}
                   </h4>
                   <div className="text-xs text-gray-400 font-medium flex items-center gap-1.5 flex-wrap">
-                    <span>{item.date} {item.customerName ? `• ${item.customerName}` : ''}</span>
+                    <span>{item.date} {item.customerName ? `• ${localizeDisplayValue(item.customerName, currentLanguage)}` : ''}</span>
                     <span>• {entryLabel}</span>
                     <SyncBadge state={syncStateOf(item.id)} currentLanguage={currentLanguage} compact />
                   </div>
@@ -443,7 +444,7 @@ export const KamaiView: React.FC<KamaiViewProps> = ({
                       : 'bg-green-50 text-green-700'
                   }`}
                 >
-                  {item.paymentType}
+                  {item.paymentType === 'upi' ? 'UPI' : copy.cash}
                 </span>
               </div>
             </div>

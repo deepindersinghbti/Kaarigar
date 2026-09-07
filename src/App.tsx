@@ -37,6 +37,7 @@ import {
   INITIAL_JOBS,
   INITIAL_KAMAI,
 } from './data/initialData';
+import { isLanguageSelectable } from './data/translations';
 
 export default function App() {
   const navigate = useNavigate();
@@ -54,7 +55,9 @@ export default function App() {
     () => {
       if (typeof window !== 'undefined') {
         const saved = localStorage.getItem('kaarigar_lang');
-        if (saved) return saved as SupportedLanguage;
+        if (saved && isLanguageSelectable(saved as SupportedLanguage)) {
+          return saved as SupportedLanguage;
+        }
       }
       return 'hi';
     }
@@ -189,6 +192,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('kaarigar_lang', currentLanguage);
   }, [currentLanguage]);
+
+  const handleLanguageChange = (language: SupportedLanguage) => {
+    if (isLanguageSelectable(language)) setCurrentLanguage(language);
+  };
 
   /**
    * localStorage stops being written for a domain the moment it is API-backed.
@@ -388,7 +395,7 @@ export default function App() {
           isOpen={isLangModalOpen}
           onClose={() => setIsLangModalOpen(false)}
           currentLanguage={currentLanguage}
-          onSelectLanguage={setCurrentLanguage}
+          onSelectLanguage={handleLanguageChange}
         />
       </>
     );
@@ -506,7 +513,7 @@ export default function App() {
               />
             }
           />
-          <Route path="/quote" element={<QuoteBuilder profile={profile} />} />
+          <Route path="/quote" element={<QuoteBuilder profile={profile} currentLanguage={currentLanguage} />} />
           <Route
             path="/kamai"
             element={
@@ -557,7 +564,7 @@ export default function App() {
         isOpen={isLangModalOpen}
         onClose={() => setIsLangModalOpen(false)}
         currentLanguage={currentLanguage}
-        onSelectLanguage={setCurrentLanguage}
+        onSelectLanguage={handleLanguageChange}
       />
     </div>
   );

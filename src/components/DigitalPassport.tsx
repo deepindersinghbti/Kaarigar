@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { WorkerProfile, SupportedLanguage } from '../types';
 import { TRANSLATIONS } from '../data/translations';
+import { getScreenCopy, localizeDisplayValue, localizeWorkerName } from '../data/uiCopy';
 import { passportUrl } from '../lib/passportLink';
 import QRCode from 'qrcode';
 
@@ -34,6 +35,8 @@ export const DigitalPassport: React.FC<DigitalPassportProps> = ({
   onAddWorkVoice,
 }) => {
   const t = TRANSLATIONS[currentLanguage];
+  const copy = getScreenCopy(currentLanguage).passport;
+  const displayName = localizeWorkerName(profile.name, currentLanguage);
   const [isFlipped, setIsFlipped] = useState(false);
   const [copied, setCopied] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState('');
@@ -41,23 +44,23 @@ export const DigitalPassport: React.FC<DigitalPassportProps> = ({
   const publicPassportUrl = passportUrl(profile.passportHandle);
   const verificationLabel =
     profile.verifiedStatus === 'verified'
-      ? 'IDENTITY VERIFIED'
+      ? copy.identityVerified
       : profile.verifiedStatus === 'pending'
-        ? 'VERIFICATION PENDING'
-        : 'PROFILE NOT VERIFIED';
+        ? copy.verificationPending
+        : copy.profileNotVerified;
   // Credential claims are deliberately separate from phone identity. This
   // prototype has no authorised government lookup, so listed certificates
   // never become verified merely because a worker entered them.
-  const credentialStatus = 'Not linked';
-  const credentialDemoStatus = 'Sandbox demo';
+  const credentialStatus = copy.notLinked;
+  const credentialDemoStatus = copy.sandboxDemo;
   const trustRows = profile.trustScore
     ? [
-        { label: 'Phone identity', value: profile.trustScore.components.identityVerification, max: 20 },
-        { label: 'Skill credentials', value: profile.trustScore.components.skillCredentials, max: 15 },
-        { label: 'Job-linked work history', value: profile.trustScore.components.verifiedWorkHistory, max: 25 },
-        { label: 'Customer ratings', value: profile.trustScore.components.customerRatings, max: 25 },
-        { label: 'Reliability record', value: profile.trustScore.components.reliabilityRecord, max: 0 },
-        { label: 'Skilling engagement', value: profile.trustScore.components.skillingEngagement, max: 5 },
+        { label: copy.trustRows[0], value: profile.trustScore.components.identityVerification, max: 20 },
+        { label: copy.trustRows[1], value: profile.trustScore.components.skillCredentials, max: 15 },
+        { label: copy.trustRows[2], value: profile.trustScore.components.verifiedWorkHistory, max: 25 },
+        { label: copy.trustRows[3], value: profile.trustScore.components.customerRatings, max: 25 },
+        { label: copy.trustRows[4], value: profile.trustScore.components.reliabilityRecord, max: 0 },
+        { label: copy.trustRows[5], value: profile.trustScore.components.skillingEngagement, max: 5 },
       ]
     : [];
 
@@ -95,8 +98,8 @@ export const DigitalPassport: React.FC<DigitalPassportProps> = ({
     if (navigator.share) {
       navigator
         .share({
-          title: `${profile.name} - Digital Kaarigar Passport`,
-          text: `View ${profile.name}'s job-linked work history and customer reviews.`,
+          title: `${displayName} - ${copy.passportTitle}`,
+          text: copy.scanDescription,
           url,
         })
         .catch(() => {});
@@ -116,14 +119,14 @@ export const DigitalPassport: React.FC<DigitalPassportProps> = ({
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse" />
             <span className="text-xs font-bold uppercase tracking-wider text-green-700">
-              Government & Industry Aligned
+              {copy.governmentAligned}
             </span>
           </div>
           <h2 className="text-2xl sm:text-3xl font-extrabold text-gray-900 tracking-tight">
             {t.digitalPassport}
           </h2>
           <p className="text-xs sm:text-sm text-gray-500">
-            QR-सत्यापित कार्य पहचान पत्र • Instant Trust for Every Homeowner
+            {copy.subtitle}
           </p>
         </div>
 
@@ -134,7 +137,7 @@ export const DigitalPassport: React.FC<DigitalPassportProps> = ({
           className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-full bg-orange-500 hover:bg-orange-600 text-white font-extrabold text-xs sm:text-sm shadow-lg shadow-orange-200 transition-all active:scale-95"
         >
           <Mic className="w-4 h-4" />
-          <span>{t.addWork} (बोलकर)</span>
+          <span>{copy.addWorkVoice}</span>
         </button>
       </div>
 
@@ -155,10 +158,10 @@ export const DigitalPassport: React.FC<DigitalPassportProps> = ({
             </div>
             <div>
               <div className="text-[10px] font-extrabold tracking-widest text-orange-400 uppercase">
-                National Kaarigar Identity
+                {copy.nationalIdentity}
               </div>
               <div className="text-base sm:text-lg font-extrabold tracking-tight text-white flex items-center gap-2">
-                <span>DIGITAL KAARIGAR PASSPORT</span>
+                <span>{copy.passportTitle}</span>
                 <span className="text-xs bg-orange-400 text-gray-950 font-black px-1.5 py-0.2 rounded">
                   PRO
                 </span>
@@ -183,7 +186,7 @@ export const DigitalPassport: React.FC<DigitalPassportProps> = ({
             <div className="relative">
               <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl bg-orange-500 p-1 shadow-xl shadow-orange-500/20">
                 <div className="w-full h-full bg-gray-900 rounded-[14px] flex items-center justify-center text-3xl font-black text-orange-400 border border-orange-400/30">
-                  {profile.name
+                  {displayName
                     .split(' ')
                     .map((n) => n[0])
                     .join('')}
@@ -196,14 +199,14 @@ export const DigitalPassport: React.FC<DigitalPassportProps> = ({
 
             <div>
               <h3 className="text-xl sm:text-2xl font-extrabold text-white leading-tight">
-                {profile.name}
+                {displayName}
               </h3>
               <p className="text-orange-400 font-bold text-sm">
-                {profile.trade}
+                {localizeDisplayValue(profile.trade, currentLanguage)}
               </p>
               <div className="text-xs text-gray-400 font-medium mt-0.5 flex items-center sm:justify-center gap-1">
                 <MapPin className="w-3 h-3 text-orange-500" />
-                <span>{profile.location}</span>
+                <span>{localizeDisplayValue(profile.location, currentLanguage)}</span>
               </div>
             </div>
           </div>
@@ -213,15 +216,15 @@ export const DigitalPassport: React.FC<DigitalPassportProps> = ({
             <div className="grid grid-cols-3 gap-2 bg-gray-900/90 rounded-2xl p-3 border border-gray-800 text-center">
               <div>
                 <span className="text-[10px] text-gray-400 block uppercase font-bold">
-                  Experience
+                  {copy.experience}
                 </span>
                 <span className="text-base sm:text-lg font-black text-orange-400">
-                  {profile.experienceYears} Years
+                  {profile.experienceYears} {copy.years}
                 </span>
               </div>
               <div className="border-x border-gray-800">
                 <span className="text-[10px] text-gray-400 block uppercase font-bold">
-                  Jobs Done
+                  {copy.jobsDone}
                 </span>
                 <span className="text-base sm:text-lg font-black text-green-400">
                   {profile.totalJobsCount}+
@@ -229,7 +232,7 @@ export const DigitalPassport: React.FC<DigitalPassportProps> = ({
               </div>
               <div>
                 <span className="text-[10px] text-gray-400 block uppercase font-bold">
-                  Rating
+                  {copy.rating}
                 </span>
                 <span className="text-base sm:text-lg font-black text-orange-300 flex items-center justify-center gap-1">
                   <Star className="w-3.5 h-3.5 fill-orange-300 text-orange-300" />
@@ -241,8 +244,8 @@ export const DigitalPassport: React.FC<DigitalPassportProps> = ({
             {/* Skills listed by worker */}
             <div>
               <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5 flex items-center justify-between">
-                <span>Skills (worker-entered)</span>
-                <span className="text-[10px] text-orange-400">Evidence builds over time</span>
+                <span>{copy.skillsListed}</span>
+                <span className="text-[10px] text-orange-400">{copy.evidenceBuilds}</span>
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {profile.skills.map((skill, idx) => (
@@ -251,7 +254,7 @@ export const DigitalPassport: React.FC<DigitalPassportProps> = ({
                     className="bg-gray-900/90 border border-orange-400/40 text-orange-200 text-xs px-2.5 py-1 rounded-xl font-semibold flex items-center gap-1 shadow-sm"
                   >
                     <CheckCircle className="w-3 h-3 text-green-400 shrink-0" />
-                    {skill}
+                    {localizeDisplayValue(skill, currentLanguage)}
                   </span>
                 ))}
               </div>
@@ -260,7 +263,7 @@ export const DigitalPassport: React.FC<DigitalPassportProps> = ({
             {/* Certifications */}
             <div>
               <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">
-                Credentials listed by worker
+                {copy.credentialsListed}
               </div>
               <div className="space-y-1">
                 {profile.certifications.map((cert, idx) => (
@@ -269,7 +272,7 @@ export const DigitalPassport: React.FC<DigitalPassportProps> = ({
                     className="flex items-center gap-2 text-xs text-gray-300 bg-gray-900/60 p-2 rounded-xl border border-gray-800"
                   >
                     <Award className="w-4 h-4 text-orange-400 shrink-0" />
-                    <span className="font-medium truncate">{cert}</span>
+                    <span className="font-medium truncate">{localizeDisplayValue(cert, currentLanguage)}</span>
                   </div>
                 ))}
               </div>
@@ -279,18 +282,18 @@ export const DigitalPassport: React.FC<DigitalPassportProps> = ({
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <div className="text-[10px] font-extrabold uppercase tracking-wider text-amber-300">
-                    Government credential link
+                    {copy.credentialLink}
                   </div>
                   <div className="text-xs font-bold text-gray-200 mt-0.5">
-                    Status: {credentialStatus}
+                    {copy.credentialStatus}: {credentialStatus}
                   </div>
                 </div>
                 <span className="shrink-0 rounded-full border border-amber-400/40 bg-amber-400/10 px-2 py-1 text-[10px] font-black text-amber-200">
-                  DigiLocker: {credentialDemoStatus}
+                DigiLocker: {credentialDemoStatus}
                 </span>
               </div>
               <p className="text-[11px] text-amber-100/80 mt-2">
-                Demo-only mock state. No live government lookup or certificate verification is performed here.
+                {copy.credentialNotice}
               </p>
             </div>
           </div>
@@ -302,20 +305,20 @@ export const DigitalPassport: React.FC<DigitalPassportProps> = ({
             {/* Real Visual QR Code simulation */}
               <div className="bg-white p-2 rounded-2xl shadow-md shrink-0 flex items-center justify-center w-[76px] h-[76px]">
                 {qrDataUrl ? (
-                  <img src={qrDataUrl} alt="Scan to open the public passport" className="w-full h-full" />
+                  <img src={qrDataUrl} alt={copy.scanAlt} className="w-full h-full" />
                 ) : (
                   <QrCode className="w-14 h-14 text-gray-950" />
                 )}
             </div>
             <div>
               <div className="text-xs font-bold text-white">
-                Scan to Verify Work History
+                {copy.scanTitle}
               </div>
               <div className="text-[11px] text-gray-400">
-                Instant digital proof for builders, homeowners & companies.
+                {copy.scanDescription}
               </div>
               <div className="text-[10px] text-orange-400 font-mono mt-0.5">
-                Public passport • Joined {new Date(profile.joinedDate).toLocaleDateString('en-IN')}
+                {copy.joined(new Date(profile.joinedDate).toLocaleDateString('en-IN'))}
               </div>
             </div>
           </div>
@@ -327,15 +330,15 @@ export const DigitalPassport: React.FC<DigitalPassportProps> = ({
               className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-full bg-gray-800 hover:bg-gray-700 text-white text-xs font-bold border border-gray-700 transition-colors"
             >
               <Share2 className="w-3.5 h-3.5" />
-              <span>{copied ? 'Link Copied!' : 'Share'}</span>
+              <span>{copied ? copy.linkCopied : copy.share}</span>
             </button>
             <button
               id="download-passport-btn"
-              onClick={() => alert('Digital Passport ID Card downloaded as PDF!')}
+              onClick={() => alert(copy.downloadNotice)}
               className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-full bg-orange-500 hover:bg-orange-600 text-white text-xs font-extrabold shadow-md shadow-orange-500/20 transition-colors"
             >
               <Download className="w-3.5 h-3.5" />
-              <span>Download ID</span>
+              <span>{copy.downloadId}</span>
             </button>
           </div>
         </div>
@@ -345,14 +348,14 @@ export const DigitalPassport: React.FC<DigitalPassportProps> = ({
         <div id="passport-trust-score" className="bg-white p-5 sm:p-6 rounded-3xl border border-gray-200 shadow-sm">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h3 className="font-extrabold text-gray-900">Trust evidence</h3>
+              <h3 className="font-extrabold text-gray-900">{copy.trustEvidence}</h3>
               <p className="text-xs text-gray-500 mt-1 max-w-xl">
-                A transparent rubric from phone OTP, completed jobs and customer feedback. Skills and certificates are worker-entered until an authorised verification is linked.
+                {copy.trustDescription}
               </p>
             </div>
             <div className="text-right shrink-0">
               <div className="text-3xl font-black text-orange-500">{profile.trustScore.value}</div>
-              <div className="text-[10px] font-bold uppercase tracking-wider text-gray-400">out of 100</div>
+              <div className="text-[10px] font-bold uppercase tracking-wider text-gray-400">{copy.outOf100}</div>
             </div>
           </div>
           <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
@@ -387,10 +390,10 @@ export const DigitalPassport: React.FC<DigitalPassportProps> = ({
           </div>
           <div>
             <h4 className="font-extrabold text-gray-900 text-xs sm:text-sm">
-              Evidence that travels
+              {copy.benefits[0].title}
             </h4>
             <p className="text-gray-500 text-xs mt-0.5">
-              Completed jobs and customer feedback build a portable record.
+              {copy.benefits[0].description}
             </p>
           </div>
         </div>
@@ -401,10 +404,10 @@ export const DigitalPassport: React.FC<DigitalPassportProps> = ({
           </div>
           <div>
             <h4 className="font-extrabold text-gray-900 text-xs sm:text-sm">
-              Voice-logged work
+              {copy.benefits[1].title}
             </h4>
             <p className="text-gray-500 text-xs mt-0.5">
-              Speak after a job to record the work and payment details.
+              {copy.benefits[1].description}
             </p>
           </div>
         </div>
@@ -415,10 +418,10 @@ export const DigitalPassport: React.FC<DigitalPassportProps> = ({
           </div>
           <div>
             <h4 className="font-extrabold text-gray-900 text-xs sm:text-sm">
-              Fair rates & records
+              {copy.benefits[2].title}
             </h4>
             <p className="text-gray-500 text-xs mt-0.5">
-              Transparent bands and a structured ledger support future finance.
+              {copy.benefits[2].description}
             </p>
           </div>
         </div>

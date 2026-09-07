@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { WorkerProfile, SupportedLanguage } from '../types';
 import { TRANSLATIONS } from '../data/translations';
+import { getScreenCopy, localizeDisplayValue, localizeWorkerName } from '../data/uiCopy';
 
 interface ProfileViewProps {
   profile: WorkerProfile;
@@ -31,11 +32,13 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   onSaveProfile,
 }) => {
   const t = TRANSLATIONS[currentLanguage];
+  const copy = getScreenCopy(currentLanguage).profile;
+  const displayName = localizeWorkerName(profile.name, currentLanguage);
   const identityLabel = profile.verifiedStatus === 'verified'
-    ? 'Identity verified'
+    ? copy.identityVerified
     : profile.verifiedStatus === 'pending'
-      ? 'Verification pending'
-      : 'Profile not verified';
+      ? copy.verificationPending
+      : copy.profileNotVerified;
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState<WorkerProfile>({ ...profile });
 
@@ -58,16 +61,16 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-xl sm:text-2xl font-extrabold text-white">
-                {profile.name}
+                {displayName}
               </h2>
               <span className="bg-gray-700/70 text-gray-200 text-xs font-bold px-2.5 py-0.5 rounded-full border border-gray-600">
                 {identityLabel}
               </span>
             </div>
             <p className="text-orange-400 font-bold text-sm">
-              {profile.trade} • {profile.experienceYears} Years Exp
+              {localizeDisplayValue(profile.trade, currentLanguage)} • {copy.yearsExperience(profile.experienceYears)}
             </p>
-            <p className="text-xs text-gray-400 mt-0.5">{profile.location}</p>
+            <p className="text-xs text-gray-400 mt-0.5">{localizeDisplayValue(profile.location, currentLanguage)}</p>
           </div>
         </div>
 
@@ -78,7 +81,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           className="w-full sm:w-auto shrink-0 flex items-center justify-center gap-2 px-5 py-3 rounded-full bg-orange-500 hover:bg-orange-600 text-white font-extrabold text-sm shadow-lg shadow-orange-500/30 transition-all active:scale-95"
         >
           <Mic className="w-4 h-4" />
-          <span>{t.updateProfile} (बोलकर)</span>
+          <span>{copy.updateVoice}</span>
         </button>
       </div>
 
@@ -86,14 +89,14 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       <div className="bg-white rounded-3xl p-6 sm:p-8 border border-gray-200 shadow-sm space-y-6">
         <div className="flex items-center justify-between border-b border-gray-100 pb-4">
           <h3 className="font-extrabold text-gray-900 text-base">
-            कारीगर विवरण (Worker Information)
+            {copy.workerInformation}
           </h3>
           <button
             onClick={() => setIsEditing(!isEditing)}
             className="text-xs font-extrabold text-orange-600 hover:text-orange-700 flex items-center gap-1.5"
           >
             <Edit2 className="w-3.5 h-3.5" />
-            <span>{isEditing ? 'Cancel Edit' : 'Edit Details'}</span>
+            <span>{isEditing ? copy.cancelEdit : copy.editDetails}</span>
           </button>
         </div>
 
@@ -101,7 +104,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           <div className="space-y-4 text-sm">
             <div>
               <label className="text-xs font-bold text-gray-700 block mb-1">
-                Full Name (नाम)
+                {copy.fullName}
               </label>
               <input
                 type="text"
@@ -116,7 +119,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-bold text-gray-700 block mb-1">
-                  Trade (काम)
+                  {copy.trade}
                 </label>
                 <input
                   type="text"
@@ -129,7 +132,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               </div>
               <div>
                 <label className="text-xs font-bold text-gray-700 block mb-1">
-                  Experience (Years)
+                  {copy.experience}
                 </label>
                 <input
                   type="number"
@@ -148,7 +151,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-bold text-gray-700 block mb-1">
-                  Location (शहर / इलाका)
+                  {copy.location}
                 </label>
                 <input
                   type="text"
@@ -161,7 +164,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               </div>
               <div>
                 <label className="text-xs font-bold text-gray-700 block mb-1">
-                  Daily Rate (₹/दिन)
+                  {copy.dailyRate}
                 </label>
                 <input
                   type="number"
@@ -182,7 +185,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               className="w-full py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-full font-extrabold flex items-center justify-center gap-2 shadow-md shadow-orange-200 transition-all active:scale-95"
             >
               <Save className="w-4 h-4" />
-              <span>Save Profile</span>
+              <span>{copy.saveProfile}</span>
             </button>
           </div>
         ) : (
@@ -190,31 +193,31 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
                 <span className="text-gray-400 text-[10px] uppercase font-bold block">
-                  Trade
+                  {copy.trade}
                 </span>
                 <span className="text-gray-900 font-extrabold text-sm">
-                  {profile.trade}
+                  {localizeDisplayValue(profile.trade, currentLanguage)}
                 </span>
               </div>
               <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
                 <span className="text-gray-400 text-[10px] uppercase font-bold block">
-                  Experience
+                  {copy.experience}
                 </span>
                 <span className="text-gray-900 font-extrabold text-sm">
-                  {profile.experienceYears} Years
+                  {profile.experienceYears} {copy.years}
                 </span>
               </div>
               <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
                 <span className="text-gray-400 text-[10px] uppercase font-bold block">
-                  Daily Rate
+                  {copy.dailyRate}
                 </span>
                 <span className="text-green-600 font-black text-sm">
-                  ₹{(profile.dailyRate || 1200).toLocaleString('en-IN')}/day
+                  ₹{(profile.dailyRate || 1200).toLocaleString('en-IN')}{copy.perDay}
                 </span>
               </div>
               <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
                 <span className="text-gray-400 text-[10px] uppercase font-bold block">
-                  Blood Group
+                  {copy.bloodGroup}
                 </span>
                 <span className="text-red-600 font-black text-sm">
                   {profile.bloodGroup || 'O+'}
@@ -225,7 +228,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             {/* Skills */}
             <div>
               <span className="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-2">
-                Skills listed by worker (हुनर)
+                {copy.skillsListed}
               </span>
               <div className="flex flex-wrap gap-2">
                 {profile.skills.map((skill, idx) => (
@@ -234,7 +237,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                     className="bg-orange-50 text-orange-900 border border-orange-200 text-xs px-3 py-1.5 rounded-full font-bold flex items-center gap-1.5 shadow-xs"
                   >
                     <CheckCircle2 className="w-3.5 h-3.5 text-green-600" />
-                    {skill}
+                    {localizeDisplayValue(skill, currentLanguage)}
                   </span>
                 ))}
               </div>
@@ -243,10 +246,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             {/* Accreditations */}
             <div>
               <span className="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-2">
-                ट्रेनिंग व सर्टिफिकेट्स (Worker-entered)
+                {copy.trainingCertificates}
               </span>
               <p className="text-[11px] text-gray-500 mb-2">
-                Credential status: Not linked · DigiLocker sandbox/mock: demo only. No live government verification is performed.
+                {copy.credentialNotice}
               </p>
               <div className="space-y-2.5">
                 {profile.certifications.map((cert, idx) => (
@@ -256,7 +259,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                   >
                     <Award className="w-5 h-5 text-orange-600 shrink-0" />
                     <span className="text-xs font-bold text-gray-800">
-                      {cert}
+                      {localizeDisplayValue(cert, currentLanguage)}
                     </span>
                   </div>
                 ))}

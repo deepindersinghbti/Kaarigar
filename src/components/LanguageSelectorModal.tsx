@@ -2,7 +2,45 @@ import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Check, Globe } from 'lucide-react';
 import { SupportedLanguage } from '../types';
-import { SUPPORTED_LANGUAGES, TRANSLATIONS } from '../data/translations';
+import { isLanguageSelectable, SUPPORTED_LANGUAGES, TRANSLATIONS } from '../data/translations';
+
+const SELECTOR_COPY: Record<SupportedLanguage, {
+  subtitle: string;
+  close: string;
+  footer: string;
+  comingSoon: string;
+}> = {
+  en: {
+    subtitle: 'Choose your language',
+    close: 'Close',
+    footer: 'You can change the language anytime by tapping the globe.',
+    comingSoon: 'Coming soon',
+  },
+  hi: {
+    subtitle: 'अपनी भाषा चुनें',
+    close: 'बंद करें',
+    footer: '🌐 दबाकर आप कभी भी भाषा बदल सकते हैं।',
+    comingSoon: 'जल्द आ रहा है',
+  },
+  pa: {
+    subtitle: 'ਆਪਣੀ ਭਾਸ਼ਾ ਚੁਣੋ',
+    close: 'ਬੰਦ ਕਰੋ',
+    footer: '🌐 ਦਬਾ ਕੇ ਤੁਸੀਂ ਕਦੇ ਵੀ ਭਾਸ਼ਾ ਬਦਲ ਸਕਦੇ ਹੋ।',
+    comingSoon: 'ਜਲਦੀ ਆ ਰਿਹਾ ਹੈ',
+  },
+  kn: {
+    subtitle: 'ನಿಮ್ಮ ಭಾಷೆಯನ್ನು ಆಯ್ಕೆಮಾಡಿ',
+    close: 'ಮುಚ್ಚಿ',
+    footer: '🌐 ಒತ್ತಿ ಯಾವಾಗ ಬೇಕಾದರೂ ಭಾಷೆ ಬದಲಾಯಿಸಬಹುದು.',
+    comingSoon: 'ಶೀಘ್ರದಲ್ಲೇ ಬರಲಿದೆ',
+  },
+  mr: {
+    subtitle: 'तुमची भाषा निवडा',
+    close: 'बंद करा',
+    footer: '🌐 दाबून तुम्ही कधीही भाषा बदलू शकता.',
+    comingSoon: 'लवकरच येत आहे',
+  },
+};
 
 interface LanguageSelectorModalProps {
   isOpen: boolean;
@@ -18,6 +56,7 @@ export const LanguageSelectorModal: React.FC<LanguageSelectorModalProps> = ({
   onSelectLanguage,
 }) => {
   const t = TRANSLATIONS[currentLanguage];
+  const selectorCopy = SELECTOR_COPY[currentLanguage];
 
   return (
     <AnimatePresence>
@@ -47,15 +86,15 @@ export const LanguageSelectorModal: React.FC<LanguageSelectorModalProps> = ({
                     {t.chooseLanguage}
                   </h3>
                   <p className="text-xs text-orange-100 font-medium">
-                    Choose your language
+                    {selectorCopy.subtitle}
                   </p>
                 </div>
               </div>
               <button
                 id="close-language-modal"
                 onClick={onClose}
+                aria-label={selectorCopy.close}
                 className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center text-white hover:bg-white/30 transition-colors"
-                aria-label="Close"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -65,14 +104,19 @@ export const LanguageSelectorModal: React.FC<LanguageSelectorModalProps> = ({
             <div className="p-4 space-y-2.5 max-h-[70vh] overflow-y-auto">
               {SUPPORTED_LANGUAGES.map((lang) => {
                 const isSelected = currentLanguage === lang.code;
+                const isAvailable = isLanguageSelectable(lang.code);
                 return (
                   <button
                     key={lang.code}
+                    type="button"
+                    disabled={!isAvailable}
                     id={`lang-option-${lang.code}`}
                     onClick={() => {
+                      if (!isAvailable) return;
                       onSelectLanguage(lang.code);
                       onClose();
                     }}
+                    style={!isAvailable ? { opacity: 0.7, cursor: 'not-allowed' } : undefined}
                     className={`w-full flex items-center justify-between p-4 rounded-2xl border-2 transition-all text-left ${
                       isSelected
                         ? 'border-orange-500 bg-orange-50/80 shadow-xs'
@@ -91,7 +135,11 @@ export const LanguageSelectorModal: React.FC<LanguageSelectorModalProps> = ({
                       </div>
                     </div>
 
-                    {isSelected ? (
+                    {!isAvailable ? (
+                      <span className="text-xs font-extrabold text-gray-500 whitespace-nowrap">
+                        {SELECTOR_COPY[lang.code].comingSoon}
+                      </span>
+                    ) : isSelected ? (
                       <div className="w-7 h-7 rounded-full bg-orange-500 flex items-center justify-center text-white shadow-xs">
                         <Check className="w-4 h-4 stroke-[3]" />
                       </div>
@@ -105,7 +153,7 @@ export const LanguageSelectorModal: React.FC<LanguageSelectorModalProps> = ({
 
             {/* Footer note */}
             <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 text-center text-xs text-gray-500">
-              💡 You can change the language anytime by tapping 🌐
+              {selectorCopy.footer}
             </div>
           </motion.div>
         </div>
