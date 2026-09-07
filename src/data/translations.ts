@@ -38,6 +38,18 @@ export const SUPPORTED_LANGUAGES: LanguageOption[] = [
   },
 ];
 
+/**
+ * Only languages with a complete UI surface are selectable in this MVP.
+ * Punjabi remains active; Marathi and Kannada stay visible as coming soon so
+ * workers can see that support is planned without entering a mixed-language
+ * screen.
+ */
+export const SELECTABLE_LANGUAGE_CODES: ReadonlyArray<SupportedLanguage> = ['hi', 'pa', 'en'];
+
+export function isLanguageSelectable(language: string): boolean {
+  return SELECTABLE_LANGUAGE_CODES.some((code) => code === language);
+}
+
 export interface LanguageStrings {
   appName: string;
   assistantName: string;
@@ -132,8 +144,8 @@ export const TRANSLATIONS: Record<SupportedLanguage, LanguageStrings> = {
     certifications: 'सर्टिफिकेट / ट्रेनिंग',
     navHome: 'होम',
     navPassport: 'पासपोर्ट',
-    navJobs: 'काम (Jobs)',
-    navKamai: 'कमाई (Kamai)',
+    navJobs: 'काम',
+    navKamai: 'कमाई',
     navProfile: 'प्रोफाइल',
     demoPromptHelp: 'या नीचे दिए डेमो वाक्य पर टैप करें:',
     onboardingQuestions: {

@@ -28,6 +28,7 @@ import {
   KamaiEntry,
 } from '../types';
 import { TRANSLATIONS } from '../data/translations';
+import { getScreenCopy, localizeWorkerName } from '../data/uiCopy';
 import {
   VoiceRecognizer,
   speakText,
@@ -38,6 +39,56 @@ import {
 import { uuidv7 } from '../lib/ids';
 import { todayIso } from '../utils/date';
 import { authHeader } from '../lib/authToken';
+
+const ASSISTANT_HEADER_COPY: Record<SupportedLanguage, {
+  badge: string;
+  onboarding: string;
+  addJob: string;
+  addKamai: string;
+  defaultContext: string;
+  close: string;
+}> = {
+  en: {
+    badge: 'AI friend',
+    onboarding: 'Build your profile by voice',
+    addJob: 'Add a job by voice',
+    addKamai: 'Add earnings by voice',
+    defaultContext: 'Your voice-first companion',
+    close: 'Close',
+  },
+  hi: {
+    badge: 'AI दोस्त',
+    onboarding: 'आवाज़ से प्रोफाइल बनाएं',
+    addJob: 'बोलकर काम जोड़ें',
+    addKamai: 'बोलकर कमाई जोड़ें',
+    defaultContext: 'आपका बोलकर चलने वाला साथी',
+    close: 'बंद करें',
+  },
+  pa: {
+    badge: 'AI ਦੋਸਤ',
+    onboarding: 'ਆਵਾਜ਼ ਨਾਲ ਪ੍ਰੋਫਾਈਲ ਬਣਾਓ',
+    addJob: 'ਬੋਲ ਕੇ ਕੰਮ ਜੋੜੋ',
+    addKamai: 'ਬੋਲ ਕੇ ਕਮਾਈ ਜੋੜੋ',
+    defaultContext: 'ਤੁਹਾਡਾ ਆਵਾਜ਼ ਵਾਲਾ ਸਾਥੀ',
+    close: 'ਬੰਦ ਕਰੋ',
+  },
+  kn: {
+    badge: 'AI ಸ್ನೇಹಿತ',
+    onboarding: 'ಧ್ವನಿಯ ಮೂಲಕ ಪ್ರೊಫೈಲ್ ರಚಿಸಿ',
+    addJob: 'ಧ್ವನಿಯ ಮೂಲಕ ಕೆಲಸ ಸೇರಿಸಿ',
+    addKamai: 'ಧ್ವನಿಯ ಮೂಲಕ ಗಳಿಕೆ ಸೇರಿಸಿ',
+    defaultContext: 'ನಿಮ್ಮ ಧ್ವನಿ ಸಂಗಾತಿ',
+    close: 'ಮುಚ್ಚಿ',
+  },
+  mr: {
+    badge: 'AI मित्र',
+    onboarding: 'आवाजाने प्रोफाईल तयार करा',
+    addJob: 'बोलून काम जोडा',
+    addKamai: 'बोलून कमाई जोडा',
+    defaultContext: 'तुमचा आवाजातील साथी',
+    close: 'बंद करा',
+  },
+};
 
 interface VoiceAssistantModalProps {
   isOpen: boolean;
@@ -65,6 +116,42 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
   onOpenPassport,
 }) => {
   const t = TRANSLATIONS[currentLanguage];
+  const copy = getScreenCopy(currentLanguage).assistant;
+  const displayWorkerName = localizeWorkerName(workerProfile.name, currentLanguage);
+  const headerCopy = ASSISTANT_HEADER_COPY[currentLanguage];
+  const contextLabel = context === 'onboarding'
+    ? headerCopy.onboarding
+    : context === 'add_job'
+      ? headerCopy.addJob
+      : context === 'add_kamai'
+        ? headerCopy.addKamai
+        : headerCopy.defaultContext;
+  const demoPrompts = currentLanguage === 'en'
+    ? {
+      trade: 'I am an electrician.',
+      experience: '18 years.',
+      skills: 'House wiring, fan installation and switchboard work.',
+      allInOne: 'I have been an electrician for 18 years. I do house wiring, fan installation and MCB work.',
+      fan: 'Installed a fan in Sector 35. Customer Neha Sharma. Received 1100 rupees.',
+      mcb: 'Changed Rajesh Gupta’s MCB in Sector 22 for 1500 rupees.',
+    }
+    : currentLanguage === 'pa'
+      ? {
+        trade: 'ਮੈਂ ਇਲੈਕਟ੍ਰੀਸ਼ੀਅਨ ਹਾਂ।',
+        experience: '18 ਸਾਲ।',
+        skills: 'ਘਰ ਦੀ ਵਾਇਰਿੰਗ, ਪੱਖੇ ਲਗਾਉਣਾ ਅਤੇ ਸਵਿੱਚਬੋਰਡ ਦਾ ਕੰਮ।',
+        allInOne: 'ਮੈਂ ਪਿਛਲੇ 18 ਸਾਲਾਂ ਤੋਂ ਇਲੈਕਟ੍ਰੀਸ਼ੀਅਨ ਦਾ ਕੰਮ ਕਰ ਰਿਹਾ ਹਾਂ। ਮੈਂ ਘਰ ਦੀ ਵਾਇਰਿੰਗ, ਪੱਖੇ ਅਤੇ MCB ਦਾ ਕੰਮ ਕਰਦਾ ਹਾਂ।',
+        fan: 'ਸੈਕਟਰ 35 ਵਿੱਚ ਪੱਖਾ ਲਗਾਇਆ। ਗਾਹਕ ਨੇਹਾ ਸ਼ਰਮਾ। 1100 ਰੁਪਏ ਮਿਲੇ।',
+        mcb: 'ਸੈਕਟਰ 22 ਵਿੱਚ ਰਾਜੇਸ਼ ਗੁਪਤਾ ਦਾ MCB ਬਦਲਿਆ, 1500 ਰੁਪਏ।',
+      }
+    : {
+      trade: 'Main electrician hoon.',
+      experience: '18 saal.',
+      skills: 'Ghar ki wiring, pankhe lagana aur switchboard ka kaam.',
+      allInOne: 'Main pichle 18 saal se electrician ka kaam kar raha hoon. Ghar ki wiring karta hoon, pankhe lagata hoon aur MCB ka kaam bhi karta hoon.',
+      fan: 'Sector 35 mein fan lagaya. Customer Neha Sharma. 1100 rupaye mile.',
+      mcb: 'Sector 22 mein Rajesh Gupta ka MCB change kiya, 1500 rupaye.',
+    };
 
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -116,7 +203,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
 
       let initialPrompt = '';
       if (context === 'onboarding') {
-        initialPrompt = t.onboardingQuestions.welcome(workerProfile.name);
+        initialPrompt = t.onboardingQuestions.welcome(displayWorkerName);
         setDraftProfile({
           name: workerProfile.name || 'Ramesh Kumar',
           trade: '',
@@ -131,7 +218,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
         initialPrompt = t.kamaiQuestions.prompt;
         setDraftKamai(null);
       } else {
-        initialPrompt = t.onboardingQuestions.welcome(workerProfile.name);
+        initialPrompt = t.onboardingQuestions.welcome(displayWorkerName);
       }
 
       setAssistantMessage(initialPrompt);
@@ -163,7 +250,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
       if (!isSpeechRecognitionSupported()) {
         // Speech recognition not directly supported in this browser, provide friendly guidance
         alert(
-          'Speech recognition is not supported in this browser environment. You can use the quick demo voice buttons below to test the full voice assistant flow!'
+          copy.unsupportedSpeech
         );
         return;
       }
@@ -280,16 +367,12 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
     if (context === 'onboarding') {
       const updated: WorkerProfile = {
         ...workerProfile,
-        trade: draftProfile.trade || 'Electrician',
+        trade: draftProfile.trade || copy.defaultTrade,
         experienceYears: draftProfile.experienceYears || 18,
         skills:
           draftProfile.skills && draftProfile.skills.length > 0
             ? draftProfile.skills
-            : [
-                'House Wiring',
-                'Fan Installation',
-                'MCB & Switchboard Installation',
-              ],
+            : copy.defaultSkills,
         certifications:
           draftProfile.certifications &&
           draftProfile.certifications.length > 0
@@ -309,7 +392,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
       });
 
       const passportAnnouncement =
-        t.onboardingQuestions.passportReadyAnnouncement(workerProfile.name);
+        t.onboardingQuestions.passportReadyAnnouncement(displayWorkerName);
       setAssistantMessage(passportAnnouncement);
       setIsSpeaking(true);
       speakText(passportAnnouncement, currentLanguage, () => {
@@ -413,17 +496,11 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
                   {t.assistantName}
                 </h2>
                 <span className="bg-orange-100 text-orange-700 text-[11px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
-                  AI Dost
+                  {headerCopy.badge}
                 </span>
               </div>
               <p className="text-xs text-gray-500 font-medium">
-                {context === 'onboarding'
-                  ? 'आवाज़ से प्रोफाइल बनाएं'
-                  : context === 'add_job'
-                  ? 'बोलकर काम जोड़ें'
-                  : context === 'add_kamai'
-                  ? 'बोलकर कमाई जोड़ें'
-                  : 'आपका बोलकर चलने वाला साथी'}
+                {contextLabel}
               </p>
             </div>
           </div>
@@ -441,7 +518,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
               id="close-voice-assistant"
               onClick={onClose}
               className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-600 transition-colors"
-              aria-label="Close"
+              aria-label={headerCopy.close}
             >
               <X className="w-5 h-5" />
             </button>
@@ -462,10 +539,10 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
 
             <div className="space-y-2">
               <h3 className="text-2xl font-black text-gray-900">
-                {workerProfile.name} जी, आपका पासपोर्ट तैयार है! 🎉
+                {copy.passportReady(displayWorkerName)}
               </h3>
               <p className="text-gray-600 text-sm max-w-md mx-auto">
-                Your digital passport is ready. Government certificate verification is not connected in this demo.
+                {copy.passportReadyDescription}
               </p>
             </div>
 
@@ -475,40 +552,40 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
               <div className="flex justify-between items-start">
                 <div>
                   <div className="text-xs font-semibold text-orange-400 uppercase tracking-wider">
-                    Passport preview
+                    {copy.passportPreview}
                   </div>
                   <div className="text-lg font-bold text-white">
                     {workerProfile.id.toUpperCase()}
                   </div>
                 </div>
                 <span className="bg-green-500/20 text-green-400 text-xs font-bold px-2.5 py-1 rounded-full border border-green-500/30 flex items-center gap-1">
-                  <Sparkles className="w-3 h-3" /> Demo only
+                  <Sparkles className="w-3 h-3" /> {copy.demoOnly}
                 </span>
               </div>
 
               <div className="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-gray-800">
                 <div>
-                  <span className="text-gray-400 block">Trade</span>
+                  <span className="text-gray-400 block">{copy.trade}</span>
                   <span className="font-bold text-gray-200 text-sm">
-                    {draftProfile.trade || 'Electrician'}
+                    {draftProfile.trade || copy.defaultTrade}
                   </span>
                 </div>
                 <div>
-                  <span className="text-gray-400 block">Experience</span>
+                  <span className="text-gray-400 block">{copy.experience}</span>
                   <span className="font-bold text-gray-200 text-sm">
-                    {draftProfile.experienceYears || 18} Years
+                    {draftProfile.experienceYears || 18} {copy.years}
                   </span>
                 </div>
               </div>
 
               <div>
                 <span className="text-gray-400 text-xs block mb-1">
-                  Skills listed by worker
+                  {getScreenCopy(currentLanguage).passport.skillsListed}
                 </span>
                 <div className="flex flex-wrap gap-1.5">
                   {(draftProfile.skills && draftProfile.skills.length > 0
                     ? draftProfile.skills
-                    : ['House Wiring', 'Fan Installation', 'MCB & Switchboard']
+                    : copy.defaultSkills
                   ).map((s, idx) => (
                     <span
                       key={idx}
@@ -520,7 +597,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
                 </div>
               </div>
               <p className="text-[11px] text-amber-200/80">
-                DigiLocker sandbox/mock: demo only. This preview is not a government verification.
+                {copy.credentialDemoNotice}
               </p>
             </div>
 
@@ -558,7 +635,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
                   className="mt-2 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold transition-colors"
                 >
                   <Volume2 className="w-4 h-4 text-orange-500" />
-                  <span>{t.hearAgain} (दोबारा सुनो)</span>
+                  <span>{t.hearAgain}</span>
                 </button>
               </div>
             </div>
@@ -572,7 +649,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
               </div>
 
               <div className="text-orange-800 font-bold uppercase tracking-widest text-xs">
-                {isListening ? t.listening : 'Aapki Awaaz Sun Rahe Hain...'}
+                {isListening ? t.listening : copy.idleListening}
               </div>
 
               {/* Huge Pulsing Mic Button */}
@@ -599,7 +676,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
                       ? 'bg-gradient-to-tr from-red-500 to-rose-600 shadow-rose-300 scale-105'
                       : 'bg-orange-500 hover:bg-orange-600 shadow-orange-300 hover:scale-105'
                   }`}
-                  aria-label={isListening ? 'Stop listening' : 'Start listening'}
+                  aria-label={isListening ? copy.stopListening : copy.startListening}
                 >
                   <Mic
                     className={`w-10 h-10 sm:w-12 sm:h-12 ${
@@ -607,17 +684,17 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
                     }`}
                   />
                   <span className="text-[11px] font-extrabold uppercase tracking-wider mt-1">
-                    {isListening ? 'Listening...' : t.speak}
+                    {isListening ? t.listening : t.speak}
                   </span>
                 </button>
               </div>
 
               <div className="text-center px-4">
                 <p className="text-lg font-medium text-gray-700 italic">
-                  "{interimText || transcript || 'Speak now in your language...'}"
+                  "{interimText || transcript || copy.transcriptPlaceholder}"
                 </p>
                 <span className="text-xs text-orange-600 font-bold mt-1 block">
-                  {isListening ? 'Bolte rahiye, hum sun rahe hain...' : '🎙️ Tap microphone to speak'}
+                  {isListening ? copy.listeningHint : copy.speakHint}
                 </span>
               </div>
             </div>
@@ -631,14 +708,14 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
               >
                 <div className="absolute -top-3.5 left-6 sm:left-8 bg-orange-500 text-white px-3.5 py-0.5 rounded-full text-xs font-bold shadow-md flex items-center gap-1">
                   <Sparkles className="w-3.5 h-3.5" />
-                  <span>AI Extracted Details</span>
+                  <span>{copy.extractedDetails}</span>
                 </div>
 
                 {context === 'onboarding' && (
                   <div className="grid grid-cols-2 gap-4 pt-2">
                     <div>
                       <span className="text-xs font-bold text-gray-400 uppercase tracking-widest block">
-                        Kaam (Trade)
+                        {copy.trade}
                       </span>
                       <p className="text-xl font-bold text-blue-600">
                         {draftProfile.trade || 'Electrician'}
@@ -647,16 +724,16 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
 
                     <div>
                       <span className="text-xs font-bold text-gray-400 uppercase tracking-widest block">
-                        Anubhav (Experience)
+                        {copy.experience}
                       </span>
                       <p className="text-xl font-bold text-blue-600">
-                        {draftProfile.experienceYears || 18} Saal
+                        {draftProfile.experienceYears || 18} {copy.years}
                       </p>
                     </div>
 
                     <div className="col-span-2">
                       <span className="text-xs font-bold text-gray-400 uppercase tracking-widest block mb-1.5">
-                        Khaas Hunar (Skills)
+                        {copy.skills}
                       </span>
                       <div className="flex flex-wrap gap-2">
                         {(draftProfile.skills && draftProfile.skills.length > 0
@@ -685,7 +762,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
                     <div className="flex justify-between items-start">
                       <div>
                         <span className="text-xs font-bold text-gray-400 uppercase tracking-widest block">
-                          Kaam Ka Naam
+                          {copy.jobName}
                         </span>
                         <p className="text-xl font-bold text-blue-600">
                           {draftJob.title || 'Fan Installation'}
@@ -693,7 +770,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
                       </div>
                       <div className="text-right">
                         <span className="text-xs font-bold text-gray-400 uppercase tracking-widest block">
-                          Amount
+                          {copy.amount}
                         </span>
                         <p className="text-2xl font-black text-green-600">
                           ₹{(draftJob.amount || 1100).toLocaleString('en-IN')}
@@ -703,13 +780,13 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
 
                     <div className="grid grid-cols-2 gap-2 text-xs bg-gray-50 p-3 rounded-2xl border border-gray-100">
                       <div>
-                        <span className="text-gray-400 block font-bold">Customer</span>
+                        <span className="text-gray-400 block font-bold">{copy.customer}</span>
                         <span className="font-bold text-gray-800">
                           {draftJob.customerName || 'Neha Sharma'}
                         </span>
                       </div>
                       <div>
-                        <span className="text-gray-400 block font-bold">Location</span>
+                        <span className="text-gray-400 block font-bold">{copy.location}</span>
                         <span className="font-bold text-gray-800">
                           {draftJob.location || 'Sector 35, Chandigarh'}
                         </span>
@@ -721,7 +798,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
                 {context === 'add_kamai' && draftKamai && (
                   <div className="space-y-3 pt-2">
                     <span className="text-xs font-bold text-gray-400 uppercase tracking-widest block">
-                      Earnings Breakdown
+                      {copy.earningsBreakdown}
                     </span>
                     <div className="space-y-1.5">
                       {draftKamai.entries.map((entry, idx) => (
@@ -737,7 +814,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
                       ))}
                     </div>
                     <div className="pt-2 border-t border-gray-200 flex justify-between items-center">
-                      <span className="font-bold text-gray-700">Total:</span>
+                      <span className="font-bold text-gray-700">{copy.total}:</span>
                       <span className="text-2xl font-black text-green-600">
                         ₹{draftKamai.total.toLocaleString('en-IN')}
                       </span>
@@ -753,7 +830,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
                     className="w-full bg-green-500 hover:bg-green-600 text-white py-3.5 sm:py-4 rounded-2xl font-extrabold text-base sm:text-lg shadow-lg shadow-green-100 flex items-center justify-center gap-3 transition-all"
                   >
                     <Check className="w-5 h-5 stroke-[3]" />
-                    <span>{t.yesCorrect} (हाँ, सब सही है)</span>
+                    <span>{t.yesCorrect}</span>
                   </button>
 
                   <button
@@ -762,7 +839,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
                     className="w-full bg-white border-2 border-gray-200 py-3 rounded-2xl font-bold text-gray-600 flex items-center justify-center gap-2 hover:bg-gray-50 transition-colors text-sm"
                   >
                     <Edit3 className="w-4 h-4" />
-                    <span>{t.changeSomething} (कुछ बदलना है)</span>
+                    <span>{t.changeSomething}</span>
                   </button>
                 </div>
               </motion.div>
@@ -772,7 +849,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
             <div className="bg-white rounded-3xl p-5 border border-gray-200 shadow-sm space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
-                  ⚡ Quick Voice Demo Prompts
+                  ⚡ {copy.quickPrompts}
                 </span>
                 <button
                   id="toggle-manual-input-btn"
@@ -780,7 +857,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
                   className="text-xs text-orange-600 hover:text-orange-700 font-bold flex items-center gap-1"
                 >
                   <Edit3 className="w-3.5 h-3.5" />
-                  <span>{showManualEdit ? 'Hide Text' : 'Type / Edit'}</span>
+                  <span>{showManualEdit ? copy.hideText : copy.typeEdit}</span>
                 </button>
               </div>
 
@@ -789,7 +866,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
                   <input
                     id="manual-voice-input-field"
                     type="text"
-                    placeholder="Type what worker would say in Hindi/English..."
+                    placeholder={copy.manualPlaceholder}
                     value={manualInput}
                     onChange={(e) => setManualInput(e.target.value)}
                     onKeyDown={(e) => {
@@ -821,46 +898,41 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
                     <button
                       id="demo-speech-trade"
                       onClick={() =>
-                        handleQuickDemoClick('Main electrician hoon.')
+                        handleQuickDemoClick(demoPrompts.trade)
                       }
                       className="p-3 rounded-2xl bg-gray-50 hover:bg-orange-50 text-gray-800 text-xs font-bold text-left border border-gray-200 hover:border-orange-200 transition-colors flex items-center gap-2"
                     >
                       <span>🗣️</span>
-                      <span>"Main electrician hoon."</span>
+                      <span>"{demoPrompts.trade}"</span>
                     </button>
                     <button
                       id="demo-speech-exp"
-                      onClick={() => handleQuickDemoClick('18 saal.')}
+                      onClick={() => handleQuickDemoClick(demoPrompts.experience)}
                       className="p-3 rounded-2xl bg-gray-50 hover:bg-orange-50 text-gray-800 text-xs font-bold text-left border border-gray-200 hover:border-orange-200 transition-colors flex items-center gap-2"
                     >
                       <span>🗣️</span>
-                      <span>"18 saal."</span>
+                      <span>"{demoPrompts.experience}"</span>
                     </button>
                     <button
                       id="demo-speech-skills"
                       onClick={() =>
-                        handleQuickDemoClick(
-                          'Ghar ki wiring, pankhe lagana aur switchboard ka kaam.'
-                        )
+                        handleQuickDemoClick(demoPrompts.skills)
                       }
                       className="p-3 rounded-2xl bg-gray-50 hover:bg-orange-50 text-gray-800 text-xs font-bold text-left border border-gray-200 hover:border-orange-200 transition-colors flex items-center gap-2"
                     >
                       <span>🗣️</span>
-                      <span>"Ghar ki wiring, fan aur switchboard..."</span>
+                      <span>"{demoPrompts.skills}"</span>
                     </button>
                     <button
                       id="demo-speech-allinone"
                       onClick={() =>
-                        handleQuickDemoClick(
-                          'Main pichle 18 saal se electrician ka kaam kar raha hoon. Ghar ki wiring karta hoon, pankhe lagata hoon aur MCB ka kaam bhi karta hoon.'
-                        )
+                        handleQuickDemoClick(demoPrompts.allInOne)
                       }
                       className="p-3 rounded-2xl bg-green-50 hover:bg-green-100 text-green-900 text-xs font-bold text-left border border-green-300 transition-colors flex items-center gap-2 sm:col-span-2"
                     >
                       <span>⚡ Full Speech:</span>
                       <span className="truncate">
-                        "Main pichle 18 saal se electrician ka kaam kar raha
-                        hoon..."
+                        "{demoPrompts.allInOne}"
                       </span>
                     </button>
                   </>
@@ -871,31 +943,25 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
                     <button
                       id="demo-job-fan"
                       onClick={() =>
-                        handleQuickDemoClick(
-                          'Sector 35 mein fan lagaya. Customer Neha Sharma. 1100 rupaye mile.'
-                        )
+                        handleQuickDemoClick(demoPrompts.fan)
                       }
                       className="p-3 rounded-2xl bg-gray-50 hover:bg-orange-50 text-gray-800 text-xs font-bold text-left border border-gray-200 hover:border-orange-200 transition-colors flex items-center gap-2 sm:col-span-2"
                     >
                       <span>🗣️</span>
                       <span>
-                        "Sector 35 mein fan lagaya. Customer Neha Sharma. 1100
-                        rupaye mile."
+                        "{demoPrompts.fan}"
                       </span>
                     </button>
                     <button
                       id="demo-job-mcb"
                       onClick={() =>
-                        handleQuickDemoClick(
-                          'Sector 22 mein Rajesh Gupta ka MCB change kiya, 1500 rupaye.'
-                        )
+                        handleQuickDemoClick(demoPrompts.mcb)
                       }
                       className="p-3 rounded-2xl bg-gray-50 hover:bg-orange-50 text-gray-800 text-xs font-bold text-left border border-gray-200 hover:border-orange-200 transition-colors flex items-center gap-2 sm:col-span-2"
                     >
                       <span>🗣️</span>
                       <span>
-                        "Sector 22 mein Rajesh Gupta ka MCB change kiya, 1500
-                        rupaye."
+                        "{demoPrompts.mcb}"
                       </span>
                     </button>
                   </>

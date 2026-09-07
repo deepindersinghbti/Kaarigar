@@ -13,6 +13,38 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { SupportedLanguage } from '../types';
 import { TRANSLATIONS, SUPPORTED_LANGUAGES } from '../data/translations';
 
+const NAVBAR_COPY: Record<SupportedLanguage, {
+  badge: string;
+  tagline: string;
+  companion: string;
+}> = {
+  en: {
+    badge: 'AI friend',
+    tagline: 'Your digital friend • Voice-first assistant',
+    companion: 'Companion',
+  },
+  hi: {
+    badge: 'AI दोस्त',
+    tagline: 'आपका डिजिटल साथी • आवाज़ से काम',
+    companion: 'साथी',
+  },
+  pa: {
+    badge: 'AI ਦੋਸਤ',
+    tagline: 'ਤੁਹਾਡਾ ਡਿਜੀਟਲ ਸਾਥੀ • ਆਵਾਜ਼ ਨਾਲ ਕੰਮ',
+    companion: 'ਸਾਥੀ',
+  },
+  kn: {
+    badge: 'AI ಸ್ನೇಹಿತ',
+    tagline: 'ನಿಮ್ಮ ಡಿಜಿಟಲ್ ಸಂಗಾತಿ • ಧ್ವನಿ ಸಹಾಯಕ',
+    companion: 'ಸಂಗಾತಿ',
+  },
+  mr: {
+    badge: 'AI मित्र',
+    tagline: 'तुमचा डिजिटल साथी • आवाजावर चालणारा सहाय्यक',
+    companion: 'साथी',
+  },
+};
+
 interface NavbarProps {
   currentLanguage: SupportedLanguage;
   onChangeLanguage: () => void;
@@ -27,6 +59,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   const navigate = useNavigate();
   const t = TRANSLATIONS[currentLanguage];
   const langObj = SUPPORTED_LANGUAGES.find((l) => l.code === currentLanguage);
+  const navbarCopy = NAVBAR_COPY[currentLanguage];
 
   const navItems = [
     { id: 'home', path: '/', label: t.navHome, icon: Home },
@@ -58,11 +91,11 @@ export const Navbar: React.FC<NavbarProps> = ({
                   {t.appName}
                 </h1>
                 <span className="text-[10px] bg-orange-100 text-orange-700 font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider">
-                  AI Dost
+                  {navbarCopy.badge}
                 </span>
               </div>
               <p className="text-xs text-gray-500 font-medium hidden sm:block">
-                Aapka Digital Dost • Voice-First Assistant
+                {navbarCopy.tagline}
               </p>
             </div>
           </div>
@@ -85,7 +118,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               className="flex items-center gap-1.5 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-full bg-orange-500 hover:bg-orange-600 text-white text-xs sm:text-sm font-extrabold shadow-md shadow-orange-200 transition-all active:scale-95"
             >
               <Mic className="w-4 h-4 animate-pulse" />
-              <span>साथी</span>
+              <span>{navbarCopy.companion}</span>
             </button>
           </div>
         </div>

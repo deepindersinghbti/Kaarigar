@@ -24,26 +24,14 @@ import {
 import { SyncBadge } from './SyncBadge';
 import { SendReviewLink } from './SendReviewLink';
 import { TRANSLATIONS } from '../data/translations';
+import { getScreenCopy, localizeDisplayValue, localizeWorkerName } from '../data/uiCopy';
 import { todayIso } from '../utils/date';
 
-const JOB_BADGE_PRESENTATION: Record<JobBadge, { label: string; className: string }> = {
-  scheduled: { label: 'Scheduled', className: 'text-blue-700 bg-blue-50 border-blue-200' },
-  in_progress: { label: 'In progress', className: 'text-amber-700 bg-amber-50 border-amber-200' },
-  completed: { label: 'Completed', className: 'text-green-700 bg-green-50 border-green-200' },
-  cancelled: { label: 'Cancelled', className: 'text-red-700 bg-red-50 border-red-200' },
-};
-
-const JOB_STATE_LABEL: Record<JobState, string> = {
-  REQUESTED: 'Requested',
-  QUOTED: 'Quoted',
-  ACCEPTED: 'Accepted',
-  SCHEDULED: 'Scheduled',
-  IN_PROGRESS: 'In progress',
-  COMPLETED: 'Completed',
-  SETTLED: 'Payment settled',
-  REVIEWED: 'Reviewed',
-  CANCELLED: 'Cancelled',
-  DISPUTED: 'Disputed',
+const JOB_BADGE_PRESENTATION: Record<JobBadge, { className: string }> = {
+  scheduled: { className: 'text-blue-700 bg-blue-50 border-blue-200' },
+  in_progress: { className: 'text-amber-700 bg-amber-50 border-amber-200' },
+  completed: { className: 'text-green-700 bg-green-50 border-green-200' },
+  cancelled: { className: 'text-red-700 bg-red-50 border-red-200' },
 };
 
 /** The single judge-demo path. Cancellation remains available through the API. */
@@ -54,24 +42,6 @@ const HAPPY_PATH_NEXT: Partial<Record<JobState, JobState>> = {
   SCHEDULED: 'IN_PROGRESS',
   IN_PROGRESS: 'COMPLETED',
   COMPLETED: 'SETTLED',
-};
-
-const NEXT_ACTION_LABEL: Partial<Record<JobState, string>> = {
-  QUOTED: 'Mark quote sent',
-  ACCEPTED: 'Customer accepted',
-  SCHEDULED: 'Schedule job',
-  IN_PROGRESS: 'Start work',
-  COMPLETED: 'Mark work completed',
-  SETTLED: 'Mark payment received',
-};
-
-const PAYMENT_PRESENTATION: Record<
-  JobItem['paymentMethod'],
-  { label: string; className: string }
-> = {
-  upi: { label: '⚡ UPI', className: 'bg-purple-100 text-purple-800' },
-  cash: { label: '💵 Cash', className: 'bg-green-100 text-green-800' },
-  pending: { label: 'Payment pending', className: 'bg-amber-100 text-amber-800' },
 };
 
 interface JobsViewProps {
@@ -101,6 +71,8 @@ export const JobsView: React.FC<JobsViewProps> = ({
   onTransitionJob,
 }) => {
   const t = TRANSLATIONS[currentLanguage];
+  const copy = getScreenCopy(currentLanguage).jobs;
+  const displayWorkerName = localizeWorkerName(workerName, currentLanguage);
   const [filter, setFilter] = useState<'all' | 'today' | 'week'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [transitioningJobId, setTransitioningJobId] = useState<string | null>(null);
@@ -134,7 +106,7 @@ export const JobsView: React.FC<JobsViewProps> = ({
     try {
       await onTransitionJob(jobId, state);
     } catch (error) {
-      setTransitionError(error instanceof Error ? error.message : 'Could not update the job.');
+      setTransitionError(error instanceof Error ? error.message : copy.updateError);
     } finally {
       setTransitioningJobId(null);
     }
@@ -147,14 +119,13 @@ export const JobsView: React.FC<JobsViewProps> = ({
         <div className="space-y-2 text-center sm:text-left">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-orange-100 text-orange-800 text-xs font-extrabold shadow-xs">
             <Sparkles className="w-4 h-4 text-orange-600" />
-            <span>AI Voice Job Logger</span>
+            <span>{copy.eyebrow}</span>
           </div>
           <h2 className="text-2xl sm:text-3xl font-extrabold text-gray-900">
             {t.navJobs}
           </h2>
           <p className="text-xs sm:text-sm text-gray-600 font-medium max-w-sm">
-            बस बोलिए — "सेक्टर 35 में पंखा लगाया, ₹1100 मिले" और काम दर्ज हो
-            जाएगा!
+            {copy.description}
           </p>
         </div>
 
@@ -169,7 +140,7 @@ export const JobsView: React.FC<JobsViewProps> = ({
             <span>{t.addJobByVoice}</span>
           </button>
           <button type="button" onClick={onOpenQuote} className="w-full flex items-center justify-center gap-2 px-5 py-2.5 rounded-full bg-white border border-orange-300 text-orange-700 font-extrabold text-xs hover:bg-orange-50 transition-colors">
-            Create itemised quote
+            {copy.createQuote}
           </button>
         </div>
       </div>
@@ -187,7 +158,7 @@ export const JobsView: React.FC<JobsViewProps> = ({
                 : 'hover:text-gray-900'
             }`}
           >
-            सभी काम ({jobs.length})
+            {copy.allJobs(jobs.length)}
           </button>
           <button
             id="job-filter-today"
@@ -198,7 +169,7 @@ export const JobsView: React.FC<JobsViewProps> = ({
                 : 'hover:text-gray-900'
             }`}
           >
-            आज (Today)
+            {copy.today}
           </button>
           <button
             id="job-filter-week"
@@ -209,13 +180,13 @@ export const JobsView: React.FC<JobsViewProps> = ({
                 : 'hover:text-gray-900'
             }`}
           >
-            इस हफ्ते
+            {copy.week}
           </button>
         </div>
 
         {/* Total stats pill */}
         <div className="text-right text-xs font-semibold text-gray-600 bg-white px-4 py-2.5 rounded-full border border-gray-200 shadow-xs flex items-center justify-between sm:justify-end gap-2">
-          <span>कुल राशि (Total):</span>
+          <span>{copy.total}:</span>
           <span className="text-sm font-black text-green-700">
             ₹{totalAmount.toLocaleString('en-IN')}
           </span>
@@ -228,7 +199,7 @@ export const JobsView: React.FC<JobsViewProps> = ({
         <input
           id="search-jobs-input"
           type="text"
-          placeholder="ग्राहक, जगह या काम खोजें (Search customer or location)..."
+          placeholder={copy.searchPlaceholder}
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="w-full pl-11 pr-4 py-3 bg-white border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 shadow-xs text-gray-900 placeholder:text-gray-400"
@@ -248,23 +219,32 @@ export const JobsView: React.FC<JobsViewProps> = ({
               <Mic className="w-6 h-6" />
             </div>
             <h4 className="font-extrabold text-gray-800 text-base">
-              कोई काम नहीं मिला
+              {copy.noJobs}
             </h4>
             <p className="text-xs text-gray-500 max-w-sm mx-auto">
-              माइक बटन दबाकर अपना पहला काम बोलकर जोड़ें!
+              {copy.noJobsHint}
             </p>
             <button
               onClick={onAddJobVoice}
               className="px-5 py-2.5 bg-orange-500 text-white rounded-full text-xs font-extrabold hover:bg-orange-600 shadow-sm transition-all"
             >
-              🎙️ बोलकर काम जोड़ें
+              {copy.speakAdd}
             </button>
           </div>
         ) : (
           filteredJobs.map((job) => {
             const nextState = HAPPY_PATH_NEXT[job.status];
             const syncState = syncStateOf(job.id);
-            const payment = PAYMENT_PRESENTATION[job.paymentMethod];
+            const payment = job.status === 'SETTLED' || job.status === 'REVIEWED'
+              ? { label: copy.payment.settled, className: 'bg-green-100 text-green-800' }
+              : {
+                label: copy.payment[job.paymentMethod],
+                className: job.paymentMethod === 'upi'
+                  ? 'bg-purple-100 text-purple-800'
+                  : job.paymentMethod === 'cash'
+                    ? 'bg-green-100 text-green-800'
+                    : 'bg-amber-100 text-amber-800',
+              };
             const isTransitioning = transitioningJobId === job.id;
             const canTransition = Boolean(onTransitionJob && nextState && syncState === 'synced');
 
@@ -280,7 +260,7 @@ export const JobsView: React.FC<JobsViewProps> = ({
                     <span
                       className={`text-[11px] font-extrabold uppercase px-2.5 py-0.5 rounded-full border ${JOB_BADGE_PRESENTATION[JOB_BADGE[job.status]].className}`}
                     >
-                      {JOB_BADGE_PRESENTATION[JOB_BADGE[job.status]].label}
+                      {copy.state[job.status]}
                     </span>
                     <span className="text-xs text-gray-400 font-medium">
                       {job.date} • {job.time || '11:00 AM'}
@@ -288,7 +268,7 @@ export const JobsView: React.FC<JobsViewProps> = ({
                     <SyncBadge state={syncState} currentLanguage={currentLanguage} compact />
                   </div>
                   <h3 className="font-extrabold text-base sm:text-lg text-gray-900">
-                    {job.title}
+                    {localizeDisplayValue(job.title, currentLanguage)}
                   </h3>
                 </div>
 
@@ -309,17 +289,17 @@ export const JobsView: React.FC<JobsViewProps> = ({
                 <div className="flex items-center justify-between sm:justify-start gap-3 bg-gray-50 p-3 rounded-2xl border border-gray-100">
                   <div>
                     <span className="text-gray-400 block text-[10px] font-bold uppercase">
-                      Customer
+                      {copy.customer}
                     </span>
                     <span className="font-extrabold text-gray-800">
-                      {job.customerName}
+                      {localizeDisplayValue(job.customerName, currentLanguage)}
                     </span>
                   </div>
                   {job.customerPhone && (
                     <a
                       href={`tel:${job.customerPhone}`}
                       className="w-8 h-8 rounded-xl bg-green-500 text-white flex items-center justify-center hover:bg-green-600 shadow-sm transition-colors"
-                      title="Call Customer"
+                      title={copy.callCustomer}
                     >
                       <Phone className="w-3.5 h-3.5" />
                     </a>
@@ -329,10 +309,10 @@ export const JobsView: React.FC<JobsViewProps> = ({
                 <div className="flex items-center justify-between sm:justify-start gap-2 bg-gray-50 p-3 rounded-2xl border border-gray-100">
                   <div>
                     <span className="text-gray-400 block text-[10px] font-bold uppercase">
-                      Location
+                      {copy.location}
                     </span>
                     <span className="font-extrabold text-gray-800 truncate">
-                      {job.location}
+                      {localizeDisplayValue(job.location, currentLanguage)}
                     </span>
                   </div>
                   <a
@@ -342,7 +322,7 @@ export const JobsView: React.FC<JobsViewProps> = ({
                     target="_blank"
                     rel="noreferrer"
                     className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center hover:bg-blue-100 transition-colors"
-                    title="View on Map"
+                    title={copy.viewMap}
                   >
                     <MapPin className="w-3.5 h-3.5" />
                   </a>
@@ -357,7 +337,7 @@ export const JobsView: React.FC<JobsViewProps> = ({
                       key={idx}
                       className="text-[11px] bg-gray-100 text-gray-600 font-semibold px-2.5 py-0.5 rounded-full"
                     >
-                      🏷️ {st}
+                      🏷️ {localizeDisplayValue(st, currentLanguage)}
                     </span>
                   ))}
                 </div>
@@ -365,7 +345,7 @@ export const JobsView: React.FC<JobsViewProps> = ({
 
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-gray-100">
                 <p className="text-xs text-gray-500">
-                  Lifecycle: <span className="font-extrabold text-gray-800">{JOB_STATE_LABEL[job.status]}</span>
+                  {copy.lifecycle}: <span className="font-extrabold text-gray-800">{copy.state[job.status]}</span>
                 </p>
                 {nextState && (
                   <button
@@ -375,13 +355,13 @@ export const JobsView: React.FC<JobsViewProps> = ({
                     className="inline-flex items-center justify-center gap-1.5 min-h-10 px-4 py-2 rounded-full bg-gray-900 text-white text-xs font-extrabold disabled:opacity-45 disabled:cursor-not-allowed active:scale-[0.98] transition"
                     title={
                       !onTransitionJob
-                        ? 'Enable API demo mode to use lifecycle controls.'
+                        ? copy.apiOnly
                         : syncState !== 'synced'
-                          ? 'Wait for this job to sync before changing its state.'
+                          ? copy.waitForSync
                           : undefined
                     }
                   >
-                    {isTransitioning ? 'Updating…' : NEXT_ACTION_LABEL[nextState]}
+                    {isTransitioning ? copy.updating : copy.action[nextState]}
                     {!isTransitioning && <ChevronRight className="w-3.5 h-3.5" aria-hidden="true" />}
                   </button>
                 )}
@@ -390,7 +370,7 @@ export const JobsView: React.FC<JobsViewProps> = ({
               {/* Renders nothing unless the job is COMPLETED or SETTLED. */}
               <SendReviewLink
                 job={job}
-                workerName={workerName}
+                workerName={displayWorkerName}
                 currentLanguage={currentLanguage}
               />
             </div>

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { GoogleGenAI } from '@google/genai';
 import type { AssistantFallbackReason } from '../../types';
+import { isLanguageSelectable } from '../../data/translations';
 import { requireAuth } from '../middleware/auth';
 import { rateLimit } from '../middleware/rateLimit';
 
@@ -83,6 +84,13 @@ assistantRouter.post('/process', requireAuth, assistantLimit, async (req: Reques
   }
   if (req.body.language !== undefined && typeof req.body.language !== 'string') {
     return res.status(400).json({ error: 'invalid_field', field: 'language', message: 'language must be a string.' });
+  }
+  if (!isLanguageSelectable(language)) {
+    return res.status(400).json({
+      error: 'language_unavailable',
+      field: 'language',
+      message: 'This language is coming soon. Please choose Hindi, Punjabi, or English.',
+    });
   }
   if (req.body.context !== undefined && typeof req.body.context !== 'string') {
     return res.status(400).json({ error: 'invalid_field', field: 'context', message: 'context must be a string.' });
@@ -226,6 +234,8 @@ function fallbackProcessVoiceInput(
   pending: any
 ) {
   const lower = input.toLowerCase().trim();
+  const reply = (english: string, hindi: string, punjabi: string) =>
+    lang === 'pa' ? punjabi : lang === 'hi' ? hindi : english;
 
   // 1. Onboarding Flow
   if (context === 'onboarding') {
@@ -259,9 +269,11 @@ function fallbackProcessVoiceInput(
       if (exp && updatedSkills.length > 0) {
         // Multi-sentence input processed!
         return {
-          replyText: lang === 'hi'
-            ? `${workerName} ji, maine ye details samjhi hain: ${trade}, ${exp} saal ka anubhav, aur ${updatedSkills.join(', ')}. Sab sahi hai?`
-            : `${workerName} ji, I captured: ${trade}, ${exp} years experience, and skills: ${updatedSkills.join(', ')}. Is everything correct?`,
+          replyText: reply(
+            `${workerName} ji, I captured: ${trade}, ${exp} years experience, and skills: ${updatedSkills.join(', ')}. Is everything correct?`,
+            `${workerName} ji, maine ye details samjhi hain: ${trade}, ${exp} saal ka anubhav, aur ${updatedSkills.join(', ')}. Sab sahi hai?`,
+            `${workerName} ਜੀ, ਮੈਂ ਇਹ ਵੇਰਵੇ ਸਮਝੇ ਹਨ: ${trade}, ${exp} ਸਾਲ ਦਾ ਤਜਰਬਾ ਅਤੇ ਹੁਨਰ: ${updatedSkills.join(', ')}। ਕੀ ਸਭ ਠੀਕ ਹੈ?`,
+          ),
           extractedData: {
             trade,
             experienceYears: exp,
@@ -275,9 +287,11 @@ function fallbackProcessVoiceInput(
       }
 
       return {
-        replyText: lang === 'hi'
-          ? `Aapko ${trade} ka kaam karte hue kitne saal ho gaye?`
-          : `How many years of experience do you have as an ${trade}?`,
+        replyText: reply(
+          `How many years of experience do you have as an ${trade}?`,
+          `Aapko ${trade} ka kaam karte hue kitne saal ho gaye?`,
+          `ਤੁਹਾਨੂੰ ${trade} ਦਾ ਕੰਮ ਕਰਦੇ ਕਿੰਨੇ ਸਾਲ ਹੋ ਗਏ ਹਨ?`,
+        ),
         extractedData: {
           trade,
         },
@@ -291,9 +305,11 @@ function fallbackProcessVoiceInput(
     if (step === 1 || (!pending.experienceYears && extractedYears)) {
       const exp = extractedYears || 18;
       return {
-        replyText: lang === 'hi'
-          ? `Aap kis tarah ka kaam sabse zyada karte hain? Jaise house wiring, fan, ya switchboard?`
-          : `What specific electrical or technical work do you do most often?`,
+        replyText: reply(
+          `What specific electrical or technical work do you do most often?`,
+          `Aap kis tarah ka kaam sabse zyada karte hain? Jaise house wiring, fan, ya switchboard?`,
+          `ਤੁਸੀਂ ਸਭ ਤੋਂ ਵੱਧ ਕਿਹੜਾ ਬਿਜਲੀ ਜਾਂ ਤਕਨੀਕੀ ਕੰਮ ਕਰਦੇ ਹੋ?`,
+        ),
         extractedData: {
           experienceYears: exp,
         },
@@ -307,9 +323,11 @@ function fallbackProcessVoiceInput(
     if (step === 2 || (skills.length > 0 && !pending.skills)) {
       const finalSkills = skills.length > 0 ? skills : ['House Wiring', 'Fan Installation', 'MCB & Switchboard Installation'];
       return {
-        replyText: lang === 'hi'
-          ? `${workerName} ji, aapke paas koi certificate ya ITI training hai?`
-          : `${workerName} ji, do you have any trade certificate or training?`,
+        replyText: reply(
+          `${workerName} ji, do you have any trade certificate or training?`,
+          `${workerName} ji, aapke paas koi certificate ya ITI training hai?`,
+          `${workerName} ਜੀ, ਕੀ ਤੁਹਾਡੇ ਕੋਲ ਕੋਈ ਟਰੇਡ ਸਰਟੀਫਿਕੇਟ ਜਾਂ ITI ਟ੍ਰੇਨਿੰਗ ਹੈ?`,
+        ),
         extractedData: {
           skills: finalSkills,
         },
@@ -326,9 +344,11 @@ function fallbackProcessVoiceInput(
     const skillList = pending.skills || ['House Wiring', 'Fan Installation', 'MCB & Switchboard Installation'];
 
     return {
-      replyText: lang === 'hi'
-        ? `${workerName} ji, maine ye details samjhi hain:\n• Kaam: ${trade}\n• Anubhav: ${exp} saal\n• Skills: ${skillList.join(', ')}\nSab sahi hai?`
-        : `${workerName} ji, I have noted these details:\n• Trade: ${trade}\n• Experience: ${exp} Years\n• Skills: ${skillList.join(', ')}\nIs everything correct?`,
+      replyText: reply(
+        `${workerName} ji, I have noted these details:\n• Trade: ${trade}\n• Experience: ${exp} years\n• Skills: ${skillList.join(', ')}\nIs everything correct?`,
+        `${workerName} ji, maine ye details samjhi hain:\n• Kaam: ${trade}\n• Anubhav: ${exp} saal\n• Skills: ${skillList.join(', ')}\nSab sahi hai?`,
+        `${workerName} ਜੀ, ਮੈਂ ਇਹ ਵੇਰਵੇ ਨੋਟ ਕੀਤੇ ਹਨ:\n• ਕੰਮ: ${trade}\n• ਤਜਰਬਾ: ${exp} ਸਾਲ\n• ਹੁਨਰ: ${skillList.join(', ')}\nਕੀ ਸਭ ਠੀਕ ਹੈ?`,
+      ),
       extractedData: {
         trade,
         experienceYears: exp,
@@ -384,9 +404,11 @@ function fallbackProcessVoiceInput(
     }
 
     return {
-      replyText: lang === 'hi'
-        ? `${workerName} ji, maine ye kaam samjha hai:\n• Kaam: ${title}\n• Customer: ${customerName}\n• Location: ${location}\n• Rashi: ₹${amount.toLocaleString('en-IN')}\nYe details sahi hain?`
-        : `${workerName} ji, I captured the job:\n• Work: ${title}\n• Customer: ${customerName}\n• Location: ${location}\n• Amount: ₹${amount.toLocaleString('en-IN')}\nAre these details correct?`,
+      replyText: reply(
+        `${workerName} ji, I captured the job:\n• Work: ${title}\n• Customer: ${customerName}\n• Location: ${location}\n• Amount: ₹${amount.toLocaleString('en-IN')}\nAre these details correct?`,
+        `${workerName} ji, maine ye kaam samjha hai:\n• Kaam: ${title}\n• Customer: ${customerName}\n• Location: ${location}\n• Rashi: ₹${amount.toLocaleString('en-IN')}\nYe details sahi hain?`,
+        `${workerName} ਜੀ, ਮੈਂ ਇਹ ਕੰਮ ਸਮਝਿਆ ਹੈ:\n• ਕੰਮ: ${title}\n• ਗਾਹਕ: ${customerName}\n• ਥਾਂ: ${location}\n• ਰਕਮ: ₹${amount.toLocaleString('en-IN')}\nਕੀ ਇਹ ਵੇਰਵੇ ਠੀਕ ਹਨ?`,
+      ),
       extractedData: {
         job: {
           title,
@@ -428,9 +450,11 @@ function fallbackProcessVoiceInput(
     }
 
     return {
-      replyText: lang === 'hi'
-        ? `Aaj ki kul kamai ₹${total.toLocaleString('en-IN')} samajh li gayi hai (${entries.map(e => `₹${e.amount}`).join(' + ')}). Kamai ledger mein add kar dein?`
-        : `Total today's earnings calculated as ₹${total.toLocaleString('en-IN')} (${entries.map(e => `₹${e.amount}`).join(' + ')}). Confirm to add to ledger?`,
+      replyText: reply(
+        `Total today's earnings calculated as ₹${total.toLocaleString('en-IN')} (${entries.map(e => `₹${e.amount}`).join(' + ')}). Confirm to add to ledger?`,
+        `Aaj ki kul kamai ₹${total.toLocaleString('en-IN')} samajh li gayi hai (${entries.map(e => `₹${e.amount}`).join(' + ')}). Kamai ledger mein add kar dein?`,
+        `ਅੱਜ ਦੀ ਕੁੱਲ ਕਮਾਈ ₹${total.toLocaleString('en-IN')} ਸਮਝ ਲਈ ਗਈ ਹੈ (${entries.map(e => `₹${e.amount}`).join(' + ')})। ਕਮਾਈ ਲੇਜਰ ਵਿੱਚ ਜੋੜ ਦਈਏ?`,
+      ),
       extractedData: {
         kamai: {
           total,
@@ -445,9 +469,11 @@ function fallbackProcessVoiceInput(
 
   // General fallback
   return {
-    replyText: lang === 'hi'
-      ? `Main Kaarigar Saathi hoon. Aap kya madad chahte hain?`
-      : `I am Kaarigar Saathi. How can I help you today?`,
+    replyText: reply(
+      `I am Kaarigar Saathi. How can I help you today?`,
+      `Main Kaarigar Saathi hoon. Aap kya madad chahte hain?`,
+      `ਮੈਂ ਕਾਰੀਗਰ ਸਾਥੀ ਹਾਂ। ਮੈਂ ਅੱਜ ਤੁਹਾਡੀ ਕਿਵੇਂ ਮਦਦ ਕਰ ਸਕਦਾ ਹਾਂ?`,
+    ),
     extractedData: {},
     isComplete: false,
     requiresConfirmation: false,
