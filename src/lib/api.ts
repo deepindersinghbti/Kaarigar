@@ -1,6 +1,44 @@
 import { authHeader } from './authToken';
 import type { JobItem, JobState, KamaiEntry, RateBand, WorkerProfile } from '../types';
 
+/**
+ * A kaarigar as the customer-facing directory sees them.
+ *
+ * Picked from WorkerProfile to mirror the server's PublicProfile, so the two
+ * cannot describe different shapes. NOT the privacy boundary - that is the
+ * projection in server/data/profiles.ts, which decides what actually leaves the
+ * database. This type only describes what arrives, and narrowing it here would
+ * hide fields rather than withhold them.
+ */
+export type PublicKaarigar = Pick<
+  WorkerProfile,
+  | 'passportHandle'
+  | 'name'
+  | 'trade'
+  | 'ncoCode'
+  | 'experienceYears'
+  | 'location'
+  | 'skills'
+  | 'certifications'
+  | 'rating'
+  | 'totalJobsCount'
+  | 'verifiedStatus'
+  | 'joinedDate'
+  | 'bio'
+>;
+
+/** What a customer fills in when asking a kaarigar for work. */
+export interface JobRequestInput {
+  /** Client-generated UUIDv7. The server is idempotent on it. */
+  id: string;
+  kaarigarHandle: string;
+  title: string;
+  customerName: string;
+  location: string;
+  amount: number;
+  notes?: string;
+}
+
 export interface PricingBandResult extends Partial<RateBand> {
   trade: string;
   taskCode: string;
@@ -199,6 +237,46 @@ export const api = {
       body: JSON.stringify(entry),
     });
     return body.entry;
+  },
+
+  /**
+   * The kaarigar directory a customer browses.
+   *
+   * Server-side this is the same projection that backs the public passport
+   * page, so nothing arrives that /p/:handle would not already show a stranger.
+   */
+  async listKaarigars(trade?: string): Promise<PublicKaarigar[]> {
+    const qs = trade ? `?trade=${encodeURIComponent(trade)}` : '';
+    const body = await request<{ kaarigars: PublicKaarigar[] }>(`/api/kaarigars${qs}`);
+    return body.kaarigars;
+  },
+
+  /**
+   * Ask a named kaarigar for work.
+   *
+   * SYNCHRONOUS ON PURPOSE, and deliberately not the outbox. The outbox exists
+   * because a worker recording their own completed job must never lose it to a
+   * missing network - the record is theirs and already true. A request to
+   * someone else is the opposite: it is not true until the server has it, and
+   * queueing one would tell a customer their request was sent when no kaarigar
+   * has been asked anything. A failure here is reported, not stored.
+   *
+   * The kaarigar is named by PASSPORT HANDLE. There is no user id in this
+   * payload because the directory never publishes one - the server resolves the
+   * handle to an owner itself.
+   */
+  async requestJob(input: JobRequestInput): Promise<JobItem> {
+    const body = await request<{ job: JobItem }>('/api/customer/jobs', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+    return body.job;
+  },
+
+  /** The caller's own requests, newest first. */
+  async listCustomerJobs(): Promise<JobItem[]> {
+    const body = await request<{ jobs: JobItem[] }>('/api/customer/jobs');
+    return body.jobs;
   },
 
   /** Download the server-generated append-only ledger statement. */

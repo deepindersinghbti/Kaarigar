@@ -33,17 +33,55 @@ export async function ensureJobIndexes() {
   const db = getDb();
   await db.collection(JOBS).createIndex({ kaarigarId: 1, date: -1 });
   await db.collection(JOBS).createIndex({ kaarigarId: 1, status: 1 });
+  // The customer side reads the same collection from the other end.
+  await db.collection(JOBS).createIndex({ customerId: 1, date: -1 });
   indexesReady = true;
+}
+
+/**
+ * Fields the SERVER decides, never the request body.
+ *
+ * Optional, and absent for the kaarigar path, so POST /api/jobs and
+ * /api/sync/batch call this function exactly as they did before.
+ */
+export interface CreateJobContext {
+  /**
+   * Who performed the creating transition, for stateHistory[0].by.
+   * Defaults to the owner - true when a kaarigar logs their own job, false
+   * when a customer requests one, and the history should not say otherwise.
+   */
+  actorId?: string;
+  /**
+   * The authenticated customer. Takes precedence over anything the body says,
+   * so a customer cannot file a request in someone else's name.
+   */
+  customerId?: string;
 }
 
 /**
  * Validate and insert one job, idempotently on the client-generated id.
  *
+ * THE ONLY WRITE PATH INTO `jobs`. Three callers - POST /api/jobs,
+ * POST /api/sync/batch and POST /api/customer/jobs - and one insertOne, which
+ * is below. A route cannot skip a rule here, because no route reaches the
+ * collection without coming through this function.
+ *
+ * That is what keeps the kaarigar and customer paths from drifting: they do not
+ * agree to run the same checks, they are physically incapable of running
+ * different ones. `kaarigarId` stays a PARAMETER rather than a body field for
+ * the same reason - each caller states the owner explicitly, and POST /api/jobs
+ * can go on passing req.user.uid while the customer route passes an id it
+ * resolved and verified itself.
+ *
  * Returns an outcome rather than throwing, because sync-svc needs to reject one
  * item and continue with the rest of the batch - an exception would take the
  * whole flush down and the user would lose a day's offline work.
  */
-export async function createJob(kaarigarId: string, input: unknown): Promise<CreateOutcome> {
+export async function createJob(
+  kaarigarId: string,
+  input: unknown,
+  context: CreateJobContext = {}
+): Promise<CreateOutcome> {
   const body = (input ?? {}) as Partial<JobItem>;
 
   const title = typeof body.title === 'string' ? body.title.trim() : '';
@@ -91,13 +129,16 @@ export async function createJob(kaarigarId: string, input: unknown): Promise<Cre
   // Creation is a trust boundary. Accepting COMPLETED here would let a client
   // manufacture verified-work evidence without traversing the state machine.
   const status: JobState = 'REQUESTED';
-  const stateHistory: JobStateTransition[] = [{ state: status, at: now, by: kaarigarId }];
+  const actorId = context.actorId ?? kaarigarId;
+  const stateHistory: JobStateTransition[] = [{ state: status, at: now, by: actorId }];
 
   const job: Omit<JobItem, 'id'> = {
     kaarigarId,
     title,
     customerName: typeof body.customerName === 'string' ? body.customerName : '',
-    customerId: typeof body.customerId === 'string' ? body.customerId : undefined,
+    // Server-supplied wins. On the customer path this is req.user.uid, so the
+    // body's customerId - if it sent one - is discarded rather than trusted.
+    customerId: context.customerId ?? (typeof body.customerId === 'string' ? body.customerId : undefined),
     customerPhone: typeof body.customerPhone === 'string' ? body.customerPhone : undefined,
     location: typeof body.location === 'string' ? body.location : '',
     amount,

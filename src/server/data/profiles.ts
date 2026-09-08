@@ -110,6 +110,38 @@ export async function findPublicProfileByHandle(handle: string): Promise<PublicP
 }
 
 /**
+ * Every passport, for the customer-facing browse list. Backs GET /api/kaarigars.
+ *
+ * SAME PUBLIC_PROJECTION AS findPublicProfileByHandle ABOVE - the identifier,
+ * not a copy of the field list. That is the whole reason this function lives
+ * here instead of in the route: a second list of field names in a second file
+ * is a privacy guarantee maintained in two places, and the failure mode is
+ * silent. Add a field to WorkerProfile and the passport page keeps hiding it
+ * while the directory starts publishing it, with nothing failing to say so.
+ *
+ * Returning PublicProfile[] means `phone`, `totalEarnings`, `dailyRate` and
+ * `bloodGroup` are not merely unrendered - they never leave the database, and
+ * the type will not let a caller reach for them.
+ *
+ * Sorted by rating, then name for a stable order under equal ratings. No
+ * pagination: the locked scope seeds six passports, and a limit/cursor pair
+ * that is never exercised is a code path that is never tested.
+ *
+ * `trade` is matched case-insensitively through a collation rather than a
+ * regex, so nothing from the query string is ever compiled as a pattern.
+ */
+export async function listPublicProfiles(trade?: string): Promise<PublicProfile[]> {
+  const filter = trade ? { trade } : {};
+  const docs = await getDb()
+    .collection(PROFILES)
+    .find(filter, { projection: PUBLIC_PROJECTION })
+    .collation({ locale: 'en', strength: 2 })
+    .sort({ rating: -1, name: 1 })
+    .toArray();
+  return docs as unknown as PublicProfile[];
+}
+
+/**
  * The display name for a user id, for surfaces that know the worker only as a
  * job's kaarigarId - the review form, which reaches the worker through a job
  * rather than through a handle.

@@ -27,7 +27,8 @@ import { TRANSLATIONS } from '../data/translations';
 import { getScreenCopy, localizeDisplayValue, localizeWorkerName } from '../data/uiCopy';
 import { todayIso } from '../utils/date';
 
-const JOB_BADGE_PRESENTATION: Record<JobBadge, { className: string }> = {
+/** Exported so the customer's request list badges a status identically. */
+export const JOB_BADGE_PRESENTATION: Record<JobBadge, { className: string }> = {
   scheduled: { className: 'text-blue-700 bg-blue-50 border-blue-200' },
   in_progress: { className: 'text-amber-700 bg-amber-50 border-amber-200' },
   completed: { className: 'text-green-700 bg-green-50 border-green-200' },

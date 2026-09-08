@@ -1,7 +1,8 @@
 import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
-import {BrowserRouter} from 'react-router-dom';
+import {BrowserRouter, Route, Routes} from 'react-router-dom';
 import App from './App.tsx';
+import {CustomerApp} from './components/customer/CustomerApp';
 import {AuthProvider} from './auth/AuthProvider';
 import {primePassportOrigin} from './lib/passportLink';
 import './index.css';
@@ -15,7 +16,21 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
       <AuthProvider>
-        <App />
+        {/*
+          The customer tree is a SIBLING of App, not a route inside it.
+
+          App loads the worker's dashboard the moment anyone authenticates, and
+          the first call it makes is GET /api/passport/me - which CREATES a
+          kaarigar passport if the caller has none. Mounting the customer
+          screens inside App would therefore mint a stub passport for every
+          customer who signed in, and each one would show up in the very browse
+          list they were using. Splitting here means App never mounts for a
+          customer and that load never runs.
+        */}
+        <Routes>
+          <Route path="/customer/*" element={<CustomerApp />} />
+          <Route path="/*" element={<App />} />
+        </Routes>
       </AuthProvider>
     </BrowserRouter>
   </StrictMode>,

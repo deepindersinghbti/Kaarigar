@@ -10,6 +10,7 @@ import { syncRouter } from './sync';
 import { pricingRouter } from './pricing';
 import { reputationRouter } from './reputation';
 import { publicRouter } from './public';
+import { kaarigarsRouter, customerRouter } from './customer';
 
 /**
  * The single mounting table for every route module.
@@ -41,6 +42,12 @@ export function registerRoutes(app: Express): void {
   app.use('/api/sync', syncRouter);             // A - sync-svc
   app.use('/api/pricing', pricingRouter);       // A - pricing-svc
   app.use('/api/reviews', reputationRouter);    // C - reputation-svc
+
+  // The customer side. Two mounts from one module because the paths name
+  // resources rather than a role: /api/kaarigars is the directory being
+  // browsed, /api/customer is the browser's own stuff.
+  app.use('/api/kaarigars', kaarigarsRouter);   // A - customer browse
+  app.use('/api/customer', customerRouter);     // A - customer requests
 
   // Any /api/* path that reached here matched no router above. Answer it
   // honestly with JSON.

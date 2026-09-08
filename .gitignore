@@ -18,3 +18,7 @@ coverage/
 /scripts/generate_probability_statistics_textbook.py
 /scripts/worksheet_question_texts.py
 /scripts/worksheet_solutions.py
+
+# Demo DB row backups. Contain refresh token families and phone numbers —
+# dumped by hand before destructive fixes, never meant to be committed.
+demo-db-backup-*.json
