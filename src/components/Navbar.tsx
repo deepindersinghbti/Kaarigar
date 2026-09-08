@@ -8,40 +8,48 @@ import {
   Mic,
   Globe,
   Sparkles,
+  LogOut,
 } from 'lucide-react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { SupportedLanguage } from '../types';
 import { TRANSLATIONS, SUPPORTED_LANGUAGES } from '../data/translations';
+import { useAuth } from '../auth/AuthProvider';
 
 const NAVBAR_COPY: Record<SupportedLanguage, {
   badge: string;
   tagline: string;
   companion: string;
+  signOut: string;
 }> = {
   en: {
     badge: 'AI friend',
     tagline: 'Your digital friend • Voice-first assistant',
     companion: 'Companion',
+    signOut: 'Sign out',
   },
   hi: {
     badge: 'AI दोस्त',
     tagline: 'आपका डिजिटल साथी • आवाज़ से काम',
     companion: 'साथी',
+    signOut: 'साइन आउट',
   },
   pa: {
     badge: 'AI ਦੋਸਤ',
     tagline: 'ਤੁਹਾਡਾ ਡਿਜੀਟਲ ਸਾਥੀ • ਆਵਾਜ਼ ਨਾਲ ਕੰਮ',
     companion: 'ਸਾਥੀ',
+    signOut: 'ਸਾਈਨ ਆਊਟ',
   },
   kn: {
     badge: 'AI ಸ್ನೇಹಿತ',
     tagline: 'ನಿಮ್ಮ ಡಿಜಿಟಲ್ ಸಂಗಾತಿ • ಧ್ವನಿ ಸಹಾಯಕ',
     companion: 'ಸಂಗಾತಿ',
+    signOut: 'ಸೈನ್ ಔಟ್',
   },
   mr: {
     badge: 'AI मित्र',
     tagline: 'तुमचा डिजिटल साथी • आवाजावर चालणारा सहाय्यक',
     companion: 'साथी',
+    signOut: 'साइन आउट',
   },
 };
 
@@ -57,6 +65,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenVoiceAssistant,
 }) => {
   const navigate = useNavigate();
+  const { signOut } = useAuth();
   const t = TRANSLATIONS[currentLanguage];
   const langObj = SUPPORTED_LANGUAGES.find((l) => l.code === currentLanguage);
   const navbarCopy = NAVBAR_COPY[currentLanguage];
@@ -119,6 +128,18 @@ export const Navbar: React.FC<NavbarProps> = ({
             >
               <Mic className="w-4 h-4 animate-pulse" />
               <span>{navbarCopy.companion}</span>
+            </button>
+
+            <button
+              id="header-sign-out-btn"
+              type="button"
+              onClick={signOut}
+              aria-label={navbarCopy.signOut}
+              title={navbarCopy.signOut}
+              className="flex items-center gap-1.5 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-full border border-gray-200 bg-white hover:bg-gray-100 text-gray-700 text-xs sm:text-sm font-extrabold transition-all active:scale-95"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>{navbarCopy.signOut}</span>
             </button>
           </div>
         </div>

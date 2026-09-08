@@ -36,6 +36,7 @@ import {
   INITIAL_PROFILE,
   INITIAL_JOBS,
   INITIAL_KAMAI,
+  addRameshPassportSkills,
 } from './data/initialData';
 import { isLanguageSelectable } from './data/translations';
 
@@ -77,14 +78,21 @@ export default function App() {
       const saved = localStorage.getItem('kaarigar_profile_v2');
       if (saved) {
         try {
-          return JSON.parse(saved);
+          return addRameshPassportSkills(JSON.parse(saved));
         } catch {
           // ignore
         }
       }
     }
-    return INITIAL_PROFILE;
+    return addRameshPassportSkills(INITIAL_PROFILE);
   });
+
+  // Older local demo sessions may have been saved before the electrician skill
+  // catalogue was added. Enrich only the seeded Ramesh profile, preserving any
+  // unrelated worker's actual declared skills.
+  useEffect(() => {
+    setProfile((current) => addRameshPassportSkills(current));
+  }, []);
 
   // State: Jobs List
   const [jobs, setJobs] = useState<JobItem[]>(() => {
