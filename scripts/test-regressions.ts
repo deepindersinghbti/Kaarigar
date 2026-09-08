@@ -375,7 +375,7 @@ async function main() {
     process.env.DEMO_OTP_PHONE = 'not-a-phone';
     check('off when the phone is unparseable', resolveDemoOtp() === null);
 
-    // -- scoped to exactly one number ------------------------------------
+    // -- scoped to exactly the configured numbers ------------------------
     process.env.DEMO_OTP_PHONE = '+919876543210';
     check('on when fully configured', resolveDemoOtp() !== null);
     check('accepts the demo number with the fixed code',
@@ -387,6 +387,46 @@ async function main() {
       demoOtpAccepts('+919876543210', '111111') === false);
     check('no length-prefix match',
       demoOtpAccepts('+919876543210', '4242') === false);
+
+    // -- a comma-separated list ------------------------------------------
+    //
+    // The worker and the customer both need the fixed code on stage, because
+    // OTP delivery is stubbed to the server log and reading Render's dashboard
+    // mid-demo is the dependency this whole module exists to remove.
+    process.env.DEMO_OTP_PHONE = '+919876543210,+919812345670';
+    check('list: both configured numbers are accepted',
+      demoOtpAccepts('+919876543210', '424242') === true &&
+      demoOtpAccepts('+919812345670', '424242') === true);
+    check('list: a third number is still rejected',
+      demoOtpAccepts('+919000000123', '424242') === false);
+    check('list: a configured number still rejects a wrong code',
+      demoOtpAccepts('+919812345670', '111111') === false);
+
+    // Whitespace around entries is operator convenience, not a second format.
+    process.env.DEMO_OTP_PHONE = ' +919876543210 , +919812345670 ';
+    check('list: entries are trimmed',
+      demoOtpAccepts('+919812345670', '424242') === true);
+
+    // A trailing comma is a typo that should not change the meaning.
+    process.env.DEMO_OTP_PHONE = '+919876543210,';
+    check('list: empty entries are dropped, not treated as malformed',
+      resolveDemoOtp() !== null && demoOtpAccepts('+919876543210', '424242') === true);
+
+    // ONE BAD ENTRY DISABLES THE WHOLE BYPASS. Dropping it instead would mean a
+    // typo silently removes one actor's login and nothing says so until stage.
+    process.env.DEMO_OTP_PHONE = '+919876543210,not-a-phone';
+    check('list: one malformed entry turns the whole bypass off',
+      resolveDemoOtp() === null);
+    check('list: malformed entry also revokes the good number',
+      demoOtpAccepts('+919876543210', '424242') === false);
+
+    // Over the cap is off, like every other malformed case.
+    process.env.DEMO_OTP_PHONE =
+      '+919876543210,+919812345670,+919000000001,+919000000002,+919000000003';
+    check('list: more than MAX_DEMO_PHONES turns the bypass off',
+      resolveDemoOtp() === null);
+
+    process.env.DEMO_OTP_PHONE = '+919876543210';
   } finally {
     for (const [k, v] of Object.entries({
       DEMO_OTP_ENABLED: savedEnv.enabled,

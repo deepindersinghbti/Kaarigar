@@ -5,6 +5,7 @@ import { requireAuth } from '../middleware/auth';
 import { uuidv7 } from '../../lib/ids';
 import type { WorkerProfile } from '../../types';
 import { calculateTrustEvidence } from '../data/trustScore';
+import { getProfileIdForUser } from '../data/profiles';
 
 /**
  * passport-svc - worker profile, credentials, portfolio.
@@ -84,6 +85,39 @@ async function allocateHandle(name: string): Promise<string> {
   }
   return `${base}-${Date.now().toString(36)}`;
 }
+
+/**
+ * GET /api/passport/exists
+ *
+ * Does this user already have a passport? Answers without making one.
+ *
+ * THAT IS THE ENTIRE POINT, and it is why this cannot be served by calling
+ * GET /api/passport/me and checking the result. /me CREATES a passport when the
+ * caller has none - correct for a worker opening their own app, catastrophic as
+ * an existence check, because asking the question would make the answer true.
+ * A customer would be issued a kaarigar passport named "Kaarigar" merely by
+ * signing in, and it would then appear in the browse list they were about to
+ * use.
+ *
+ * Reads through getProfileIdForUser, which projects to _id and creates nothing.
+ * Returns a boolean and no identifiers: the caller is deciding which screen to
+ * show, not reading a profile, so the profile id has no business in the
+ * response.
+ */
+passportRouter.get('/exists', requireAuth, async (req: Request, res: Response) => {
+  if (!dbGuard(res)) return;
+
+  try {
+    const profileId = await getProfileIdForUser(req.user!.uid);
+    return res.json({ hasPassport: profileId !== null });
+  } catch (err) {
+    console.error('[passport] GET /exists failed:', err);
+    return res.status(500).json({
+      error: 'passport_exists_failed',
+      message: 'Could not check for a passport.',
+    });
+  }
+});
 
 /**
  * GET /api/passport/me

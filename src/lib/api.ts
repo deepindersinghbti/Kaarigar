@@ -159,6 +159,18 @@ export const api = {
     return body.profile;
   },
 
+  /**
+   * Does this user have a passport yet?
+   *
+   * Deliberately NOT getProfile(). That endpoint creates a passport when there
+   * is none, so using it to decide whether someone is a kaarigar would make
+   * every customer into one on sign-in.
+   */
+  async hasPassport(): Promise<boolean> {
+    const body = await request<{ hasPassport: boolean }>('/api/passport/exists');
+    return body.hasPassport;
+  },
+
   async patchProfile(patch: Partial<WorkerProfile>): Promise<WorkerProfile> {
     const body = await request<{ profile: WorkerProfile }>('/api/passport/me', {
       method: 'PATCH',

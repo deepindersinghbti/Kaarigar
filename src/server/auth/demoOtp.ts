@@ -1,7 +1,7 @@
 import { timingSafeEqual } from 'crypto';
 
 /**
- * A fixed OTP for ONE seeded demo number, for the stage demo only.
+ * A fixed OTP for the seeded demo numbers, for the stage demo only.
  *
  * Owner: Track A. Server-side only.
  *
@@ -19,10 +19,11 @@ import { timingSafeEqual } from 'crypto';
  *    exact shape of the VITE_DEMO_TOKEN mistake and the prefix is the whole
  *    reason that one shipped a live credential to every visitor.
  *
- * 2. SCOPED TO ONE NUMBER. demoOtpAccepts() returns false for any phone that is
- *    not the configured one, before the submitted code is examined at all - so
- *    for every other number the code has no influence on the result or on how
- *    long the check takes.
+ * 2. SCOPED TO AN EXPLICIT LIST. demoOtpAccepts() returns false for any phone
+ *    that is not on the configured list, before the submitted code is examined
+ *    at all - so for every other number the code has no influence on the result
+ *    or on how long the check takes. The list is whatever DEMO_OTP_PHONE names
+ *    and nothing else; there is no pattern, prefix or wildcard form.
  *
  * 3. OFF UNLESS EXPLICITLY ENABLED. Three variables must all be present and
  *    well-formed. Absent, malformed, or DEMO_OTP_ENABLED set to anything other
@@ -39,8 +40,18 @@ import { timingSafeEqual } from 'crypto';
 const E164_IN = /^\+91\d{10}$/;
 const SIX_DIGITS = /^\d{6}$/;
 
+/**
+ * A ceiling on how many numbers one variable may enable.
+ *
+ * The demo has two actors; four is slack, not a policy. It exists so that a
+ * mangled value - a pasted column, a stray join - cannot quietly turn the
+ * bypass on for a crowd. Over the cap is off, like every other malformed case.
+ */
+const MAX_DEMO_PHONES = 4;
+
 export interface DemoOtpConfig {
-  phone: string;
+  /** Every number the fixed code is accepted for. Never empty. */
+  phones: string[];
   /** Never log, return, or interpolate this. Compare it and discard it. */
   code: string;
 }
@@ -57,25 +68,45 @@ export function resolveDemoOtp(): DemoOtpConfig | null {
     return null;
   }
 
-  const phone = String(process.env.DEMO_OTP_PHONE ?? '').trim();
+  /**
+   * One number, or several separated by commas.
+   *
+   * The VARIABLE IS UNCHANGED and so is render.yaml, which declares
+   * DEMO_OTP_PHONE as sync:false with no literal. A value containing no comma
+   * yields a one-element list, which is exactly the previous behaviour - so an
+   * existing deployment keeps working without anyone touching it first, and
+   * there is no window during a rollout where login is half-configured.
+   */
+  const phones = String(process.env.DEMO_OTP_PHONE ?? '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry !== '');
   const code = String(process.env.DEMO_OTP_CODE ?? '').trim();
 
   // Unparseable means off, not "off for this field". A half-valid config that
   // silently accepted some other number would be worse than no feature.
-  if (!E164_IN.test(phone)) return null;
+  //
+  // ALL-OR-NOTHING ACROSS THE LIST, for the same reason. One malformed entry
+  // disables the bypass entirely rather than being dropped from it: silently
+  // ignoring an entry turns a typo into "the demo account did not work on
+  // stage", discovered live, with nothing anywhere saying why.
+  if (phones.length === 0 || phones.length > MAX_DEMO_PHONES) return null;
+  if (!phones.every((entry) => E164_IN.test(entry))) return null;
   if (!SIX_DIGITS.test(code)) return null;
 
-  return { phone, code };
+  return { phones, code };
 }
 
 /**
  * Does the demo bypass accept this (phone, code) pair?
  *
- * ORDER IS DELIBERATE. The phone is compared first and returns immediately on a
- * mismatch, so a non-demo number never reaches the code comparison. That is
- * what makes "no behaviour change and no timing difference for any other
- * number" true rather than asserted: for those numbers the submitted code is
- * never read, so it cannot influence timing.
+ * ORDER IS DELIBERATE. The phone is matched first and returns immediately when
+ * it is not on the list, so a non-demo number never reaches the code
+ * comparison. That is what makes "no behaviour change and no timing difference
+ * for any other number" true rather than asserted: for those numbers the
+ * submitted code is never read, so it cannot influence timing. includes() over
+ * a list of at most MAX_DEMO_PHONES preserves that - the work it does depends
+ * on the configured list, never on the submitted code.
  *
  * The code comparison itself is constant-time. A byte-wise early return would
  * leak the code one character at a time to anyone who already knew the demo
@@ -84,7 +115,7 @@ export function resolveDemoOtp(): DemoOtpConfig | null {
 export function demoOtpAccepts(phone: string, submittedCode: string): boolean {
   const config = resolveDemoOtp();
   if (!config) return false;
-  if (phone !== config.phone) return false;
+  if (!config.phones.includes(phone)) return false;
 
   const expected = Buffer.from(config.code, 'utf8');
   const provided = Buffer.from(String(submittedCode ?? ''), 'utf8');
@@ -96,11 +127,11 @@ export function demoOtpAccepts(phone: string, submittedCode: string): boolean {
 /**
  * Whether the bypass is on, for startup logging.
  *
- * Returns a boolean and the PHONE only - never the code. The phone is already
- * visible to anyone who watches the demo; the code is the part that must not
- * leave this module.
+ * Returns a boolean and the PHONES only - never the code. The numbers are
+ * already visible to anyone who watches the demo; the code is the part that
+ * must not leave this module.
  */
-export function demoOtpStatus(): { enabled: boolean; phone?: string } {
+export function demoOtpStatus(): { enabled: boolean; phones?: string[] } {
   const config = resolveDemoOtp();
-  return config ? { enabled: true, phone: config.phone } : { enabled: false };
+  return config ? { enabled: true, phones: config.phones } : { enabled: false };
 }
