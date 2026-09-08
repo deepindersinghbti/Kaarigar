@@ -1,6 +1,26 @@
 import { WorkerProfile, JobItem, KamaiEntry } from '../types';
 import { daysAgoIso } from '../utils/date';
 
+export const RAMESH_ELECTRICIAN_PASSPORT_SKILLS = [
+  'Earthing Check',
+  'Ceiling Fan Installation',
+  'Fan Repair',
+  'Fault Diagnosis',
+  'Geyser Point',
+  'House Wiring Point',
+  'Inverter Installation',
+  'Light Fitting',
+  'MCB Replacement',
+  'Switchboard Installation',
+];
+
+/** Add the agreed skill catalogue when opening the seeded Ramesh demo. */
+export function addRameshPassportSkills(profile: WorkerProfile): WorkerProfile {
+  if (profile.passportHandle !== 'ramesh-kumar-chd') return profile;
+  const skills = [...new Set([...profile.skills, ...RAMESH_ELECTRICIAN_PASSPORT_SKILLS])];
+  return skills.length === profile.skills.length ? profile : { ...profile, skills };
+}
+
 /**
  * Seed dates are relative to today, never literals. Pinned dates made the
  * dashboard show one fixed day's data as "today" forever - which looks correct
@@ -16,13 +36,7 @@ export const INITIAL_PROFILE: WorkerProfile = {
   experienceYears: 18,
   location: 'Sector 35, Chandigarh',
   phone: '+91 98765 43210',
-  skills: [
-    'House Wiring',
-    'Fan Installation',
-    'MCB & Switchboard Installation',
-    'Inverter & Battery Wiring',
-    'Appliance Earthing & Safety',
-  ],
+  skills: RAMESH_ELECTRICIAN_PASSPORT_SKILLS,
   certifications: [
     'ITI Electrician National Trade Certificate (NTC)',
     'Pradhan Mantri Kaushal Vikas Yojana (PMKVY) Level 4',

@@ -1,8 +1,9 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { GoogleGenAI } from '@google/genai';
-import type { AssistantFallbackReason } from '../../types';
+import type { AssistantFallbackReason, SupportedLanguage } from '../../types';
 import { isLanguageSelectable } from '../../data/translations';
+import { localizeDisplayValue } from '../../data/uiCopy';
 import { requireAuth } from '../middleware/auth';
 import { rateLimit } from '../middleware/rateLimit';
 
@@ -124,6 +125,9 @@ Key rules:
 3. Extract structured data accurately from whatever the user said.
 4. Current context is "${context}", step: ${currentStep}.
 5. Return clean JSON matching the requested schema.
+6. replyText must stay entirely in the requested language. For Punjabi, use
+   Gurmukhi script and Punjabi sentences only; do not mix Hindi or English
+   sentence fragments. Structured extractedData must remain canonical English.
 
 Contexts:
 - 'onboarding': Collect trade, experience, main skills, certifications/training. When enough info is collected, summarize and set requiresConfirmation=true.
@@ -236,27 +240,33 @@ function fallbackProcessVoiceInput(
   const lower = input.toLowerCase().trim();
   const reply = (english: string, hindi: string, punjabi: string) =>
     lang === 'pa' ? punjabi : lang === 'hi' ? hindi : english;
+  const display = (value: string) =>
+    lang === 'hi' || lang === 'pa'
+      ? localizeDisplayValue(value, lang as SupportedLanguage)
+      : value;
 
-  // 1. Onboarding Flow
-  if (context === 'onboarding') {
+  // 1. Profile flow. Updating an existing profile uses the same extraction
+  // rules as onboarding, but the caller supplies existing details in
+  // `pending`, so a worker can change only what they mentioned.
+  if (context === 'onboarding' || context === 'update_profile') {
     // Check for all-in-one utterance
     // e.g. "Main pichle 18 saal se electrician ka kaam kar raha hoon. Ghar ki wiring karta hoon, pankhe lagata hoon aur MCB ka kaam bhi karta hoon."
-    const isElectrician = lower.includes('electrician') || lower.includes('इलेक्ट्रीशियन') || lower.includes('bijli') || lower.includes('बिजली');
+    const isElectrician = lower.includes('electrician') || lower.includes('इलेक्ट्रीशियन') || lower.includes('ਇਲੈਕਟ੍ਰੀਸ਼ੀਅਨ') || lower.includes('bijli') || lower.includes('बिजली');
     const isPlumber = lower.includes('plumber') || lower.includes('प्लंबर') || lower.includes('nal') || lower.includes('नल');
     const isCarpenter = lower.includes('carpenter') || lower.includes('बढ़ई') || lower.includes('lakdi') || lower.includes('wood');
 
-    const yearsMatch = lower.match(/(\d+)\s*(saal|years?|साल|वर्ष)/i) || lower.match(/(\d+)/);
+    const yearsMatch = lower.match(/(\d+)\s*(saal|years?|साल|ਵਰ੍ਹੇ?|ਸਾਲ|वर्ष)/i) || lower.match(/(\d+)/);
     const extractedYears = yearsMatch ? parseInt(yearsMatch[1], 10) : null;
 
     const skills: string[] = [];
-    if (lower.includes('wiring') || lower.includes('वायरिंग')) skills.push('House Wiring');
-    if (lower.includes('fan') || lower.includes('pankh') || lower.includes('पंखा') || lower.includes('पंखे')) skills.push('Fan Installation');
-    if (lower.includes('mcb') || lower.includes('switchboard') || lower.includes('स्विच') || lower.includes('बोर्ड')) skills.push('MCB & Switchboard Installation');
-    if (lower.includes('inverter') || lower.includes('इन्वर्टर')) skills.push('Inverter & Battery Wiring');
-    if (lower.includes('pipe') || lower.includes('fitting') || lower.includes('leakage')) skills.push('Pipe Fitting & Leakage Fix');
+    if (lower.includes('wiring') || lower.includes('वायरिंग') || lower.includes('ਵਾਇਰਿੰਗ')) skills.push('House Wiring');
+    if (lower.includes('fan') || lower.includes('pankh') || lower.includes('पंखा') || lower.includes('पंखे') || lower.includes('ਪੱਖਾ')) skills.push('Fan Installation');
+    if (lower.includes('mcb') || lower.includes('switchboard') || lower.includes('स्विच') || lower.includes('बोर्ड') || lower.includes('ਸਵਿੱਚਬੋਰਡ')) skills.push('MCB & Switchboard Installation');
+    if (lower.includes('inverter') || lower.includes('इन्वर्टर') || lower.includes('ਇਨਵਰਟਰ')) skills.push('Inverter & Battery Wiring');
+    if (lower.includes('pipe') || lower.includes('fitting') || lower.includes('leakage') || lower.includes('ਅਰਥਿੰਗ')) skills.push('Appliance Earthing & Safety');
 
     const certs: string[] = [];
-    if (lower.includes('iti') || lower.includes('certificate') || lower.includes('सर्टिफिकेट') || lower.includes('training') || lower.includes('ट्रेनिंग')) {
+    if (lower.includes('iti') || lower.includes('certificate') || lower.includes('सर्टिफिकेट') || lower.includes('training') || lower.includes('ट्रेनिंग') || lower.includes('ਸਰਟੀਫਿਕੇਟ') || lower.includes('ਟ੍ਰੇਨਿੰਗ')) {
       certs.push('ITI Certified National Trade Certificate');
     }
 
@@ -270,9 +280,9 @@ function fallbackProcessVoiceInput(
         // Multi-sentence input processed!
         return {
           replyText: reply(
-            `${workerName} ji, I captured: ${trade}, ${exp} years experience, and skills: ${updatedSkills.join(', ')}. Is everything correct?`,
-            `${workerName} ji, maine ye details samjhi hain: ${trade}, ${exp} saal ka anubhav, aur ${updatedSkills.join(', ')}. Sab sahi hai?`,
-            `${workerName} ਜੀ, ਮੈਂ ਇਹ ਵੇਰਵੇ ਸਮਝੇ ਹਨ: ${trade}, ${exp} ਸਾਲ ਦਾ ਤਜਰਬਾ ਅਤੇ ਹੁਨਰ: ${updatedSkills.join(', ')}। ਕੀ ਸਭ ਠੀਕ ਹੈ?`,
+            `${workerName} ji, I captured: ${display(trade)}, ${exp} years experience, and skills: ${updatedSkills.map(display).join(', ')}. Is everything correct?`,
+            `${workerName} ji, maine ye details samjhi hain: ${display(trade)}, ${exp} saal ka anubhav, aur ${updatedSkills.map(display).join(', ')}. Sab sahi hai?`,
+            `${workerName} ਜੀ, ਮੈਂ ਇਹ ਵੇਰਵੇ ਸਮਝੇ ਹਨ: ${display(trade)}, ${exp} ਸਾਲ ਦਾ ਤਜਰਬਾ ਅਤੇ ਹੁਨਰ: ${updatedSkills.map(display).join(', ')}। ਕੀ ਸਭ ਠੀਕ ਹੈ?`,
           ),
           extractedData: {
             trade,
@@ -288,9 +298,9 @@ function fallbackProcessVoiceInput(
 
       return {
         replyText: reply(
-          `How many years of experience do you have as an ${trade}?`,
-          `Aapko ${trade} ka kaam karte hue kitne saal ho gaye?`,
-          `ਤੁਹਾਨੂੰ ${trade} ਦਾ ਕੰਮ ਕਰਦੇ ਕਿੰਨੇ ਸਾਲ ਹੋ ਗਏ ਹਨ?`,
+          `How many years of experience do you have as an ${display(trade)}?`,
+          `Aapko ${display(trade)} ka kaam karte hue kitne saal ho gaye?`,
+          `ਤੁਹਾਨੂੰ ${display(trade)} ਦਾ ਕੰਮ ਕਰਦੇ ਕਿੰਨੇ ਸਾਲ ਹੋ ਗਏ ਹਨ?`,
         ),
         extractedData: {
           trade,
@@ -345,9 +355,9 @@ function fallbackProcessVoiceInput(
 
     return {
       replyText: reply(
-        `${workerName} ji, I have noted these details:\n• Trade: ${trade}\n• Experience: ${exp} years\n• Skills: ${skillList.join(', ')}\nIs everything correct?`,
-        `${workerName} ji, maine ye details samjhi hain:\n• Kaam: ${trade}\n• Anubhav: ${exp} saal\n• Skills: ${skillList.join(', ')}\nSab sahi hai?`,
-        `${workerName} ਜੀ, ਮੈਂ ਇਹ ਵੇਰਵੇ ਨੋਟ ਕੀਤੇ ਹਨ:\n• ਕੰਮ: ${trade}\n• ਤਜਰਬਾ: ${exp} ਸਾਲ\n• ਹੁਨਰ: ${skillList.join(', ')}\nਕੀ ਸਭ ਠੀਕ ਹੈ?`,
+        `${workerName} ji, I have noted these details:\n• Trade: ${display(trade)}\n• Experience: ${exp} years\n• Skills: ${skillList.map(display).join(', ')}\nIs everything correct?`,
+        `${workerName} ji, maine ye details samjhi hain:\n• Kaam: ${display(trade)}\n• Anubhav: ${exp} saal\n• Skills: ${skillList.map(display).join(', ')}\nSab sahi hai?`,
+        `${workerName} ਜੀ, ਮੈਂ ਇਹ ਵੇਰਵੇ ਨੋਟ ਕੀਤੇ ਹਨ:\n• ਕੰਮ: ${display(trade)}\n• ਤਜਰਬਾ: ${exp} ਸਾਲ\n• ਹੁਨਰ: ${skillList.map(display).join(', ')}\nਕੀ ਸਭ ਠੀਕ ਹੈ?`,
       ),
       extractedData: {
         trade,
@@ -407,7 +417,7 @@ function fallbackProcessVoiceInput(
       replyText: reply(
         `${workerName} ji, I captured the job:\n• Work: ${title}\n• Customer: ${customerName}\n• Location: ${location}\n• Amount: ₹${amount.toLocaleString('en-IN')}\nAre these details correct?`,
         `${workerName} ji, maine ye kaam samjha hai:\n• Kaam: ${title}\n• Customer: ${customerName}\n• Location: ${location}\n• Rashi: ₹${amount.toLocaleString('en-IN')}\nYe details sahi hain?`,
-        `${workerName} ਜੀ, ਮੈਂ ਇਹ ਕੰਮ ਸਮਝਿਆ ਹੈ:\n• ਕੰਮ: ${title}\n• ਗਾਹਕ: ${customerName}\n• ਥਾਂ: ${location}\n• ਰਕਮ: ₹${amount.toLocaleString('en-IN')}\nਕੀ ਇਹ ਵੇਰਵੇ ਠੀਕ ਹਨ?`,
+        `${workerName} ਜੀ, ਮੈਂ ਇਹ ਕੰਮ ਸਮਝਿਆ ਹੈ:\n• ਕੰਮ: ${display(title)}\n• ਗਾਹਕ: ${display(customerName)}\n• ਥਾਂ: ${display(location)}\n• ਰਕਮ: ₹${amount.toLocaleString('en-IN')}\nਕੀ ਇਹ ਵੇਰਵੇ ਠੀਕ ਹਨ?`,
       ),
       extractedData: {
         job: {

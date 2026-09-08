@@ -36,6 +36,8 @@ import {
   sfx,
   isSpeechRecognitionSupported,
 } from '../utils/speech';
+import { getVoiceCopy, voiceErrorMessage } from '../data/voiceCopy';
+import type { SpeechStatus } from '../utils/speech';
 import { uuidv7 } from '../lib/ids';
 import { todayIso } from '../utils/date';
 import { authHeader } from '../lib/authToken';
@@ -90,6 +92,14 @@ const ASSISTANT_HEADER_COPY: Record<SupportedLanguage, {
   },
 };
 
+const PROFILE_UPDATE_PROMPT: Record<SupportedLanguage, (name: string) => string> = {
+  en: (name) => `${name}, tell me what you would like to update in your profile.`,
+  hi: (name) => `${name} जी, अपनी प्रोफाइल में जो बदलना है, वह बताइए।`,
+  pa: (name) => `${name} ਜੀ, ਆਪਣੀ ਪ੍ਰੋਫਾਈਲ ਵਿੱਚ ਜੋ ਬਦਲਣਾ ਹੈ ਉਹ ਦੱਸੋ।`,
+  kn: (name) => `${name}, ನಿಮ್ಮ ಪ್ರೊಫೈಲ್‌ನಲ್ಲಿ ಏನು ಬದಲಾಯಿಸಬೇಕೆಂದು ತಿಳಿಸಿ.`,
+  mr: (name) => `${name} जी, तुमच्या प्रोफाइलमध्ये काय बदलायचे आहे ते सांगा.`,
+};
+
 interface VoiceAssistantModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -118,7 +128,9 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
   const t = TRANSLATIONS[currentLanguage];
   const copy = getScreenCopy(currentLanguage).assistant;
   const displayWorkerName = localizeWorkerName(workerProfile.name, currentLanguage);
+  const voiceCopy = getVoiceCopy(currentLanguage);
   const headerCopy = ASSISTANT_HEADER_COPY[currentLanguage];
+  const isProfileContext = context === 'onboarding' || context === 'update_profile';
   const contextLabel = context === 'onboarding'
     ? headerCopy.onboarding
     : context === 'add_job'
@@ -154,6 +166,8 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
     };
 
   const [isListening, setIsListening] = useState(false);
+  const [voiceStatus, setVoiceStatus] = useState<SpeechStatus>('idle');
+  const [voiceError, setVoiceError] = useState('');
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [interimText, setInterimText] = useState('');
@@ -181,18 +195,45 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
 
   const recognizerRef = useRef<VoiceRecognizer | null>(null);
   const lastSpokenMessageRef = useRef<string>('');
+  const pressToTalkRef = useRef(false);
+  const holdInputRef = useRef<string | null>(null);
+  const requestBusyRef = useRef(false);
+  const pendingSubmissionRef = useRef(false);
+  const finalTranscriptRef = useRef('');
 
+  const cancelHold = () => {
+    if (!holdInputRef.current) return;
+    holdInputRef.current = null;
+    pressToTalkRef.current = false;
+    pendingSubmissionRef.current = false;
+    recognizerRef.current?.cancel();
+    setIsListening(false);
+    setInterimText('');
+    setVoiceError('cancelled');
+  };
+
+  // Losing the window/focus cancels capture; it must never submit a partial job.
   // Initialize Speech Recognizer
   useEffect(() => {
     recognizerRef.current = new VoiceRecognizer();
     return () => {
+      holdInputRef.current = null;
+      pressToTalkRef.current = false;
+      pendingSubmissionRef.current = false;
       stopSpeaking();
-      if (recognizerRef.current) recognizerRef.current.stop();
+      recognizerRef.current?.cancel();
     };
   }, []);
 
   // Initialize flow when modal opens
   useEffect(() => {
+    holdInputRef.current = null;
+    pressToTalkRef.current = false;
+    pendingSubmissionRef.current = false;
+    recognizerRef.current?.cancel();
+    setIsListening(false);
+    setVoiceStatus('idle');
+    setVoiceError('');
     if (isOpen) {
       setCurrentStep(0);
       setTranscript('');
@@ -202,14 +243,16 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
       setShowManualEdit(false);
 
       let initialPrompt = '';
-      if (context === 'onboarding') {
-        initialPrompt = t.onboardingQuestions.welcome(displayWorkerName);
+      if (isProfileContext) {
+        initialPrompt = context === 'update_profile'
+          ? PROFILE_UPDATE_PROMPT[currentLanguage](displayWorkerName)
+          : t.onboardingQuestions.welcome(displayWorkerName);
         setDraftProfile({
           name: workerProfile.name || 'Ramesh Kumar',
-          trade: '',
-          experienceYears: 0,
-          skills: [],
-          certifications: [],
+          trade: context === 'update_profile' ? workerProfile.trade || '' : '',
+          experienceYears: context === 'update_profile' ? workerProfile.experienceYears || 0 : 0,
+          skills: context === 'update_profile' ? workerProfile.skills || [] : [],
+          certifications: context === 'update_profile' ? workerProfile.certifications || [] : [],
         });
       } else if (context === 'add_job') {
         initialPrompt = t.jobQuestions.prompt;
@@ -231,51 +274,77 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
       });
     } else {
       stopSpeaking();
-      if (recognizerRef.current) recognizerRef.current.stop();
+      recognizerRef.current?.cancel();
+      pressToTalkRef.current = false;
+      pendingSubmissionRef.current = false;
+      finalTranscriptRef.current = '';
       setIsListening(false);
       setIsSpeaking(false);
     }
   }, [isOpen, context, currentLanguage]);
 
-  // Handle start/stop listening
-  const toggleListening = () => {
-    if (isListening) {
-      if (recognizerRef.current) recognizerRef.current.stop();
-      setIsListening(false);
-    } else {
-      stopSpeaking();
-      setIsSpeaking(false);
-      setInterimText('');
+  const submitCapturedText = () => {
+    if (!pendingSubmissionRef.current) return;
+    pendingSubmissionRef.current = false;
+    const capturedText = finalTranscriptRef.current.trim();
+    if (capturedText) void processUserInput(capturedText);
+    else setVoiceError('empty');
+  };
 
-      if (!isSpeechRecognitionSupported()) {
-        // Speech recognition not directly supported in this browser, provide friendly guidance
-        alert(
-          copy.unsupportedSpeech
-        );
-        return;
-      }
-
-      recognizerRef.current?.start({
-        language: currentLanguage,
-        onStart: () => setIsListening(true),
-        onEnd: () => setIsListening(false),
-        onInterimResult: (text) => setInterimText(text),
-        onFinalResult: (finalText) => {
-          setIsListening(false);
-          setTranscript(finalText);
-          processUserInput(finalText);
-        },
-        onError: (err) => {
-          console.warn('Recognition error:', err);
-          setIsListening(false);
-        },
-      });
+  const startListening = (input: string) => {
+    if (holdInputRef.current || pendingSubmissionRef.current || requestBusyRef.current) return;
+    stopSpeaking();
+    setIsSpeaking(false);
+    setVoiceError('');
+    setTranscript('');
+    setInterimText('');
+    finalTranscriptRef.current = '';
+    if (!isSpeechRecognitionSupported()) {
+      setVoiceError('unsupported');
+      return;
     }
+    holdInputRef.current = input;
+    pressToTalkRef.current = true;
+    recognizerRef.current?.start({
+      language: currentLanguage,
+      onStatus: (status) => {
+        setVoiceStatus(status);
+        setIsListening(status === 'listening');
+      },
+      onInterimResult: setInterimText,
+      onFinalResult: (text) => {
+        finalTranscriptRef.current = [finalTranscriptRef.current, text].filter(Boolean).join(' ');
+        setTranscript(finalTranscriptRef.current);
+      },
+      onComplete: () => {
+        setInterimText('');
+        submitCapturedText();
+      },
+      onError: ({ error }) => {
+        holdInputRef.current = null;
+        pressToTalkRef.current = false;
+        pendingSubmissionRef.current = false;
+        setIsListening(false);
+        setVoiceStatus('idle');
+        setInterimText('');
+        setVoiceError(error);
+      },
+    });
+  };
+
+  const finishListening = (input: string) => {
+    if (holdInputRef.current !== input) return;
+    holdInputRef.current = null;
+    pressToTalkRef.current = false;
+    pendingSubmissionRef.current = true;
+    setIsListening(false);
+    recognizerRef.current?.stop();
   };
 
   // Process text through Backend (Gemini API / Fallback)
   const processUserInput = async (inputText: string) => {
-    if (!inputText.trim()) return;
+    if (!inputText.trim() || requestBusyRef.current || holdInputRef.current || pendingSubmissionRef.current) return;
+    requestBusyRef.current = true;
     setIsProcessing(true);
     stopSpeaking();
 
@@ -291,7 +360,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
           language: currentLanguage,
           context,
           currentStep,
-          workerName: workerProfile.name || 'Ramesh',
+          workerName: displayWorkerName || 'Ramesh',
           pendingData: {
             ...draftProfile,
             job: draftJob,
@@ -301,9 +370,15 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
       });
 
       const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.message || data?.error || `Assistant request failed (${response.status})`);
+      }
+      if (!data?.replyText) {
+        throw new Error('Assistant returned no reply text');
+      }
 
       if (data.extractedData) {
-        if (context === 'onboarding') {
+        if (isProfileContext) {
           setDraftProfile((prev) => ({
             ...prev,
             trade: data.extractedData.trade || prev.trade,
@@ -338,7 +413,9 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
       }
     } catch (error) {
       console.error('Error processing speech:', error);
+      setVoiceError('assistant');
     } finally {
+      requestBusyRef.current = false;
       setIsProcessing(false);
     }
   };
@@ -364,7 +441,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
   const handleConfirm = () => {
     sfx.playSuccessChime();
 
-    if (context === 'onboarding') {
+    if (isProfileContext) {
       const updated: WorkerProfile = {
         ...workerProfile,
         trade: draftProfile.trade || copy.defaultTrade,
@@ -649,9 +726,14 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
               </div>
 
               <div className="text-orange-800 font-bold uppercase tracking-widest text-xs">
-                {isListening ? t.listening : copy.idleListening}
+                {voiceStatus === 'idle' ? copy.idleListening : voiceCopy[voiceStatus]}
               </div>
 
+              {voiceError && (
+                <p id="voice-error" role="alert" className="text-sm text-red-800 bg-red-50 border border-red-200 rounded-xl p-3">
+                  {voiceErrorMessage(voiceError, currentLanguage)} <span className="font-mono">({voiceError})</span>
+                </p>
+              )}
               {/* Huge Pulsing Mic Button */}
               <div className="relative">
                 {isListening && (
@@ -670,13 +752,43 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
 
                 <button
                   id="primary-mic-button"
-                  onClick={toggleListening}
+                  type="button"
+                  onPointerDown={(event) => {
+                    if (!event.isPrimary || event.button !== 0) return;
+                    event.preventDefault();
+                    event.currentTarget.setPointerCapture(event.pointerId);
+                    startListening('pointer-' + event.pointerId);
+                  }}
+                  onPointerUp={(event) => {
+                    event.preventDefault();
+                    finishListening('pointer-' + event.pointerId);
+                    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                      event.currentTarget.releasePointerCapture(event.pointerId);
+                    }
+                  }}
+                  onPointerCancel={cancelHold}
+                  onContextMenu={(event) => event.preventDefault()}
+                  onKeyDown={(event) => {
+                    if (event.key === ' ' || event.key === 'Enter') {
+                      event.preventDefault();
+                      if (!event.repeat) startListening('key-' + event.key);
+                    }
+                  }}
+                  onKeyUp={(event) => {
+                    if (event.key === ' ' || event.key === 'Enter') {
+                      event.preventDefault();
+                      finishListening('key-' + event.key);
+                    }
+                  }}
+                  disabled={isProcessing || voiceStatus === 'finishing'}
+                  style={{ touchAction: 'none', userSelect: 'none' }}
                   className={`relative z-10 w-28 h-28 sm:w-32 sm:h-32 rounded-full flex flex-col items-center justify-center text-white shadow-2xl transition-all duration-300 transform active:scale-95 border-8 border-white ${
                     isListening
                       ? 'bg-gradient-to-tr from-red-500 to-rose-600 shadow-rose-300 scale-105'
                       : 'bg-orange-500 hover:bg-orange-600 shadow-orange-300 hover:scale-105'
                   }`}
-                  aria-label={isListening ? copy.stopListening : copy.startListening}
+                  aria-label={isListening ? voiceCopy.release : voiceCopy.hold}
+                  aria-pressed={isListening}
                 >
                   <Mic
                     className={`w-10 h-10 sm:w-12 sm:h-12 ${
@@ -684,7 +796,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
                     }`}
                   />
                   <span className="text-[11px] font-extrabold uppercase tracking-wider mt-1">
-                    {isListening ? t.listening : t.speak}
+                    {isListening ? voiceCopy.release : voiceCopy.hold}
                   </span>
                 </button>
               </div>
@@ -694,7 +806,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
                   "{interimText || transcript || copy.transcriptPlaceholder}"
                 </p>
                 <span className="text-xs text-orange-600 font-bold mt-1 block">
-                  {isListening ? copy.listeningHint : copy.speakHint}
+                  {isListening ? voiceCopy.listening : copy.speakHint}
                 </span>
               </div>
             </div>
@@ -711,7 +823,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
                   <span>{copy.extractedDetails}</span>
                 </div>
 
-                {context === 'onboarding' && (
+                {isProfileContext && (
                   <div className="grid grid-cols-2 gap-4 pt-2">
                     <div>
                       <span className="text-xs font-bold text-gray-400 uppercase tracking-widest block">
