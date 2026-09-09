@@ -2,6 +2,7 @@ import type { Express } from 'express';
 
 import { healthRouter } from './health';
 import { assistantRouter } from './assistant';
+import { ttsRouter } from './tts';
 import { identityRouter } from './identity';
 import { passportRouter } from './passport';
 import { jobsRouter } from './jobs';
@@ -35,6 +36,7 @@ export function registerRoutes(app: Express): void {
 
   // Tier 3 service boundaries (Architecture section 5)
   app.use('/api/assistant', assistantRouter);   // A - voice processing
+  app.use('/api/tts', ttsRouter);               // A - voice output
   app.use('/api/auth', identityRouter);         // A - identity-svc
   app.use('/api/passport', passportRouter);     // A - passport-svc
   app.use('/api/jobs', jobsRouter);             // A - jobs-svc

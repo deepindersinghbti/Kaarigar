@@ -37,6 +37,7 @@ import {
   isSpeechRecognitionSupported,
 } from '../utils/speech';
 import { getVoiceCopy, voiceErrorMessage } from '../data/voiceCopy';
+import { getDemoPrompts } from '../data/demoPrompts';
 import type { SpeechStatus } from '../utils/speech';
 import { uuidv7 } from '../lib/ids';
 import { todayIso } from '../utils/date';
@@ -138,32 +139,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
       : context === 'add_kamai'
         ? headerCopy.addKamai
         : headerCopy.defaultContext;
-  const demoPrompts = currentLanguage === 'en'
-    ? {
-      trade: 'I am an electrician.',
-      experience: '18 years.',
-      skills: 'House wiring, fan installation and switchboard work.',
-      allInOne: 'I have been an electrician for 18 years. I do house wiring, fan installation and MCB work.',
-      fan: 'Installed a fan in Sector 35. Customer Neha Sharma. Received 1100 rupees.',
-      mcb: 'Changed Rajesh Gupta’s MCB in Sector 22 for 1500 rupees.',
-    }
-    : currentLanguage === 'pa'
-      ? {
-        trade: 'ਮੈਂ ਇਲੈਕਟ੍ਰੀਸ਼ੀਅਨ ਹਾਂ।',
-        experience: '18 ਸਾਲ।',
-        skills: 'ਘਰ ਦੀ ਵਾਇਰਿੰਗ, ਪੱਖੇ ਲਗਾਉਣਾ ਅਤੇ ਸਵਿੱਚਬੋਰਡ ਦਾ ਕੰਮ।',
-        allInOne: 'ਮੈਂ ਪਿਛਲੇ 18 ਸਾਲਾਂ ਤੋਂ ਇਲੈਕਟ੍ਰੀਸ਼ੀਅਨ ਦਾ ਕੰਮ ਕਰ ਰਿਹਾ ਹਾਂ। ਮੈਂ ਘਰ ਦੀ ਵਾਇਰਿੰਗ, ਪੱਖੇ ਅਤੇ MCB ਦਾ ਕੰਮ ਕਰਦਾ ਹਾਂ।',
-        fan: 'ਸੈਕਟਰ 35 ਵਿੱਚ ਪੱਖਾ ਲਗਾਇਆ। ਗਾਹਕ ਨੇਹਾ ਸ਼ਰਮਾ। 1100 ਰੁਪਏ ਮਿਲੇ।',
-        mcb: 'ਸੈਕਟਰ 22 ਵਿੱਚ ਰਾਜੇਸ਼ ਗੁਪਤਾ ਦਾ MCB ਬਦਲਿਆ, 1500 ਰੁਪਏ।',
-      }
-    : {
-      trade: 'Main electrician hoon.',
-      experience: '18 saal.',
-      skills: 'Ghar ki wiring, pankhe lagana aur switchboard ka kaam.',
-      allInOne: 'Main pichle 18 saal se electrician ka kaam kar raha hoon. Ghar ki wiring karta hoon, pankhe lagata hoon aur MCB ka kaam bhi karta hoon.',
-      fan: 'Sector 35 mein fan lagaya. Customer Neha Sharma. 1100 rupaye mile.',
-      mcb: 'Sector 22 mein Rajesh Gupta ka MCB change kiya, 1500 rupaye.',
-    };
+  const demoPrompts = getDemoPrompts(currentLanguage);
 
   const [isListening, setIsListening] = useState(false);
   const [voiceStatus, setVoiceStatus] = useState<SpeechStatus>('idle');
@@ -1084,15 +1060,13 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
                     <button
                       id="demo-kamai-twojobs"
                       onClick={() =>
-                        handleQuickDemoClick(
-                          'Aj do kaam kiye. Pehla 1500 ka aur doosra 1200 ka.'
-                        )
+                        handleQuickDemoClick(demoPrompts.twoJobs)
                       }
                       className="p-3 rounded-2xl bg-gray-50 hover:bg-orange-50 text-gray-800 text-xs font-bold text-left border border-gray-200 hover:border-orange-200 transition-colors flex items-center gap-2 sm:col-span-2"
                     >
                       <span>🗣️</span>
                       <span>
-                        "Aj do kaam kiye. Pehla 1500 ka aur doosra 1200 ka."
+                        "{demoPrompts.twoJobs}"
                       </span>
                     </button>
                   </>
