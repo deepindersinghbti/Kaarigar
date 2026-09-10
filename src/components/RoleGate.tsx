@@ -1,144 +1,106 @@
 import React, { useEffect, useState } from 'react';
-import { Navigate } from 'react-router-dom';
-import { Hammer, Search } from 'lucide-react';
+import { ArrowLeft, Globe, Hammer, Search } from 'lucide-react';
 import { useAuth } from '../auth/AuthProvider';
-import { api, ApiError } from '../lib/api';
+import { isLanguageSelectable, SUPPORTED_LANGUAGES } from '../data/translations';
+import type { SupportedLanguage } from '../types';
+import { LanguageSelectorModal } from './LanguageSelectorModal';
+import { LoginScreen } from './LoginScreen';
 
-/**
- * Decides, once, whether a signed-in user sees the worker app or the customer
- * app - and asks them when the answer is not already on record.
- *
- * THE SIGNAL IS AN EXISTING PASSPORT, NOT isNewUser. `isNewUser` is false for
- * every seeded account, including both demo accounts, because the seed writes
- * the users document before anyone signs in. Hanging role selection off it
- * would mean the chooser never appears in the demo it exists for.
- *
- * A passport is the real evidence: only a kaarigar has one, nothing creates one
- * by accident, and it survives new devices and reinstalls because it lives in
- * the database rather than in this browser.
- *
- * The check is GET /api/passport/exists, which answers without creating. It
- * cannot be getProfile() - that endpoint mints a passport when the caller has
- * none, so asking "is this person a kaarigar?" would make the answer yes.
- */
+const COPY = {
+  en: {
+    heading: 'Who are you?', subtitle: 'Choose how you want to use Kaarigar.',
+    worker: 'I am a Kaarigar', workerHint: 'Manage your work and earnings',
+    customer: 'I need a Kaarigar', soon: 'Coming soon',
+    language: 'Change language', back: 'Back to role selection',
+  },
+  hi: {
+    heading: 'आप कौन हैं?', subtitle: 'चुनें कि आप कारीगर का उपयोग कैसे करना चाहते हैं।',
+    worker: 'मैं कारीगर हूँ', workerHint: 'अपना काम और कमाई दर्ज करें',
+    customer: 'मुझे कारीगर चाहिए', soon: 'जल्द आ रहा है',
+    language: 'भाषा बदलें', back: 'भूमिका चयन पर वापस जाएँ',
+  },
+  pa: {
+    heading: 'ਤੁਸੀਂ ਕੌਣ ਹੋ?', subtitle: 'ਚੁਣੋ ਕਿ ਤੁਸੀਂ ਕਾਰੀਗਰ ਦੀ ਵਰਤੋਂ ਕਿਵੇਂ ਕਰਨਾ ਚਾਹੁੰਦੇ ਹੋ।',
+    worker: 'ਮੈਂ ਕਾਰੀਗਰ ਹਾਂ', workerHint: 'ਆਪਣਾ ਕੰਮ ਅਤੇ ਕਮਾਈ ਦਰਜ ਕਰੋ',
+    customer: 'ਮੈਨੂੰ ਕਾਰੀਗਰ ਚਾਹੀਦਾ ਹੈ', soon: 'ਜਲਦੀ ਆ ਰਿਹਾ ਹੈ',
+    language: 'ਭਾਸ਼ਾ ਬਦਲੋ', back: 'ਭੂਮਿਕਾ ਚੋਣ ਉੱਤੇ ਵਾਪਸ ਜਾਓ',
+  },
+};
 
-/** Per-account, so two people sharing a device do not inherit each other's choice. */
-const choiceKey = (uid: string) => `kaarigar_role_${uid}`;
+function savedLanguage(): SupportedLanguage {
+  const saved = localStorage.getItem('kaarigar_lang') as SupportedLanguage | null;
+  return saved && isLanguageSelectable(saved) ? saved : 'hi';
+}
 
-type Decision = 'checking' | 'kaarigar' | 'customer' | 'ask' | 'error';
-
+/** Entry choice precedes authentication; all existing worker routes stay intact. */
 export const RoleGate: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { status, user } = useAuth();
-  const [decision, setDecision] = useState<Decision>('checking');
-  const [error, setError] = useState('');
+  const { status } = useAuth();
+  const [workerSelected, setWorkerSelected] = useState(false);
+  const [language, setLanguage] = useState<SupportedLanguage>(savedLanguage);
+  const [languageOpen, setLanguageOpen] = useState(false);
 
   useEffect(() => {
-    // Unauthenticated is not this component's business: App renders the login
-    // screen, and asking someone to pick a role before they have signed in
-    // would put a choice in front of a person we cannot yet record it for.
-    if (status !== 'authenticated' || !user) return;
-
-    let cancelled = false;
-    setDecision('checking');
-
-    (async () => {
-      try {
-        if (await api.hasPassport()) {
-          // A passport outranks a stored choice. Someone who has actually
-          // onboarded as a kaarigar is a kaarigar, whatever this device
-          // remembers.
-          if (!cancelled) setDecision('kaarigar');
-          return;
-        }
-
-        const stored = localStorage.getItem(choiceKey(user.uid));
-        if (!cancelled) setDecision(stored === 'customer' ? 'customer' : 'ask');
-      } catch (e) {
-        if (cancelled) return;
-        // A 401 has already signed the user out inside the API client.
-        if (e instanceof ApiError && e.status === 401) return;
-        setError(e instanceof Error ? e.message : 'Could not load your account.');
-        setDecision('error');
-      }
-    })();
-
-    return () => { cancelled = true; };
-  }, [status, user]);
+    // Reset the entry step once signed in, ready for the next sign-out.
+    if (status === 'authenticated') setWorkerSelected(false);
+    // App may have changed language before signing out.
+    if (status === 'unauthenticated') setLanguage(savedLanguage());
+    setLanguageOpen(false);
+  }, [status]);
 
   if (status === 'loading') return <div className="min-h-screen bg-[#F3F4F6]" />;
+  if (status === 'authenticated') return <>{children}</>;
 
-  // Signed out: straight through to App, which owns the login screen. The gate
-  // adds no step to signing in.
-  if (status !== 'authenticated') return <>{children}</>;
-
-  if (decision === 'checking') {
-    return (
-      <div className="min-h-screen bg-[#F3F4F6] flex flex-col items-center justify-center gap-3">
-        <div className="w-12 h-12 rounded-2xl bg-orange-500 animate-pulse" />
-        <p className="text-sm font-bold text-gray-500">लोड हो रहा है…</p>
-      </div>
-    );
-  }
-
-  /**
-   * The check failed. Fall through to the worker app rather than trapping the
-   * user on an error screen: that is where an existing worker was going, and a
-   * customer can still reach /customer. A network blip must not lock anyone out
-   * of an app that already works offline.
-   */
-  if (decision === 'error') {
-    return (
-      <>
-        <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 text-center text-sm font-bold text-amber-800">
-          {error}
-        </div>
-        {children}
-      </>
-    );
-  }
-
-  if (decision === 'customer') return <Navigate to="/customer" replace />;
-  if (decision === 'kaarigar') return <>{children}</>;
-
-  const choose = (role: 'kaarigar' | 'customer') => {
-    if (!user) return;
-    localStorage.setItem(choiceKey(user.uid), role);
-    // 'kaarigar' does not navigate anywhere: App is already the child, and its
-    // own first load calls getProfile(), which creates the passport. From the
-    // next sign-in onward that passport answers this question server-side and
-    // the stored choice stops mattering.
-    setDecision(role);
-  };
-
-  const card =
-    'flex-1 bg-white rounded-3xl border border-gray-200 p-6 flex flex-col items-center gap-3 active:scale-[0.98] transition';
+  const copy = COPY[language as keyof typeof COPY] ?? COPY.hi;
+  const languageName = SUPPORTED_LANGUAGES.find((item) => item.code === language)?.nativeName;
 
   return (
-    <div className="min-h-screen bg-[#F3F4F6] flex flex-col items-center justify-center px-6">
-      <div className="w-full max-w-md">
-        <p className="text-xl font-extrabold text-gray-900 text-center mb-1.5">आप कौन हैं?</p>
-        <p className="text-sm text-gray-500 text-center mb-6">
-          यह एक बार पूछा जाएगा।
-        </p>
-
-        <div className="flex flex-col sm:flex-row gap-3">
-          <button type="button" onClick={() => choose('kaarigar')} className={card}>
-            <div className="w-14 h-14 rounded-2xl bg-orange-100 text-orange-600 flex items-center justify-center">
-              <Hammer className="w-7 h-7" />
+    <>
+      {workerSelected ? (
+        <>
+          <div className="bg-[#F3F4F6] px-4 pt-4">
+            <button type="button" onClick={() => setWorkerSelected(false)}
+              className="inline-flex min-h-12 items-center gap-2 rounded-full border border-gray-200 bg-white px-4 text-sm font-bold text-gray-700 focus-visible:outline-2 focus-visible:outline-orange-500">
+              <ArrowLeft className="h-4 w-4" aria-hidden="true" />{copy.back}
+            </button>
+          </div>
+          <LoginScreen currentLanguage={language} onChangeLanguage={() => setLanguageOpen(true)} />
+        </>
+      ) : (
+        <div lang={language} className="relative flex min-h-dvh flex-col bg-[#F3F4F6] text-gray-900">
+          <header className="flex justify-end px-4 py-4 sm:px-8 sm:py-6">
+            <button id="entry-language-button" type="button" onClick={() => setLanguageOpen(true)} aria-label={copy.language}
+              className="inline-flex min-h-12 items-center gap-2 rounded-full border border-gray-200 bg-white px-5 text-sm font-bold text-gray-700 shadow-sm hover:border-orange-300 focus-visible:outline-2 focus-visible:outline-orange-500">
+              <Globe className="h-5 w-5 text-orange-500" aria-hidden="true" />{languageName}
+            </button>
+          </header>
+          <main className="flex flex-1 items-center justify-center px-5 pb-24">
+            <div className="w-full max-w-md">
+              <h1 className="mb-2 text-center text-xl font-extrabold">{copy.heading}</h1>
+              <p className="mb-6 text-center text-sm text-gray-500">{copy.subtitle}</p>
+              <div className="grid grid-cols-1 gap-3 min-[380px]:grid-cols-2">
+                <button id="entry-kaarigar-button" type="button" onClick={() => setWorkerSelected(true)}
+                  className="flex flex-col items-center gap-3 rounded-3xl border border-gray-200 bg-white px-4 py-6 transition hover:border-orange-400 hover:shadow-md focus-visible:outline-2 focus-visible:outline-orange-500 active:scale-[0.98]">
+                  <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-orange-100 text-orange-600"><Hammer className="h-7 w-7" aria-hidden="true" /></span>
+                  <span className="font-extrabold">{copy.worker}</span>
+                  <span className="text-center text-xs text-gray-500">{copy.workerHint}</span>
+                </button>
+                <button id="entry-customer-button" type="button" disabled
+                  className="flex cursor-not-allowed flex-col items-center gap-3 rounded-3xl border border-gray-200 bg-white px-4 py-6">
+                  <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-orange-100 text-orange-600"><Search className="h-7 w-7" aria-hidden="true" /></span>
+                  <span className="font-extrabold">{copy.customer}</span>
+                  <span className="rounded-full bg-gray-100 px-3 py-1 text-center text-xs font-semibold text-gray-500">{copy.soon}</span>
+                </button>
+              </div>
             </div>
-            <p className="font-extrabold text-gray-900">मैं कारीगर हूँ</p>
-            <p className="text-xs text-gray-500 text-center">अपना काम और कमाई दर्ज करें</p>
-          </button>
-
-          <button type="button" onClick={() => choose('customer')} className={card}>
-            <div className="w-14 h-14 rounded-2xl bg-orange-100 text-orange-600 flex items-center justify-center">
-              <Search className="w-7 h-7" />
-            </div>
-            <p className="font-extrabold text-gray-900">मुझे कारीगर चाहिए</p>
-            <p className="text-xs text-gray-500 text-center">काम के लिए अनुरोध भेजें</p>
-          </button>
+          </main>
         </div>
-      </div>
-    </div>
+      )}
+      <LanguageSelectorModal isOpen={languageOpen} onClose={() => setLanguageOpen(false)} currentLanguage={language}
+        onSelectLanguage={(next) => {
+          if (!isLanguageSelectable(next)) return;
+          localStorage.setItem('kaarigar_lang', next);
+          setLanguage(next);
+        }} />
+    </>
   );
 };
