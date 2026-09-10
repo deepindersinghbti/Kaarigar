@@ -29,10 +29,22 @@ const RUPEES: Record<string, string> = {
  * own docs say so: "For numbers larger than 4 digits, use commas (e.g. '10,000'
  * instead of '10000')".
  *
- * Indian rather than Western grouping because every target language here is
- * Indian and these are rupee amounts - a worker hears "ek lakh pachaas hazaar",
- * not "one hundred fifty thousand". If a provider ever mis-parses this format,
- * this function is the single place to switch it back.
+ * CHECKED WITH A NATIVE PUNJABI SPEAKER (2026-09-09), against synthesised
+ * clips of these exact strings:
+ *
+ *   - "10,000" beat a bare "10000". The comma earns its place; do not remove it.
+ *   - Indian "1,50,000" and Western "150,000" were INDISTINGUISHABLE to the
+ *     listener. An earlier version of this comment claimed Indian grouping was
+ *     needed so a worker would hear "ek lakh pachaas hazaar" - that turned out
+ *     to be wrong, and it is recorded here so nobody re-derives it. Indian
+ *     grouping is kept only because it is the correct written form for these
+ *     amounts and costs nothing, NOT because it changes the speech.
+ *   - Four-digit amounts, which this function leaves alone, were read
+ *     correctly. 1500 is the most common amount in the app, so the >4 digit
+ *     threshold is deliberate and tested, not an arbitrary cutoff.
+ *
+ * If a provider ever mis-parses this format, this function is the single place
+ * to switch it back.
  */
 function groupIndian(digits: string): string {
   if (digits.length <= 3) return digits;

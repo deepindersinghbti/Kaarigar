@@ -32,6 +32,7 @@ import { getScreenCopy, localizeWorkerName } from '../data/uiCopy';
 import {
   VoiceRecognizer,
   speakText,
+  prefetchSpeech,
   stopSpeaking,
   sfx,
   isSpeechRecognitionSupported,
@@ -144,6 +145,10 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
   const [isListening, setIsListening] = useState(false);
   const [voiceStatus, setVoiceStatus] = useState<SpeechStatus>('idle');
   const [voiceError, setVoiceError] = useState('');
+  // Separate from voiceError on purpose. This is the readable-but-silent
+  // state: the message is on screen and complete, only the audio is missing.
+  // voiceError is styled role=alert in red, which over-escalates that.
+  const [voiceNotice, setVoiceNotice] = useState('');
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [interimText, setInterimText] = useState('');
@@ -210,6 +215,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
     setIsListening(false);
     setVoiceStatus('idle');
     setVoiceError('');
+    setVoiceNotice('');
     if (isOpen) {
       setCurrentStep(0);
       setTranscript('');
@@ -247,7 +253,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
       setIsSpeaking(true);
       speakText(initialPrompt, currentLanguage, () => {
         setIsSpeaking(false);
-      });
+      }, () => setVoiceNotice(voiceCopy.voiceUnavailable));
     } else {
       stopSpeaking();
       recognizerRef.current?.cancel();
@@ -272,6 +278,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
     stopSpeaking();
     setIsSpeaking(false);
     setVoiceError('');
+    setVoiceNotice('');
     setTranscript('');
     setInterimText('');
     finalTranscriptRef.current = '';
@@ -377,11 +384,20 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
         setIsSpeaking(true);
         speakText(data.replyText, currentLanguage, () => {
           setIsSpeaking(false);
-        });
+        }, () => setVoiceNotice(voiceCopy.voiceUnavailable));
       }
 
       if (data.requiresConfirmation) {
         setRequiresConfirmation(true);
+        // Warm the next thing this worker is most likely to hear while they are
+        // still listening to the reply above. Once confirmation is on screen
+        // the only two ways forward are "Yes, correct" and "Change something",
+        // and the latter always speaks this exact line - a static string, so it
+        // lands in the shared cache and every later worker gets it free.
+        //
+        // Deliberately not awaited and never surfaced: a failed prefetch just
+        // means the real call synthesises as normal.
+        prefetchSpeech(t.whatToChange, currentLanguage);
       }
 
       if (typeof data.nextStep === 'number') {
@@ -402,7 +418,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
       setIsSpeaking(true);
       speakText(assistantMessage, currentLanguage, () => {
         setIsSpeaking(false);
-      });
+      }, () => setVoiceNotice(voiceCopy.voiceUnavailable));
     }
   };
 
@@ -450,7 +466,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
       setIsSpeaking(true);
       speakText(passportAnnouncement, currentLanguage, () => {
         setIsSpeaking(false);
-      });
+      }, () => setVoiceNotice(voiceCopy.voiceUnavailable));
     } else if (context === 'add_job') {
       const newJob: JobItem = {
         id: uuidv7(),
@@ -519,7 +535,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
     setIsSpeaking(true);
     speakText(askChange, currentLanguage, () => {
       setIsSpeaking(false);
-    });
+    }, () => setVoiceNotice(voiceCopy.voiceUnavailable));
   };
 
   if (!isOpen) return null;
@@ -708,6 +724,11 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
               {voiceError && (
                 <p id="voice-error" role="alert" className="text-sm text-red-800 bg-red-50 border border-red-200 rounded-xl p-3">
                   {voiceErrorMessage(voiceError, currentLanguage)} <span className="font-mono">({voiceError})</span>
+                </p>
+              )}
+              {!voiceError && voiceNotice && (
+                <p id="voice-notice" role="status" className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-xl p-3">
+                  {voiceNotice}
                 </p>
               )}
               {/* Huge Pulsing Mic Button */}
