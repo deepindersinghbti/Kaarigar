@@ -37,6 +37,7 @@ healthRouter.get('/', (req: Request, res: Response) => {
      */
     publicOrigin: resolveOrigin(req),
     hasGeminiKey: !!process.env.GEMINI_API_KEY,
+    hasTtsKey: !!process.env.SARVAM_API_KEY,
     db: {
       connected: isDbConnected(),
       // A category, not the driver string. This endpoint is unauthenticated and

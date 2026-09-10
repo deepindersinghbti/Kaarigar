@@ -12,6 +12,11 @@ const en = {
   cancelled: 'Recording cancelled. Hold the microphone again to retry.',
   failed: 'Speech recognition stopped unexpectedly. Try again or use Type / edit.',
   assistant: 'Kaarigar Saathi could not process that message. Please try again or use Type / edit.',
+  // Shown when speech could not be produced but the message is on screen and
+  // perfectly readable. Deliberately NOT a voiceError: that is styled
+  // role="alert" in red, which over-escalates a state where nothing is lost
+  // except the audio.
+  voiceUnavailable: 'Voice is unavailable right now. The message above is written out in full.',
 };
 const hi: typeof en = {
   hold: 'दबाकर बोलें', release: 'भेजने के लिए छोड़ें',
@@ -25,6 +30,7 @@ const hi: typeof en = {
   cancelled: 'रिकॉर्डिंग रद्द हुई। फिर कोशिश करने के लिए माइक दबाकर रखें।',
   failed: 'आवाज़ पहचान अचानक रुक गई। फिर कोशिश करें या टाइप / बदलें का उपयोग करें।',
   assistant: 'कारीगर साथी आपकी बात समझ नहीं पाया। फिर कोशिश करें या टाइप / बदलें का उपयोग करें।',
+  voiceUnavailable: 'अभी आवाज़ उपलब्ध नहीं है। ऊपर लिखा संदेश पूरा पढ़ सकते हैं।',
 };
 const pa: typeof en = {
   hold: 'ਦਬਾ ਕੇ ਬੋਲੋ', release: 'ਭੇਜਣ ਲਈ ਛੱਡੋ',
@@ -38,6 +44,7 @@ const pa: typeof en = {
   cancelled: 'ਰਿਕਾਰਡਿੰਗ ਰੱਦ ਹੋਈ। ਮੁੜ ਕੋਸ਼ਿਸ਼ ਕਰਨ ਲਈ ਮਾਈਕ ਦਬਾ ਕੇ ਰੱਖੋ।',
   failed: 'ਆਵਾਜ਼ ਪਛਾਣ ਅਚਾਨਕ ਰੁਕ ਗਈ। ਮੁੜ ਕੋਸ਼ਿਸ਼ ਕਰੋ ਜਾਂ ਲਿਖੋ / ਬਦਲੋ ਵਰਤੋ।',
   assistant: 'ਕਾਰੀਗਰ ਸਾਥੀ ਤੁਹਾਡੀ ਗੱਲ ਸਮਝ ਨਹੀਂ ਸਕਿਆ। ਮੁੜ ਕੋਸ਼ਿਸ਼ ਕਰੋ ਜਾਂ ਲਿਖੋ / ਬਦਲੋ ਵਰਤੋ।',
+  voiceUnavailable: 'ਹੁਣੇ ਆਵਾਜ਼ ਉਪਲਬਧ ਨਹੀਂ ਹੈ। ਉੱਪਰ ਲਿਖਿਆ ਸੁਨੇਹਾ ਪੂਰਾ ਪੜ੍ਹ ਸਕਦੇ ਹੋ।',
 };
 export const getVoiceCopy = (language: SupportedLanguage) =>
   language === 'pa' ? pa : language === 'hi' ? hi : en;

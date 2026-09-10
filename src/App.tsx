@@ -18,6 +18,7 @@ import { LoginScreen } from './components/LoginScreen';
 import { useAuth } from './auth/AuthProvider';
 import { api, ApiError } from './lib/api';
 import { useApiForDomain, anyDomainOnApi } from './lib/dataSource';
+import { installAudioUnlock } from './utils/audioUnlock';
 import { enqueue } from './lib/outbox';
 import { uuidv7 } from './lib/ids';
 import { useOutbox } from './hooks/useOutbox';
@@ -86,6 +87,20 @@ export default function App() {
     }
     return addRameshPassportSkills(INITIAL_PROFILE);
   });
+
+  /**
+   * Bless the shared <audio> element on the first tap anywhere in the app.
+   *
+   * HERE, at app mount, and not when the voice modal opens. On iOS the unlock
+   * play() has to run inside a gesture's own call stack; by the time the modal
+   * has mounted, the tap that opened it is already spent, the element is never
+   * blessed, and every later play() rejects silently. The symptom is that
+   * Punjabi simply never speaks on that device, with nothing in the console.
+   *
+   * Desktop browsers do not enforce this at all, so a regression here cannot
+   * be caught by "npm run dev" - only on a real phone.
+   */
+  useEffect(() => installAudioUnlock(), []);
 
   // Older local demo sessions may have been saved before the electrician skill
   // catalogue was added. Enrich only the seeded Ramesh profile, preserving any

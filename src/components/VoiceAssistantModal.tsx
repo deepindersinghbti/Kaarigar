@@ -32,11 +32,13 @@ import { getScreenCopy, localizeWorkerName } from '../data/uiCopy';
 import {
   VoiceRecognizer,
   speakText,
+  prefetchSpeech,
   stopSpeaking,
   sfx,
   isSpeechRecognitionSupported,
 } from '../utils/speech';
 import { getVoiceCopy, voiceErrorMessage } from '../data/voiceCopy';
+import { getDemoPrompts } from '../data/demoPrompts';
 import type { SpeechStatus } from '../utils/speech';
 import { uuidv7 } from '../lib/ids';
 import { todayIso } from '../utils/date';
@@ -138,36 +140,15 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
       : context === 'add_kamai'
         ? headerCopy.addKamai
         : headerCopy.defaultContext;
-  const demoPrompts = currentLanguage === 'en'
-    ? {
-      trade: 'I am an electrician.',
-      experience: '18 years.',
-      skills: 'House wiring, fan installation and switchboard work.',
-      allInOne: 'I have been an electrician for 18 years. I do house wiring, fan installation and MCB work.',
-      fan: 'Installed a fan in Sector 35. Customer Neha Sharma. Received 1100 rupees.',
-      mcb: 'Changed Rajesh Gupta’s MCB in Sector 22 for 1500 rupees.',
-    }
-    : currentLanguage === 'pa'
-      ? {
-        trade: 'ਮੈਂ ਇਲੈਕਟ੍ਰੀਸ਼ੀਅਨ ਹਾਂ।',
-        experience: '18 ਸਾਲ।',
-        skills: 'ਘਰ ਦੀ ਵਾਇਰਿੰਗ, ਪੱਖੇ ਲਗਾਉਣਾ ਅਤੇ ਸਵਿੱਚਬੋਰਡ ਦਾ ਕੰਮ।',
-        allInOne: 'ਮੈਂ ਪਿਛਲੇ 18 ਸਾਲਾਂ ਤੋਂ ਇਲੈਕਟ੍ਰੀਸ਼ੀਅਨ ਦਾ ਕੰਮ ਕਰ ਰਿਹਾ ਹਾਂ। ਮੈਂ ਘਰ ਦੀ ਵਾਇਰਿੰਗ, ਪੱਖੇ ਅਤੇ MCB ਦਾ ਕੰਮ ਕਰਦਾ ਹਾਂ।',
-        fan: 'ਸੈਕਟਰ 35 ਵਿੱਚ ਪੱਖਾ ਲਗਾਇਆ। ਗਾਹਕ ਨੇਹਾ ਸ਼ਰਮਾ। 1100 ਰੁਪਏ ਮਿਲੇ।',
-        mcb: 'ਸੈਕਟਰ 22 ਵਿੱਚ ਰਾਜੇਸ਼ ਗੁਪਤਾ ਦਾ MCB ਬਦਲਿਆ, 1500 ਰੁਪਏ।',
-      }
-    : {
-      trade: 'Main electrician hoon.',
-      experience: '18 saal.',
-      skills: 'Ghar ki wiring, pankhe lagana aur switchboard ka kaam.',
-      allInOne: 'Main pichle 18 saal se electrician ka kaam kar raha hoon. Ghar ki wiring karta hoon, pankhe lagata hoon aur MCB ka kaam bhi karta hoon.',
-      fan: 'Sector 35 mein fan lagaya. Customer Neha Sharma. 1100 rupaye mile.',
-      mcb: 'Sector 22 mein Rajesh Gupta ka MCB change kiya, 1500 rupaye.',
-    };
+  const demoPrompts = getDemoPrompts(currentLanguage);
 
   const [isListening, setIsListening] = useState(false);
   const [voiceStatus, setVoiceStatus] = useState<SpeechStatus>('idle');
   const [voiceError, setVoiceError] = useState('');
+  // Separate from voiceError on purpose. This is the readable-but-silent
+  // state: the message is on screen and complete, only the audio is missing.
+  // voiceError is styled role=alert in red, which over-escalates that.
+  const [voiceNotice, setVoiceNotice] = useState('');
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [interimText, setInterimText] = useState('');
@@ -234,6 +215,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
     setIsListening(false);
     setVoiceStatus('idle');
     setVoiceError('');
+    setVoiceNotice('');
     if (isOpen) {
       setCurrentStep(0);
       setTranscript('');
@@ -271,7 +253,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
       setIsSpeaking(true);
       speakText(initialPrompt, currentLanguage, () => {
         setIsSpeaking(false);
-      });
+      }, () => setVoiceNotice(voiceCopy.voiceUnavailable));
     } else {
       stopSpeaking();
       recognizerRef.current?.cancel();
@@ -296,6 +278,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
     stopSpeaking();
     setIsSpeaking(false);
     setVoiceError('');
+    setVoiceNotice('');
     setTranscript('');
     setInterimText('');
     finalTranscriptRef.current = '';
@@ -401,11 +384,20 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
         setIsSpeaking(true);
         speakText(data.replyText, currentLanguage, () => {
           setIsSpeaking(false);
-        });
+        }, () => setVoiceNotice(voiceCopy.voiceUnavailable));
       }
 
       if (data.requiresConfirmation) {
         setRequiresConfirmation(true);
+        // Warm the next thing this worker is most likely to hear while they are
+        // still listening to the reply above. Once confirmation is on screen
+        // the only two ways forward are "Yes, correct" and "Change something",
+        // and the latter always speaks this exact line - a static string, so it
+        // lands in the shared cache and every later worker gets it free.
+        //
+        // Deliberately not awaited and never surfaced: a failed prefetch just
+        // means the real call synthesises as normal.
+        prefetchSpeech(t.whatToChange, currentLanguage);
       }
 
       if (typeof data.nextStep === 'number') {
@@ -426,7 +418,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
       setIsSpeaking(true);
       speakText(assistantMessage, currentLanguage, () => {
         setIsSpeaking(false);
-      });
+      }, () => setVoiceNotice(voiceCopy.voiceUnavailable));
     }
   };
 
@@ -474,7 +466,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
       setIsSpeaking(true);
       speakText(passportAnnouncement, currentLanguage, () => {
         setIsSpeaking(false);
-      });
+      }, () => setVoiceNotice(voiceCopy.voiceUnavailable));
     } else if (context === 'add_job') {
       const newJob: JobItem = {
         id: uuidv7(),
@@ -543,7 +535,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
     setIsSpeaking(true);
     speakText(askChange, currentLanguage, () => {
       setIsSpeaking(false);
-    });
+    }, () => setVoiceNotice(voiceCopy.voiceUnavailable));
   };
 
   if (!isOpen) return null;
@@ -732,6 +724,11 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
               {voiceError && (
                 <p id="voice-error" role="alert" className="text-sm text-red-800 bg-red-50 border border-red-200 rounded-xl p-3">
                   {voiceErrorMessage(voiceError, currentLanguage)} <span className="font-mono">({voiceError})</span>
+                </p>
+              )}
+              {!voiceError && voiceNotice && (
+                <p id="voice-notice" role="status" className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-xl p-3">
+                  {voiceNotice}
                 </p>
               )}
               {/* Huge Pulsing Mic Button */}
@@ -1084,15 +1081,13 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
                     <button
                       id="demo-kamai-twojobs"
                       onClick={() =>
-                        handleQuickDemoClick(
-                          'Aj do kaam kiye. Pehla 1500 ka aur doosra 1200 ka.'
-                        )
+                        handleQuickDemoClick(demoPrompts.twoJobs)
                       }
                       className="p-3 rounded-2xl bg-gray-50 hover:bg-orange-50 text-gray-800 text-xs font-bold text-left border border-gray-200 hover:border-orange-200 transition-colors flex items-center gap-2 sm:col-span-2"
                     >
                       <span>🗣️</span>
                       <span>
-                        "Aj do kaam kiye. Pehla 1500 ka aur doosra 1200 ka."
+                        "{demoPrompts.twoJobs}"
                       </span>
                     </button>
                   </>

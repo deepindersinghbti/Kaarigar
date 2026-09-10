@@ -1,4 +1,6 @@
 import { SupportedLanguage } from '../types';
+import { authHeader } from '../lib/authToken';
+import { getUnlockedAudio } from './audioUnlock';
 
 export const LANGUAGE_LOCALE_MAP: Record<SupportedLanguage, string> = {
   hi: 'hi-IN',
@@ -118,76 +120,6 @@ function preferredVoice(voices: SpeechSynthesisVoice[], language: SupportedLangu
   return voices.find((voice) => voice.lang.toLowerCase().replace('_', '-') === normalizedLocale)
     ?? voices.find((voice) => voice.lang.toLowerCase().startsWith(`${normalizedLanguage}-`))
     ?? voices.find((voice) => voice.lang.toLowerCase().startsWith(normalizedLanguage));
-}
-
-const GURMUKHI_PHONETICS: Record<string, string> = {
-  'ਅ': 'a', 'ਆ': 'aa', 'ਇ': 'i', 'ਈ': 'ee', 'ਉ': 'u', 'ਊ': 'oo',
-  'ਏ': 'e', 'ਐ': 'ai', 'ਓ': 'o', 'ਔ': 'au',
-  'ਕ': 'k', 'ਖ': 'kh', 'ਗ': 'g', 'ਘ': 'gh', 'ਙ': 'ng',
-  'ਚ': 'ch', 'ਛ': 'chh', 'ਜ': 'j', 'ਝ': 'jh', 'ਞ': 'ny',
-  'ਟ': 't', 'ਠ': 'th', 'ਡ': 'd', 'ਢ': 'dh', 'ਣ': 'n',
-  'ਤ': 't', 'ਥ': 'th', 'ਦ': 'd', 'ਧ': 'dh', 'ਨ': 'n',
-  'ਪ': 'p', 'ਫ': 'ph', 'ਬ': 'b', 'ਭ': 'bh', 'ਮ': 'm',
-  'ਯ': 'y', 'ਰ': 'r', 'ਲ': 'l', 'ਵ': 'v', 'ੜ': 'r',
-  'ਸ਼': 'sh', 'ਸ': 's', 'ਹ': 'h', 'ਖ਼': 'kh', 'ਗ਼': 'g',
-  'ਜ਼': 'z', 'ਫ਼': 'f', 'ਲ਼': 'l',
-  'ਾ': 'aa', 'ਿ': 'i', 'ੀ': 'ee', 'ੁ': 'u', 'ੂ': 'oo',
-  'ੇ': 'e', 'ੈ': 'ai', 'ੋ': 'o', 'ੌ': 'au',
-  'ੰ': 'n', 'ਂ': 'n', 'ੱ': '', '੍': '', '਼': '', 'ੑ': '',
-  '੦': '0', '੧': '1', '੨': '2', '੩': '3', '੪': '4',
-  '੫': '5', '੬': '6', '੭': '7', '੮': '8', '੯': '9',
-  '।': '.',
-};
-
-const PUNJABI_SPEECH_WORDS: Record<string, string> = {
-  'ਇਲੈਕਟ੍ਰੀਸ਼ੀਅਨ': 'electrician',
-  'ਸਵਿੱਚਬੋਰਡ': 'switchboard',
-  'ਪ੍ਰੋਫਾਈਲ': 'profile',
-  'ਕਾਰੀਗਰ': 'kaarigar',
-  'ਵਾਇਰਿੰਗ': 'wiring',
-  'ਲਗਾਉਣਾ': 'lagaauna',
-  'ਤਜਰਬਾ': 'tajurba',
-  'ਰਮੇਸ਼': 'Ramesh',
-  'ਕੁਮਾਰ': 'Kumar',
-  'ਆਪਣੀ': 'aapni',
-  'ਬਦਲਣਾ': 'badalna',
-  'ਦੱਸੋ': 'dasso',
-  'ਸਮਝੇ': 'samjhe',
-  'ਵੇਰਵੇ': 'verve',
-  'ਹੁਨਰ': 'hunar',
-  'ਪੱਖਾ': 'pankha',
-  'ਐਮਸੀਬੀ': 'MCB',
-  'ਸਾਥੀ': 'saathi',
-  'ਵਿੱਚ': 'vich',
-  'ਅਤੇ': 'ate',
-  'ਸਾਲ': 'saal',
-  'ਕੰਮ': 'kam',
-  'ਘਰ': 'ghar',
-  'ਸਭ': 'sabh',
-  'ਠੀਕ': 'theek',
-  'ਮੈਂ': 'main',
-  'ਹਨ': 'han',
-  'ਹੈ': 'hai',
-  'ਉਹ': 'oh',
-  'ਇਹ': 'eh',
-  'ਜੀ': 'ji',
-  'ਜੋ': 'jo',
-  'ਕੀ': 'ki',
-  'ਦਾ': 'da',
-  'ਦੀ': 'di',
-};
-
-export function punjabiSpeechFallback(text: string): string {
-  const commonWordsReplaced = Object.entries(PUNJABI_SPEECH_WORDS)
-    .sort(([left], [right]) => right.length - left.length)
-    .reduce((result, [gurmukhi, phonetic]) => result.replaceAll(gurmukhi, phonetic), text);
-
-  return Array.from(commonWordsReplaced)
-    .map((character) => GURMUKHI_PHONETICS[character] ?? character)
-    .join('')
-    .replace(/[\u0A00-\u0A7F]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
 }
 
 function availableVoices(): Promise<SpeechSynthesisVoice[]> {
@@ -338,11 +270,17 @@ export class VoiceRecognizer {
   cancel() { this.cancelSession?.(); }
 }
 
-export const speakText = (
-  text: string,
-  lang: SupportedLanguage = 'hi',
-  onEnd?: () => void
-): Promise<void> => {
+/**
+ * The browser's own speechSynthesis path, carried over unchanged from before
+ * server-side TTS - minus the Punjabi transliteration, which is the entire
+ * reason that work happened.
+ *
+ * Still the right answer for Hindi and English: essentially every device has a
+ * usable hi-IN or en-IN voice, it costs nothing per utterance, and it works
+ * with no network. It is NEVER used for Punjabi, where the absence of a pa-IN
+ * voice is the norm rather than the exception.
+ */
+function browserSpeak(text: string, lang: SupportedLanguage, onEnd?: () => void): Promise<void> {
   return new Promise((resolve) => {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
       if (onEnd) onEnd();
@@ -350,10 +288,8 @@ export const speakText = (
       return;
     }
 
-    // Cancel any ongoing speech
     window.speechSynthesis.cancel();
 
-    // Clean emojis and decorative characters for smoother speech
     const cleanText = text
       .replace(/👋|🎙️|🔊|✏️|✓|🎉|🇮🇳|🌐|★|₹/g, '')
       .replace(/\n+/g, '. ')
@@ -366,42 +302,213 @@ export const speakText = (
     }
 
     void availableVoices().then((voices) => {
-      const matchingVoice = preferredVoice(voices, lang);
-      const needsPunjabiFallback = lang === 'pa' && !matchingVoice;
-      const spokenText = needsPunjabiFallback ? punjabiSpeechFallback(cleanText) : cleanText;
-      const utterance = new SpeechSynthesisUtterance(spokenText);
-      const locale = needsPunjabiFallback ? 'en-IN' : LANGUAGE_LOCALE_MAP[lang] || 'hi-IN';
-      utterance.lang = locale;
+      const utterance = new SpeechSynthesisUtterance(cleanText);
+      utterance.lang = LANGUAGE_LOCALE_MAP[lang] || 'hi-IN';
       utterance.rate = 0.95; // slightly relaxed conversational pacing
       utterance.pitch = 1.0;
 
-      // Voices arrive asynchronously in Chrome. Waiting for them is essential
-      // for Punjabi/Hindi, otherwise Chrome can pick the first English voice.
-      const selectedVoice = matchingVoice
-        ?? (needsPunjabiFallback ? preferredVoice(voices, 'en') : undefined);
+      // Voices arrive asynchronously in Chrome. Waiting for them still matters
+      // for Hindi, otherwise Chrome can pick the first English voice.
+      const selectedVoice = preferredVoice(voices, lang);
       if (selectedVoice) utterance.voice = selectedVoice;
-      if (needsPunjabiFallback) {
-        console.info('[voice]', {
-          event: 'punjabi-phonetic-fallback',
-          voice: selectedVoice?.name ?? 'browser-default',
-        });
-      }
 
-      utterance.onend = () => {
-        if (onEnd) onEnd();
-        resolve();
-      };
-      utterance.onerror = () => {
-        if (onEnd) onEnd();
-        resolve();
-      };
+      utterance.onend = () => { if (onEnd) onEnd(); resolve(); };
+      utterance.onerror = () => { if (onEnd) onEnd(); resolve(); };
       window.speechSynthesis.speak(utterance);
     });
   });
+}
+
+interface TtsResolveResponse {
+  audioUrl?: string;
+  audioData?: string;
+  mime?: string;
+}
+
+/**
+ * Ask the server for audio.
+ *
+ * The returned URL is used VERBATIM and never rebuilt on the client: private
+ * audio is signed and bound to the signed-in user, so a hand-constructed
+ * /api/tts/audio/<hash> would carry no signature and be refused. /resolve is
+ * the only place a playable URL comes from - including on the retry below.
+ */
+async function resolveTts(
+  text: string,
+  lang: SupportedLanguage,
+  inline: boolean
+): Promise<string | null> {
+  const response = await fetch('/api/tts/resolve', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeader() },
+    body: JSON.stringify({ text, language: lang, ...(inline ? { inline: true } : {}) }),
+  });
+  if (!response.ok) return null;
+
+  const data = await response.json() as TtsResolveResponse;
+  if (inline) {
+    return data.audioData ? `data:${data.mime || 'audio/mpeg'};base64,${data.audioData}` : null;
+  }
+  return data.audioUrl ?? null;
+}
+
+/**
+ * Warm the server-side cache for something the user is about to hear.
+ *
+ * Fire and forget, and silent on every failure: this is an optimisation, and a
+ * failed prefetch must never surface to someone mid-conversation. The real
+ * speakText call that follows will simply synthesise as normal.
+ *
+ * Concurrent with the utterance that triggered it, which is exactly the
+ * collision routes/tts.ts de-duplicates - so warming a string that is already
+ * being synthesised costs one cache lookup, not a second provider call.
+ */
+export function prefetchSpeech(text: string, lang: SupportedLanguage): void {
+  if (!text || !text.trim()) return;
+  void fetch('/api/tts/resolve', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeader() },
+    body: JSON.stringify({ text, language: lang }),
+  }).catch(() => { /* deliberately silent */ });
+}
+
+type PlaybackOutcome = 'ended' | 'failed' | 'cancelled';
+
+/**
+ * Settles the in-flight playback when stopSpeaking() interrupts it.
+ *
+ * Without this, pausing the element would leave the promise below pending
+ * forever: pause() fires no 'ended' event, so the caller's onEnd would never
+ * run and the modal's isSpeaking flag would stay true after the modal closed.
+ */
+let cancelPlayback: (() => void) | null = null;
+
+function playOnce(audio: HTMLAudioElement, src: string): Promise<PlaybackOutcome> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (outcome: PlaybackOutcome) => {
+      if (settled) return;
+      settled = true;
+      audio.onended = null;
+      audio.onerror = null;
+      cancelPlayback = null;
+      resolve(outcome);
+    };
+
+    cancelPlayback = () => finish('cancelled');
+    audio.onended = () => finish('ended');
+    audio.onerror = () => finish('failed');
+
+    audio.src = src;
+    const started = audio.play();
+    // A rejected play() is an ordinary outcome, not an exception: an element
+    // that no gesture has blessed yet refuses on mobile. Treated as a failure
+    // so the caller can fall back rather than hang.
+    if (started && typeof started.catch === 'function') {
+      started.catch(() => finish('failed'));
+    }
+  });
+}
+
+/**
+ * Speak text, preferring server-side neural audio.
+ *
+ * The signature is unchanged apart from an OPTIONAL fourth argument, so all
+ * existing call sites keep working untouched.
+ *
+ * Order of attempts:
+ *   1. POST /api/tts/resolve, then play the URL it returns.
+ *   2. If that URL fails to play - evicted from the cache, process restarted,
+ *      or served by another instance - resolve ONCE more with inline: true and
+ *      play the audio as a data URL. Exactly one retry: a resolve -> 404 ->
+ *      resolve loop would hammer the provider if something is structurally
+ *      broken.
+ *   3. On total failure, Hindi and English fall back to the browser voice.
+ *      PUNJABI DELIBERATELY STAYS SILENT and calls onFailure instead. Silence
+ *      plus the on-screen message beats an English voice reading Gurmukhi,
+ *      which is the exact failure this whole change exists to remove.
+ *
+ * The promise always settles and onEnd always runs exactly once, on every
+ * path, matching the previous behaviour that callers depend on.
+ */
+export const speakText = (
+  text: string,
+  lang: SupportedLanguage = 'hi',
+  onEnd?: () => void,
+  onFailure?: () => void
+): Promise<void> => {
+  stopSpeaking();
+
+  return new Promise<void>((resolve) => {
+    if (!text || !text.trim()) {
+      if (onEnd) onEnd();
+      resolve();
+      return;
+    }
+
+    void (async () => {
+      const audio = getUnlockedAudio();
+
+      if (audio) {
+        try {
+          const url = await resolveTts(text, lang, false);
+          if (url) {
+            const outcome = await playOnce(audio, url);
+            // 'cancelled' means stopSpeaking() ran. Honour it: do not retry and
+            // do not fall back, or closing the modal would start a new voice.
+            if (outcome === 'ended' || outcome === 'cancelled') {
+              if (onEnd) onEnd();
+              resolve();
+              return;
+            }
+
+            const inlineUrl = await resolveTts(text, lang, true);
+            if (inlineUrl) {
+              const retry = await playOnce(audio, inlineUrl);
+              if (retry === 'ended' || retry === 'cancelled') {
+                if (onEnd) onEnd();
+                resolve();
+                return;
+              }
+            }
+          }
+        } catch {
+          // Network down, signed out, server 503 - all handled below.
+        }
+      }
+
+      if (lang === 'pa') {
+        if (onFailure) onFailure();
+        if (onEnd) onEnd();
+        resolve();
+        return;
+      }
+
+      await browserSpeak(text, lang, onEnd);
+      resolve();
+    })();
+  });
 };
 
+/**
+ * Stop whatever is currently speaking.
+ *
+ * Must silence BOTH paths. The modal's teardown and its close branch call this,
+ * and before server-side audio existed only speechSynthesis.cancel() was
+ * needed - an element left playing would keep talking over a closed modal.
+ */
 export const stopSpeaking = () => {
-  if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+  if (typeof window === 'undefined') return;
+
+  const audio = getUnlockedAudio();
+  if (audio) {
+    audio.pause();
+    // Settle any pending playback first, so its caller's onEnd runs and the
+    // modal's isSpeaking flag clears.
+    if (cancelPlayback) cancelPlayback();
+  }
+
+  if ('speechSynthesis' in window) {
     window.speechSynthesis.cancel();
   }
 };
