@@ -124,6 +124,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
     en: { title: 'Neha · Customer demo', subtitle: 'Enter your demo identifier', phoneLabel: 'Demo identifier', phoneHint: '0123456789 · not an SMS number', sendCode: 'Continue to demo code', codeHint: () => 'Enter the customer demo code. No SMS is sent.' },
     hi: { title: 'नेहा · ग्राहक डेमो', subtitle: 'अपनी डेमो पहचान डालें', phoneLabel: 'डेमो पहचान', phoneHint: '0123456789 · SMS नंबर नहीं है', sendCode: 'डेमो कोड पर जाएँ', codeHint: () => 'ग्राहक डेमो कोड डालें। SMS नहीं भेजा जाता।' },
     pa: { title: 'ਨੇਹਾ · ਗਾਹਕ ਡੈਮੋ', subtitle: 'ਆਪਣੀ ਡੈਮੋ ਪਛਾਣ ਭਰੋ', phoneLabel: 'ਡੈਮੋ ਪਛਾਣ', phoneHint: '0123456789 · SMS ਨੰਬਰ ਨਹੀਂ ਹੈ', sendCode: 'ਡੈਮੋ ਕੋਡ ਵੱਲ ਜਾਓ', codeHint: () => 'ਗਾਹਕ ਡੈਮੋ ਕੋਡ ਭਰੋ। SMS ਨਹੀਂ ਭੇਜਿਆ ਜਾਂਦਾ।' },
+    kn: { title: 'ನೇಹಾ · ಗ್ರಾಹಕ ಡೆಮೊ', subtitle: 'ನಿಮ್ಮ ಡೆಮೊ ಗುರುತನ್ನು ನಮೂದಿಸಿ', phoneLabel: 'ಡೆಮೊ ಗುರುತು', phoneHint: '0123456789 · SMS ಸಂಖ್ಯೆ ಅಲ್ಲ', sendCode: 'ಡೆಮೊ ಕೋಡ್‌ಗೆ ಮುಂದುವರಿಯಿರಿ', codeHint: () => 'ಗ್ರಾಹಕ ಡೆಮೊ ಕೋಡ್ ನಮೂದಿಸಿ. SMS ಕಳುಹಿಸಲಾಗುವುದಿಲ್ಲ.' },
+    mr: { title: 'नेहा · ग्राहक डेमो', subtitle: 'तुमची डेमो ओळख टाका', phoneLabel: 'डेमो ओळख', phoneHint: '0123456789 · SMS नंबर नाही', sendCode: 'डेमो कोडकडे जा', codeHint: () => 'ग्राहक डेमो कोड टाका. SMS पाठवला जात नाही.' },
   };
   const t = customerDemo ? { ...base, ...(demo[currentLanguage as keyof typeof demo] ?? demo.en) } : base;
 

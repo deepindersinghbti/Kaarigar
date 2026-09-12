@@ -9,12 +9,7 @@ import type { SupportedLanguage } from '../../types';
 import { CustomerBrowse } from './CustomerBrowse';
 import { CustomerRequestForm } from './CustomerRequestForm';
 import { CustomerRequests } from './CustomerRequests';
-
-const COPY = {
-  en: { customer: 'Customer demo · Neha Sharma', back: 'Back to role selection', language: 'Change language', signOut: 'Sign out', browse: 'Find a Kaarigar', requests: 'My requests', notice: 'Demo login: 0123456789. Use the separate customer demo code supplied by the presenter. No SMS is sent. Only browse and request tracking are ready; quote acceptance and completion confirmation are not available yet.' },
-  hi: { customer: 'ग्राहक डेमो · नेहा शर्मा', back: 'भूमिका चयन पर वापस जाएँ', language: 'भाषा बदलें', signOut: 'साइन आउट', browse: 'कारीगर खोजें', requests: 'मेरे अनुरोध', notice: 'डेमो लॉगिन: 0123456789। प्रस्तुतकर्ता से मिला अलग ग्राहक डेमो कोड डालें। SMS नहीं भेजा जाता। अभी केवल खोज और अनुरोध देखना उपलब्ध है; कोट स्वीकार करना और काम पूरा होने की पुष्टि उपलब्ध नहीं हैं।' },
-  pa: { customer: 'ਗਾਹਕ ਡੈਮੋ · ਨੇਹਾ ਸ਼ਰਮਾ', back: 'ਭੂਮਿਕਾ ਚੋਣ ਉੱਤੇ ਵਾਪਸ ਜਾਓ', language: 'ਭਾਸ਼ਾ ਬਦਲੋ', signOut: 'ਸਾਈਨ ਆਊਟ', browse: 'ਕਾਰੀਗਰ ਲੱਭੋ', requests: 'ਮੇਰੀਆਂ ਬੇਨਤੀਆਂ', notice: 'ਡੈਮੋ ਲੌਗਇਨ: 0123456789। ਪੇਸ਼ਕਰਤਾ ਤੋਂ ਮਿਲਿਆ ਵੱਖਰਾ ਗਾਹਕ ਡੈਮੋ ਕੋਡ ਵਰਤੋ। SMS ਨਹੀਂ ਭੇਜਿਆ ਜਾਂਦਾ। ਹਾਲੇ ਸਿਰਫ਼ ਖੋਜ ਅਤੇ ਬੇਨਤੀਆਂ ਦੇਖਣਾ ਉਪਲਬਧ ਹੈ; ਕੋਟ ਮਨਜ਼ੂਰ ਕਰਨਾ ਅਤੇ ਕੰਮ ਮੁਕੰਮਲ ਹੋਣ ਦੀ ਪੁਸ਼ਟੀ ਉਪਲਬਧ ਨਹੀਂ ਹਨ।' },
-};
+import { getCustomerCopy } from './customerCopy';
 
 /**
  * The customer side of the app, mounted at /customer/* as a sibling of App.
@@ -45,7 +40,7 @@ export const CustomerApp: React.FC = () => {
     return 'hi';
   });
   const [isLangModalOpen, setIsLangModalOpen] = useState(false);
-  const copy = COPY[currentLanguage as keyof typeof COPY] ?? COPY.en;
+  const copy = getCustomerCopy(currentLanguage);
 
   const handleLanguageChange = (language: SupportedLanguage) => {
     if (!isLanguageSelectable(language)) return;
@@ -93,7 +88,7 @@ export const CustomerApp: React.FC = () => {
         <div className="max-w-3xl mx-auto px-4 h-16 flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-orange-500 shrink-0" />
           <div className="flex-1 min-w-0">
-            <p className="text-base font-extrabold leading-tight">कारीगर</p>
+            <p className="text-base font-extrabold leading-tight">{copy.appName}</p>
             <p className="text-xs text-gray-500 leading-tight">{copy.customer}</p>
           </div>
           <button type="button" onClick={() => setIsLangModalOpen(true)} aria-label={copy.language}
@@ -129,13 +124,14 @@ export const CustomerApp: React.FC = () => {
             index
             element={
               <CustomerBrowse
+                currentLanguage={currentLanguage}
                 onSelect={(handle) => navigate(`/customer/request/${encodeURIComponent(handle)}`)}
               />
             }
           />
           <Route
             path="request/:handle"
-            element={<CustomerRequestForm onSent={() => navigate('/customer/requests')} />}
+            element={<CustomerRequestForm currentLanguage={currentLanguage} onSent={() => navigate('/customer/requests')} />}
           />
           <Route
             path="requests"

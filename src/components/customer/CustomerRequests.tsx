@@ -5,6 +5,7 @@ import { api, ApiError } from '../../lib/api';
 import { JOB_BADGE, type JobItem, type SupportedLanguage } from '../../types';
 import { JOB_BADGE_PRESENTATION } from '../JobsView';
 import { getScreenCopy } from '../../data/uiCopy';
+import { getCustomerCopy } from './customerCopy';
 
 interface CustomerRequestsProps {
   currentLanguage: SupportedLanguage;
@@ -29,6 +30,7 @@ export const CustomerRequests: React.FC<CustomerRequestsProps> = ({ currentLangu
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
 
   const stateLabel = getScreenCopy(currentLanguage).jobs.state;
+  const copy = getCustomerCopy(currentLanguage);
 
   const load = useCallback(async () => {
     setRefreshing(true);
@@ -37,11 +39,11 @@ export const CustomerRequests: React.FC<CustomerRequestsProps> = ({ currentLangu
       setError('');
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) return;
-      setError(e instanceof Error ? e.message : 'अनुरोध लोड नहीं हो सके।');
+      setError(copy.requestList.loadError);
     } finally {
       setRefreshing(false);
     }
-  }, []);
+  }, [copy.requestList.loadError]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -61,7 +63,7 @@ export const CustomerRequests: React.FC<CustomerRequestsProps> = ({ currentLangu
       setJobs((prev) => (prev ?? []).map((j) => (j.id === updated.id ? updated : j)));
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) return;
-      setError(e instanceof Error ? e.message : 'दाम स्वीकार नहीं हो सका।');
+      setError(copy.requestList.acceptError);
     } finally {
       setAcceptingId(null);
     }
@@ -71,7 +73,7 @@ export const CustomerRequests: React.FC<CustomerRequestsProps> = ({ currentLangu
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-16">
         <div className="w-10 h-10 rounded-2xl bg-orange-500 animate-pulse" />
-        <p className="text-sm font-bold text-gray-500">लोड हो रहा है…</p>
+        <p className="text-sm font-bold text-gray-500">{copy.requestList.loading}</p>
       </div>
     );
   }
@@ -80,7 +82,7 @@ export const CustomerRequests: React.FC<CustomerRequestsProps> = ({ currentLangu
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <p className="text-sm font-extrabold text-gray-500">
-          {jobs?.length ?? 0} अनुरोध
+          {copy.requestList.count(jobs?.length ?? 0)}
         </p>
         <button
           type="button"
@@ -89,7 +91,7 @@ export const CustomerRequests: React.FC<CustomerRequestsProps> = ({ currentLangu
           className="h-10 px-3 rounded-xl border border-gray-200 bg-white text-gray-600 font-bold text-sm flex items-center gap-1.5 active:scale-[0.98] transition disabled:opacity-50"
         >
           <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-          ताज़ा करें
+          {copy.requestList.refresh}
         </button>
       </div>
 
@@ -101,12 +103,12 @@ export const CustomerRequests: React.FC<CustomerRequestsProps> = ({ currentLangu
 
       {jobs?.length === 0 && (
         <div className="bg-white rounded-3xl border border-gray-200 p-6 text-center space-y-3">
-          <p className="text-sm font-bold text-gray-500">अभी तक कोई अनुरोध नहीं।</p>
+          <p className="text-sm font-bold text-gray-500">{copy.requestList.empty}</p>
           <Link
             to="/customer"
             className="inline-flex h-12 px-5 items-center rounded-2xl bg-orange-500 text-white font-extrabold"
           >
-            कारीगर खोजें
+            {copy.requestList.find}
           </Link>
         </div>
       )}
@@ -151,7 +153,7 @@ export const CustomerRequests: React.FC<CustomerRequestsProps> = ({ currentLangu
           {job.status === 'QUOTED' && typeof job.quotedPrice === 'number' && (
             <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 p-3 space-y-2">
               <p className="text-sm font-bold text-amber-900">
-                कारीगर का दाम: <span className="font-extrabold">₹{job.quotedPrice}</span>
+                {copy.requestList.quote} <span className="font-extrabold">₹{job.quotedPrice}</span>
               </p>
               <button
                 type="button"
@@ -159,7 +161,7 @@ export const CustomerRequests: React.FC<CustomerRequestsProps> = ({ currentLangu
                 disabled={acceptingId === job.id}
                 className="w-full min-h-12 rounded-2xl bg-orange-500 text-white font-extrabold disabled:opacity-50 active:scale-[0.98] transition"
               >
-                {acceptingId === job.id ? 'भेज रहे हैं…' : 'यह दाम स्वीकार करें'}
+                {acceptingId === job.id ? copy.requestList.accepting : copy.requestList.accept}
               </button>
             </div>
           )}
@@ -167,7 +169,7 @@ export const CustomerRequests: React.FC<CustomerRequestsProps> = ({ currentLangu
           {/* Once agreed, the figure is shown as settled fact, with no control. */}
           {typeof job.agreedPrice === 'number' && job.status !== 'QUOTED' && (
             <p className="mt-3 text-sm font-bold text-green-800 bg-green-50 border border-green-200 rounded-2xl px-3 py-2">
-              तय दाम: <span className="font-extrabold">₹{job.agreedPrice}</span>
+              {copy.requestList.agreed} <span className="font-extrabold">₹{job.agreedPrice}</span>
             </p>
           )}
         </div>

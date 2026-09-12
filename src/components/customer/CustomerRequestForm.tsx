@@ -4,9 +4,12 @@ import { ArrowLeft, Star, MapPin } from 'lucide-react';
 import { api, ApiError, type PublicKaarigar } from '../../lib/api';
 import { uuidv7 } from '../../lib/ids';
 import { useAuth } from '../../auth/AuthProvider';
+import type { SupportedLanguage } from '../../types';
+import { getCustomerCopy, getCustomerTrade } from './customerCopy';
 
 interface CustomerRequestFormProps {
   onSent: () => void;
+  currentLanguage: SupportedLanguage;
 }
 
 /**
@@ -23,7 +26,7 @@ interface CustomerRequestFormProps {
  * tell a customer their request was sent when no kaarigar had been asked
  * anything.
  */
-export const CustomerRequestForm: React.FC<CustomerRequestFormProps> = ({ onSent }) => {
+export const CustomerRequestForm: React.FC<CustomerRequestFormProps> = ({ onSent, currentLanguage }) => {
   const { handle = '' } = useParams();
   const { user } = useAuth();
   const [requestId] = useState(uuidv7);
@@ -39,6 +42,7 @@ export const CustomerRequestForm: React.FC<CustomerRequestFormProps> = ({ onSent
 
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
+  const copy = getCustomerCopy(currentLanguage);
 
   /**
    * The directory is re-read and filtered rather than fetched per handle.
@@ -53,15 +57,15 @@ export const CustomerRequestForm: React.FC<CustomerRequestFormProps> = ({ onSent
         if (cancelled) return;
         const found = list.find((k) => k.passportHandle === handle) ?? null;
         setKaarigar(found);
-        if (!found) setLoadError('यह कारीगर नहीं मिला।');
+        if (!found) setLoadError(copy.form.notFound);
       } catch (e) {
         if (cancelled) return;
         if (e instanceof ApiError && e.status === 401) return;
-        setLoadError(e instanceof Error ? e.message : 'कारीगर लोड नहीं हो सका।');
+        setLoadError(copy.form.loadError);
       }
     })();
     return () => { cancelled = true; };
-  }, [handle]);
+  }, [copy.form.loadError, copy.form.notFound, handle]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,7 +88,7 @@ export const CustomerRequestForm: React.FC<CustomerRequestFormProps> = ({ onSent
       onSent();
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) return;
-      setError(err instanceof Error ? err.message : 'अनुरोध नहीं भेजा जा सका।');
+      setError(copy.form.sendError);
       setSending(false);
     }
   };
@@ -99,7 +103,7 @@ export const CustomerRequestForm: React.FC<CustomerRequestFormProps> = ({ onSent
         className="inline-flex items-center gap-1.5 text-sm font-extrabold text-gray-600"
       >
         <ArrowLeft className="w-4 h-4" />
-        वापस
+        {copy.form.back}
       </Link>
 
       {loadError && (
@@ -115,7 +119,7 @@ export const CustomerRequestForm: React.FC<CustomerRequestFormProps> = ({ onSent
           </div>
           <div className="min-w-0">
             <p className="font-extrabold truncate">{kaarigar.name}</p>
-            <p className="text-sm text-orange-600 font-bold">{kaarigar.trade}</p>
+            <p className="text-sm text-orange-600 font-bold">{getCustomerTrade(currentLanguage, kaarigar.trade)}</p>
             <div className="flex items-center gap-3 text-xs text-gray-500 font-semibold mt-0.5">
               <span className="flex items-center gap-1">
                 <Star className="w-3.5 h-3.5 text-amber-500" />
@@ -132,41 +136,41 @@ export const CustomerRequestForm: React.FC<CustomerRequestFormProps> = ({ onSent
 
       <form onSubmit={submit} className="bg-white rounded-3xl border border-gray-200 p-4 space-y-4">
         <div>
-          <label className={label} htmlFor="req-title">काम क्या है?</label>
+          <label className={label} htmlFor="req-title">{copy.form.workLabel}</label>
           <input
             id="req-title"
             className={field}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="जैसे: पंखा नहीं चल रहा"
+            placeholder={copy.form.workPlaceholder}
             required
           />
         </div>
 
         <div>
-          <label className={label} htmlFor="req-name">आपका नाम</label>
+          <label className={label} htmlFor="req-name">{copy.form.nameLabel}</label>
           <input
             id="req-name"
             className={field}
             value={customerName}
             onChange={(e) => setCustomerName(e.target.value)}
-            placeholder="जैसे: नेहा शर्मा"
+            placeholder={copy.form.namePlaceholder}
           />
         </div>
 
         <div>
-          <label className={label} htmlFor="req-location">पता</label>
+          <label className={label} htmlFor="req-location">{copy.form.locationLabel}</label>
           <input
             id="req-location"
             className={field}
             value={location}
             onChange={(e) => setLocation(e.target.value)}
-            placeholder="जैसे: सेक्टर 35, चंडीगढ़"
+            placeholder={copy.form.locationPlaceholder}
           />
         </div>
 
         <div>
-          <label className={label} htmlFor="req-amount">अनुमानित रकम (₹)</label>
+          <label className={label} htmlFor="req-amount">{copy.form.estimateLabel}</label>
           <input
             id="req-amount"
             className={field}
@@ -180,7 +184,7 @@ export const CustomerRequestForm: React.FC<CustomerRequestFormProps> = ({ onSent
         </div>
 
         <div>
-          <label className={label} htmlFor="req-notes">और कुछ बताना है?</label>
+          <label className={label} htmlFor="req-notes">{copy.form.notesLabel}</label>
           <textarea
             id="req-notes"
             className="w-full min-h-24 p-4 rounded-2xl border border-gray-200 bg-white font-semibold outline-none focus:border-orange-400"
@@ -200,7 +204,7 @@ export const CustomerRequestForm: React.FC<CustomerRequestFormProps> = ({ onSent
           disabled={sending || !kaarigar}
           className="w-full h-14 rounded-2xl bg-orange-500 text-white font-extrabold active:scale-[0.98] transition disabled:opacity-50"
         >
-          {sending ? 'भेजा जा रहा है…' : 'अनुरोध भेजें'}
+          {sending ? copy.form.sending : copy.form.submit}
         </button>
       </form>
     </div>

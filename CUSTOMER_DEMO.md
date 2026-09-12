@@ -1,6 +1,6 @@
 # Customer demo: Neha and Ramesh
 
-This release exposes the existing customer browse, request form, and request list at `/customer`. It is not a completed customer marketplace. Quote acceptance, negotiation, customer completion confirmation, payment verification, and nearest-worker matching are not implemented by this release.
+This release exposes customer browse, request submission, request tracking, and customer quote acceptance at `/customer`. It is not a completed customer marketplace. Negotiation, customer completion confirmation, payment verification, notifications, and nearest-worker matching are not implemented by this release.
 
 ## Configure login
 
@@ -18,9 +18,10 @@ Neha's identifier is `0123456789`. This is a demo ID, not a real SMS destination
 1. Use separate browser profiles, a private window, or separate devices for Neha and Ramesh. Ordinary tabs share the existing session storage and are not separate identities.
 2. On the home page, choose **I need a Kaarigar**. Enter `0123456789`, then the private customer demo code.
 3. Select Ramesh from the existing directory. Enter a fan installation request, location, and estimated budget. Submit once.
-4. Neha sees the request under **My requests**. Ramesh sees the same database job in **Jobs** after loading/reloading that screen. This release does not add push notifications.
-5. Request creation records Neha as the actor and starts at `REQUESTED`, with payment pending. The customer's amount is an estimate, not an accepted quote or proof of payment.
-6. Customer and worker routes are role-gated on both the UI and API. Worker-created notes cannot attach themselves to Neha's account by supplying her customer ID.
+4. Neha sees the request under **My requests**. Ramesh sees the same database job in **Jobs** after loading/reloading that screen and sends a quoted price.
+5. Neha can accept that stored quote. The server records her acceptance, copies the quoted price to `agreedPrice`, and does not accept a price supplied by the customer.
+6. Request creation records Neha as the actor and starts at `REQUESTED`, with payment pending. The customer's opening amount is an estimate, not proof of payment.
+7. Customer and worker routes are role-gated on both the UI and API. Worker-created notes cannot attach themselves to Neha's account by supplying her customer ID.
 
 Existing worker lifecycle controls remain unchanged. Do not present worker-entered completion or payment as independently customer-verified evidence.
 
