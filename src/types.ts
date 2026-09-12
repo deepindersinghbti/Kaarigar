@@ -184,6 +184,25 @@ export interface JobItem {
   customerPhone?: string;
   location: string;
   amount: number;
+  /**
+   * The two prices are deliberately separate and mean different things.
+   *
+   * quotedPrice is what the KAARIGAR proposed, written when the job moves to
+   * QUOTED. agreedPrice is what the CUSTOMER accepted, and is written only by
+   * the accept endpoint, only from the stored quotedPrice. So agreedPrice being
+   * present is itself the evidence that someone other than the worker agreed to
+   * the number - which is the whole point of it being a separate field. Never
+   * copy quotedPrice into agreedPrice anywhere else, and never let either come
+   * from a customer-supplied body.
+   *
+   * `amount` remains the customer's opening estimate on a REQUESTED job.
+   *
+   * READ THESE WITH A typeof GUARD, not `!== undefined`. The driver serializes
+   * an absent price as NULL, so a job that has never been quoted comes back from
+   * Mongo carrying `agreedPrice: null` while the type here says `undefined`.
+   * `!== undefined` is true for null and renders "₹null".
+   */
+  quotedPrice?: number;
   agreedPrice?: number;
   bandSnapshot?: { p25: number; p50: number; p75: number };
   paymentMethod: 'cash' | 'upi' | 'pending';

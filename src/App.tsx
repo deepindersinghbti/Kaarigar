@@ -314,14 +314,14 @@ export default function App() {
    * State changes are never simulated locally. The server validates each edge
    * against JOB_TRANSITIONS and returns the authoritative updated history.
    */
-  const handleTransitionJob = async (jobId: string, state: JobState): Promise<void> => {
+  const handleTransitionJob = async (jobId: string, state: JobState, quotedPrice?: number): Promise<void> => {
     if (!jobsOnApi) {
       throw new Error('Job lifecycle controls require API demo mode.');
     }
 
     setDataError('');
     try {
-      const updated = await api.transitionJob(jobId, state);
+      const updated = await api.transitionJob(jobId, state, quotedPrice);
       setJobs((prev) => prev.map((job) => (job.id === updated.id ? updated : job)));
 
       // Completed-work evidence affects the server-derived trust breakdown.

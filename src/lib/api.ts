@@ -208,14 +208,35 @@ export const api = {
     return body.job;
   },
 
-  /** Advance a job through the server-owned lifecycle state machine. */
-  async transitionJob(jobId: string, state: JobState): Promise<JobItem> {
+  /**
+   * Advance a job through the server-owned lifecycle state machine.
+   *
+   * quotedPrice is required by the server when state is 'QUOTED' and refused on
+   * every other edge, so it is passed through rather than defaulted here - a
+   * default would be this client inventing a price.
+   */
+  async transitionJob(jobId: string, state: JobState, quotedPrice?: number): Promise<JobItem> {
     const body = await request<{ job: JobItem }>(
       `/api/jobs/${encodeURIComponent(jobId)}/transition`,
       {
         method: 'POST',
-        body: JSON.stringify({ state }),
+        body: JSON.stringify({ state, ...(quotedPrice !== undefined ? { quotedPrice } : {}) }),
       }
+    );
+    return body.job;
+  },
+
+  /**
+   * The customer agrees to the quoted price.
+   *
+   * NO PRICE IS SENT. The server copies the agreed figure from the quotedPrice
+   * it already stored, so there is no number here for a client to alter. If this
+   * ever needs an amount parameter, something has gone wrong server-side.
+   */
+  async acceptQuote(jobId: string): Promise<JobItem> {
+    const body = await request<{ job: JobItem }>(
+      `/api/customer/jobs/${encodeURIComponent(jobId)}/accept`,
+      { method: 'POST' }
     );
     return body.job;
   },
