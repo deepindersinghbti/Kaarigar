@@ -5,6 +5,7 @@ import { requireAuth } from '../middleware/auth';
 import { JOBS, createJob, ensureJobIndexes } from '../data/jobs';
 import { listPublicProfiles, findOwnerIdByHandle } from '../data/profiles';
 import { optionalQueryString, queryString } from '../lib/query';
+import { DEMO_CUSTOMER_PHONE, DEMO_CUSTOMER_NAME } from '../auth/demoCustomer';
 
 /**
  * The customer side of the marketplace: browse kaarigars, request a job, watch
@@ -105,7 +106,13 @@ customerRouter.post('/jobs', requireAuth, async (req: Request, res: Response) =>
     }
 
     const uid = req.user!.uid;
-    const outcome = await createJob(kaarigarUid, req.body, { actorId: uid, customerId: uid });
+    const input = { ...req.body,
+      ...(req.user!.phone === DEMO_CUSTOMER_PHONE ? { customerName: DEMO_CUSTOMER_NAME } : {}),
+      customerPhone: req.user!.phone,
+      paymentMethod: 'pending',
+      agreedPrice: undefined,
+    };
+    const outcome = await createJob(kaarigarUid, input, { actorId: uid, customerId: uid });
 
     if (outcome.status === 'rejected') {
       return res.status(400).json({ error: 'invalid_field', field: outcome.field, message: outcome.message });

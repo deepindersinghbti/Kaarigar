@@ -121,6 +121,7 @@ export async function createJob(
   const claimed = await db.collection(JOBS).findOne({ _id: id as never });
   if (claimed) {
     if (claimed.kaarigarId !== kaarigarId) return { status: 'conflict' };
+    if (context.customerId && claimed.customerId !== context.customerId) return { status: 'conflict' };
     const { _id, ...j } = claimed;
     return { status: 'duplicate', job: { ...j, id: String(_id) } as JobItem };
   }
@@ -136,9 +137,8 @@ export async function createJob(
     kaarigarId,
     title,
     customerName: typeof body.customerName === 'string' ? body.customerName : '',
-    // Server-supplied wins. On the customer path this is req.user.uid, so the
-    // body's customerId - if it sent one - is discarded rather than trusted.
-    customerId: context.customerId ?? (typeof body.customerId === 'string' ? body.customerId : undefined),
+    // Only the authenticated customer route can link a real customer account.
+    customerId: context.customerId,
     customerPhone: typeof body.customerPhone === 'string' ? body.customerPhone : undefined,
     location: typeof body.location === 'string' ? body.location : '',
     amount,
@@ -166,6 +166,7 @@ export async function createJob(
       const raced = await db.collection(JOBS).findOne({ _id: id as never });
       if (!raced) throw err;
       if (raced.kaarigarId !== kaarigarId) return { status: 'conflict' };
+      if (context.customerId && raced.customerId !== context.customerId) return { status: 'conflict' };
       const { _id, ...j } = raced;
       return { status: 'duplicate', job: { ...j, id: String(_id) } as JobItem };
     }

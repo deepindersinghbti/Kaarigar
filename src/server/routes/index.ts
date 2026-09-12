@@ -12,6 +12,7 @@ import { pricingRouter } from './pricing';
 import { reputationRouter } from './reputation';
 import { publicRouter } from './public';
 import { kaarigarsRouter, customerRouter } from './customer';
+import { requireAuth, requireRole } from '../middleware/auth';
 
 /**
  * The single mounting table for every route module.
@@ -33,6 +34,11 @@ import { kaarigarsRouter, customerRouter } from './customer';
 export function registerRoutes(app: Express): void {
   // Infrastructure
   app.use('/api/health', healthRouter);
+
+  // Enforce actor roles before handlers can read or mutate worker data.
+  app.use(['/api/passport', '/api/jobs', '/api/ledger', '/api/sync', '/api/assistant', '/api/quotes'], requireAuth, requireRole('kaarigar'));
+  app.use('/api/reviews/link', requireAuth, requireRole('kaarigar'));
+  app.use('/api/customer', requireAuth, requireRole('customer'));
 
   // Tier 3 service boundaries (Architecture section 5)
   app.use('/api/assistant', assistantRouter);   // A - voice processing
