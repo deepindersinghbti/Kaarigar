@@ -2,6 +2,7 @@ import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { isDbConnected, getDbErrorCategory } from '../db';
 import { resolveOrigin } from '../lib/origin';
+import { demoCustomerEnabled } from '../auth/demoCustomer';
 
 /**
  * health - liveness and dependency state.
@@ -38,6 +39,7 @@ healthRouter.get('/', (req: Request, res: Response) => {
     publicOrigin: resolveOrigin(req),
     hasGeminiKey: !!process.env.GEMINI_API_KEY,
     hasTtsKey: !!process.env.SARVAM_API_KEY,
+    customerDemoEnabled: demoCustomerEnabled(),
     db: {
       connected: isDbConnected(),
       // A category, not the driver string. This endpoint is unauthenticated and

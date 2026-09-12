@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Star, MapPin } from 'lucide-react';
 import { api, ApiError, type PublicKaarigar } from '../../lib/api';
 import { uuidv7 } from '../../lib/ids';
+import { useAuth } from '../../auth/AuthProvider';
 
 interface CustomerRequestFormProps {
   onSent: () => void;
@@ -24,12 +25,14 @@ interface CustomerRequestFormProps {
  */
 export const CustomerRequestForm: React.FC<CustomerRequestFormProps> = ({ onSent }) => {
   const { handle = '' } = useParams();
+  const { user } = useAuth();
+  const [requestId] = useState(uuidv7);
 
   const [kaarigar, setKaarigar] = useState<PublicKaarigar | null>(null);
   const [loadError, setLoadError] = useState('');
 
   const [title, setTitle] = useState('');
-  const [customerName, setCustomerName] = useState('');
+  const [customerName, setCustomerName] = useState(user?.phone === '+910123456789' ? 'Neha Sharma' : '');
   const [location, setLocation] = useState('');
   const [amount, setAmount] = useState('');
   const [notes, setNotes] = useState('');
@@ -70,7 +73,7 @@ export const CustomerRequestForm: React.FC<CustomerRequestFormProps> = ({ onSent
       await api.requestJob({
         // Generated on the client so a retry after a timeout returns the
         // existing job instead of filing a second request.
-        id: uuidv7(),
+        id: requestId,
         kaarigarHandle: handle,
         title: title.trim(),
         customerName: customerName.trim(),

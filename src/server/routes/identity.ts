@@ -5,6 +5,7 @@ import { uuidv7 } from '../../lib/ids';
 import { getDb, isDbConnected } from '../db';
 import { requireAuth } from '../middleware/auth';
 import { demoOtpAccepts } from '../auth/demoOtp';
+import { DEMO_CUSTOMER_PHONE, DEMO_CUSTOMER_NAME, demoCustomerEnabled, demoCustomerAccepts } from '../auth/demoCustomer';
 import {
   signAccessToken,
   signRefreshToken,
@@ -79,6 +80,9 @@ identityRouter.post('/otp/request', async (req: Request, res: Response) => {
   if (!dbGuard(res)) return;
 
   const phone = String(req.body?.phone ?? '').trim();
+  if (phone === DEMO_CUSTOMER_PHONE && !demoCustomerEnabled()) {
+    return res.status(503).json({ error: 'customer_demo_disabled', message: 'The customer demo login has not been configured on this server.' });
+  }
   if (!E164_IN.test(phone)) {
     return res.status(400).json({
       error: 'invalid_phone',
@@ -116,7 +120,7 @@ identityRouter.post('/otp/request', async (req: Request, res: Response) => {
     });
 
     // THE STUB. Real delivery would replace exactly this line.
-    console.log(
+    if (phone !== DEMO_CUSTOMER_PHONE) console.log(
       '\n[auth] ===== STUBBED OTP DELIVERY =====\n' +
       `[auth]  phone: ${phone}\n` +
       `[auth]  code : ${code}\n` +
@@ -127,10 +131,10 @@ identityRouter.post('/otp/request', async (req: Request, res: Response) => {
     return res.status(201).json({
       challengeId,
       expiresInSeconds: OTP_TTL_SECONDS,
-      delivery: 'stubbed_server_log',
+      delivery: phone === DEMO_CUSTOMER_PHONE ? 'customer_demo_code' : 'stubbed_server_log',
       // Convenience for local work only. Absent in production, so the deployed
       // build cannot leak a code even if this endpoint is scraped.
-      ...(process.env.NODE_ENV !== 'production' ? { devCode: code } : {}),
+      ...(process.env.NODE_ENV !== 'production' && phone !== DEMO_CUSTOMER_PHONE ? { devCode: code } : {}),
     });
   } catch (err) {
     console.error('[auth] otp/request failed:', err);
@@ -181,9 +185,11 @@ identityRouter.post('/otp/verify', async (req: Request, res: Response) => {
      * exist, be unconsumed, be unexpired, and be under the attempt cap before
      * we get here, so the bypass shortens the code, never the flow.
      */
-    const accepted =
-      otpMatches(code, challengeId, challenge.codeHash) ||
-      demoOtpAccepts(challenge.phone as string, code);
+    // The reserved demo identity uses its own code, never the worker's code
+    // or the stubbed SMS code. Ordinary phone authentication is unchanged.
+    const accepted = challenge.phone === DEMO_CUSTOMER_PHONE
+      ? demoCustomerAccepts(challenge.phone, code)
+      : otpMatches(code, challengeId, challenge.codeHash) || demoOtpAccepts(challenge.phone as string, code);
 
     if (!accepted) {
       await db.collection(CHALLENGES).updateOne({ _id: challengeId as never }, { $inc: { attempts: 1 } });
@@ -205,17 +211,22 @@ identityRouter.post('/otp/verify', async (req: Request, res: Response) => {
 
     let user: AuthUser;
     if (existing) {
+      if (phone === DEMO_CUSTOMER_PHONE &&
+          (existing.roles?.length !== 1 || existing.roles[0] !== 'customer')) {
+        return res.status(409).json({ error: 'demo_identity_conflict', message: 'This demo identifier already belongs to another role. An administrator must review it; no account was changed.' });
+      }
       await db.collection(USERS).updateOne({ phone }, { $set: { lastLoginAt: now } });
       user = { uid: String(existing._id), phone, roles: existing.roles as Role[] };
     } else {
       // D5: contract ids are v7. Mixing v4 and v7 in one collection breaks
       // the sort silently. Challenge ids below stay v4 - ephemeral, never sorted.
       const uid = uuidv7();
-      const roles: Role[] = ['kaarigar'];
+      const roles: Role[] = phone === DEMO_CUSTOMER_PHONE ? ['customer'] : ['kaarigar'];
       await db.collection(USERS).insertOne({
         _id: uid as never,
         phone,
         roles,
+        ...(phone === DEMO_CUSTOMER_PHONE ? { name: DEMO_CUSTOMER_NAME, demo: true } : {}),
         createdAt: now,
         lastLoginAt: now,
       });

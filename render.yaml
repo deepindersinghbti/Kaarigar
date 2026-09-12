@@ -78,6 +78,8 @@ services:
         sync: false
       - key: DEMO_OTP_CODE
         sync: false
+      - key: DEMO_CUSTOMER_OTP_CODE
+        sync: false
 
       # Firebase web config. Not secret - these ship in the browser bundle by
       # design - but Vite inlines them at BUILD time, so they must be present

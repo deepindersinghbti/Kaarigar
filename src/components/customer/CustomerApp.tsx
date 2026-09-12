@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Routes, Route, Navigate, NavLink, useNavigate } from 'react-router-dom';
-import { Search, ClipboardList, LogOut } from 'lucide-react';
+import { Routes, Route, Navigate, NavLink, Link, useNavigate } from 'react-router-dom';
+import { Search, ClipboardList, LogOut, Globe } from 'lucide-react';
 import { useAuth } from '../../auth/AuthProvider';
 import { LoginScreen } from '../LoginScreen';
 import { LanguageSelectorModal } from '../LanguageSelectorModal';
@@ -9,6 +9,12 @@ import type { SupportedLanguage } from '../../types';
 import { CustomerBrowse } from './CustomerBrowse';
 import { CustomerRequestForm } from './CustomerRequestForm';
 import { CustomerRequests } from './CustomerRequests';
+
+const COPY = {
+  en: { customer: 'Customer demo · Neha Sharma', back: 'Back to role selection', language: 'Change language', signOut: 'Sign out', browse: 'Find a Kaarigar', requests: 'My requests', notice: 'Demo login: 0123456789. Use the separate customer demo code supplied by the presenter. No SMS is sent. Only browse and request tracking are ready; quote acceptance and completion confirmation are not available yet.' },
+  hi: { customer: 'ग्राहक डेमो · नेहा शर्मा', back: 'भूमिका चयन पर वापस जाएँ', language: 'भाषा बदलें', signOut: 'साइन आउट', browse: 'कारीगर खोजें', requests: 'मेरे अनुरोध', notice: 'डेमो लॉगिन: 0123456789। प्रस्तुतकर्ता से मिला अलग ग्राहक डेमो कोड डालें। SMS नहीं भेजा जाता। अभी केवल खोज और अनुरोध देखना उपलब्ध है; कोट स्वीकार करना और काम पूरा होने की पुष्टि उपलब्ध नहीं हैं।' },
+  pa: { customer: 'ਗਾਹਕ ਡੈਮੋ · ਨੇਹਾ ਸ਼ਰਮਾ', back: 'ਭੂਮਿਕਾ ਚੋਣ ਉੱਤੇ ਵਾਪਸ ਜਾਓ', language: 'ਭਾਸ਼ਾ ਬਦਲੋ', signOut: 'ਸਾਈਨ ਆਊਟ', browse: 'ਕਾਰੀਗਰ ਲੱਭੋ', requests: 'ਮੇਰੀਆਂ ਬੇਨਤੀਆਂ', notice: 'ਡੈਮੋ ਲੌਗਇਨ: 0123456789। ਪੇਸ਼ਕਰਤਾ ਤੋਂ ਮਿਲਿਆ ਵੱਖਰਾ ਗਾਹਕ ਡੈਮੋ ਕੋਡ ਵਰਤੋ। SMS ਨਹੀਂ ਭੇਜਿਆ ਜਾਂਦਾ। ਹਾਲੇ ਸਿਰਫ਼ ਖੋਜ ਅਤੇ ਬੇਨਤੀਆਂ ਦੇਖਣਾ ਉਪਲਬਧ ਹੈ; ਕੋਟ ਮਨਜ਼ੂਰ ਕਰਨਾ ਅਤੇ ਕੰਮ ਮੁਕੰਮਲ ਹੋਣ ਦੀ ਪੁਸ਼ਟੀ ਉਪਲਬਧ ਨਹੀਂ ਹਨ।' },
+};
 
 /**
  * The customer side of the app, mounted at /customer/* as a sibling of App.
@@ -26,7 +32,7 @@ import { CustomerRequests } from './CustomerRequests';
  * session is restored.
  */
 export const CustomerApp: React.FC = () => {
-  const { status, signOut } = useAuth();
+  const { status, user, signOut } = useAuth();
   const navigate = useNavigate();
 
   const [currentLanguage, setCurrentLanguage] = useState<SupportedLanguage>(() => {
@@ -39,6 +45,7 @@ export const CustomerApp: React.FC = () => {
     return 'hi';
   });
   const [isLangModalOpen, setIsLangModalOpen] = useState(false);
+  const copy = COPY[currentLanguage as keyof typeof COPY] ?? COPY.en;
 
   const handleLanguageChange = (language: SupportedLanguage) => {
     if (!isLanguageSelectable(language)) return;
@@ -53,7 +60,12 @@ export const CustomerApp: React.FC = () => {
   if (status === 'unauthenticated') {
     return (
       <>
+        <div className="bg-[#F3F4F6] px-4 pt-4">
+          <Link to="/" className="inline-flex min-h-12 items-center rounded-full border border-gray-200 bg-white px-4 text-sm font-bold">{copy.back}</Link>
+          <p className="mx-auto mt-4 max-w-md rounded-2xl border border-orange-200 bg-orange-50 p-4 text-sm text-gray-700">{copy.notice}</p>
+        </div>
         <LoginScreen
+          customerDemo
           currentLanguage={currentLanguage}
           onChangeLanguage={() => setIsLangModalOpen(true)}
         />
@@ -66,6 +78,8 @@ export const CustomerApp: React.FC = () => {
       </>
     );
   }
+
+  if (!user?.roles.includes('customer')) return <Navigate to="/" replace />;
 
   const tabClass = ({ isActive }: { isActive: boolean }) =>
     [
@@ -80,15 +94,19 @@ export const CustomerApp: React.FC = () => {
           <div className="w-9 h-9 rounded-xl bg-orange-500 shrink-0" />
           <div className="flex-1 min-w-0">
             <p className="text-base font-extrabold leading-tight">कारीगर</p>
-            <p className="text-xs text-gray-500 leading-tight">ग्राहक</p>
+            <p className="text-xs text-gray-500 leading-tight">{copy.customer}</p>
           </div>
+          <button type="button" onClick={() => setIsLangModalOpen(true)} aria-label={copy.language}
+            className="h-10 px-3 rounded-xl border border-gray-200 text-gray-600 flex items-center gap-1.5">
+            <Globe className="w-4 h-4" />{currentLanguage.toUpperCase()}
+          </button>
           <button
             type="button"
-            onClick={signOut}
+            onClick={() => { signOut(); navigate('/', { replace: true }); }}
             className="h-10 px-3 rounded-xl border border-gray-200 text-gray-600 font-bold text-sm flex items-center gap-1.5 active:scale-[0.98] transition"
           >
             <LogOut className="w-4 h-4" />
-            साइन आउट
+            {copy.signOut}
           </button>
         </div>
       </header>
@@ -96,15 +114,16 @@ export const CustomerApp: React.FC = () => {
       <nav className="max-w-3xl w-full mx-auto px-4 pt-4 flex gap-2">
         <NavLink to="/customer" end className={tabClass}>
           <Search className="w-4 h-4" />
-          कारीगर खोजें
+          {copy.browse}
         </NavLink>
         <NavLink to="/customer/requests" className={tabClass}>
           <ClipboardList className="w-4 h-4" />
-          मेरे अनुरोध
+          {copy.requests}
         </NavLink>
       </nav>
 
       <main className="flex-1 px-4 pt-4 pb-10 max-w-3xl w-full mx-auto">
+        <p className="mb-4 rounded-2xl border border-orange-200 bg-orange-50 p-3 text-xs text-gray-700">{copy.notice}</p>
         <Routes>
           <Route
             index
