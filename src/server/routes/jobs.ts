@@ -117,6 +117,38 @@ jobsRouter.post('/:id/transition', requireAuth, async (req: Request, res: Respon
     });
   }
 
+  /**
+   * Moving to QUOTED is the one transition that carries a number: the price the
+   * worker is proposing.
+   *
+   * It is rejected on every other edge rather than ignored. Silently dropping it
+   * would let a client believe it had repriced an ACCEPTED job.
+   *
+   * Whether it is REQUIRED depends on the job, so that check lives further down
+   * once the job is loaded - see the customerId note there.
+   */
+  const rawQuote = (req.body ?? {}).quotedPrice;
+  let quotedPrice: number | undefined;
+
+  if (rawQuote !== undefined && next !== 'QUOTED') {
+    return res.status(400).json({
+      error: 'quoted_price_not_allowed',
+      field: 'quotedPrice',
+      message: `quotedPrice may only be set when moving to QUOTED, not to ${next}.`,
+    });
+  }
+
+  if (rawQuote !== undefined) {
+    quotedPrice = Number(rawQuote);
+    if (!Number.isFinite(quotedPrice) || quotedPrice <= 0) {
+      return res.status(400).json({
+        error: 'invalid_quoted_price',
+        field: 'quotedPrice',
+        message: 'quotedPrice must be a positive number.',
+      });
+    }
+  }
+
   try {
     const db = getDb();
     const uid = req.user!.uid;
@@ -124,6 +156,42 @@ jobsRouter.post('/:id/transition', requireAuth, async (req: Request, res: Respon
 
     if (!job) {
       return res.status(404).json({ error: 'job_not_found', message: 'No such job for this user.' });
+    }
+
+    /**
+     * A customer-linked job is ACCEPTED BY THE CUSTOMER, never by the worker.
+     *
+     * Without this the worker could walk their own job past QUOTED and write an
+     * agreement the customer never gave, which would make agreedPrice worthless
+     * as evidence and the customer's Accept button decorative.
+     *
+     * Jobs with no customerId are unaffected: those are the worker's own record
+     * of work they did for someone with no account, and there is nobody else to
+     * ask. That is the same distinction createJob draws about agreedPrice.
+     */
+    /**
+     * A price is MANDATORY when quoting a customer's request and OPTIONAL on the
+     * worker's own job.
+     *
+     * The customer is shown this number and asked to accept it, so a QUOTED
+     * request with no price is a screen they cannot act on - they would be
+     * agreeing to a blank. A worker's own job has no counterparty to show it to;
+     * QUOTED is just a step on their record, and it moved without a price long
+     * before quoting existed. Requiring one there breaks that flow for no gain.
+     */
+    if (next === 'QUOTED' && job.customerId && quotedPrice === undefined) {
+      return res.status(400).json({
+        error: 'quoted_price_required',
+        field: 'quotedPrice',
+        message: 'A customer request needs a price before it can be quoted.',
+      });
+    }
+
+    if (next === 'ACCEPTED' && job.customerId) {
+      return res.status(403).json({
+        error: 'customer_accepts_quote',
+        message: 'This request was made by a customer, so only they can accept the quote.',
+      });
     }
 
     const current = job.status as JobState;
@@ -142,7 +210,10 @@ jobsRouter.post('/:id/transition', requireAuth, async (req: Request, res: Respon
     const entry: JobStateTransition = { state: next, at: new Date().toISOString(), by: uid };
     const updated = await db.collection(JOBS).findOneAndUpdate(
       { _id: req.params.id as never, kaarigarId: uid, status: current },  // guards against a concurrent transition
-      { $set: { status: next }, $push: { stateHistory: entry as never } },
+      {
+        $set: { status: next, ...(quotedPrice !== undefined ? { quotedPrice } : {}) },
+        $push: { stateHistory: entry as never },
+      },
       { returnDocument: 'after' }
     );
 

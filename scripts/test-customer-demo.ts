@@ -89,6 +89,38 @@ try {
   check('both actors see the same job ID', (await call('/api/jobs', wt)).body.jobs.some((j: any) => j.id === input.id) && (await call('/api/customer/jobs', ct)).body.jobs.some((j: any) => j.id === input.id));
   const ownJob = await call('/api/jobs', wt, { title: 'Self recorded', amount: 100, customerId: customer.user.uid });
   check('worker cannot attach self-recorded job to Neha', ownJob.status === 201 && !ownJob.body.job.customerId);
+  // --- Quote handshake: worker names a price, customer alone accepts it -----
+  check('QUOTED needs a price', (await call(`/api/jobs/${input.id}/transition`, wt, { state: 'QUOTED' })).status === 400);
+  check('zero and negative prices refused', (await call(`/api/jobs/${input.id}/transition`, wt, { state: 'QUOTED', quotedPrice: 0 })).status === 400
+    && (await call(`/api/jobs/${input.id}/transition`, wt, { state: 'QUOTED', quotedPrice: -5 })).status === 400);
+  check('price refused on an unrelated edge', (await call(`/api/jobs/${input.id}/transition`, wt, { state: 'CANCELLED', quotedPrice: 500 })).status === 400);
+  check('customer cannot quote their own request', (await call(`/api/jobs/${input.id}/transition`, ct, { state: 'QUOTED', quotedPrice: 1 })).status === 403);
+  const quoted = await call(`/api/jobs/${input.id}/transition`, wt, { state: 'QUOTED', quotedPrice: 1450 });
+  check('worker quotes a price', quoted.status === 200 && quoted.body.job.status === 'QUOTED' && quoted.body.job.quotedPrice === 1450);
+  check('quoting alone agrees nothing', quoted.body.job.agreedPrice == null);
+  check('worker cannot accept on the customer behalf', (await call(`/api/jobs/${input.id}/transition`, wt, { state: 'ACCEPTED' })).status === 403);
+  check('another customer cannot accept this quote', (await call(`/api/customer/jobs/${input.id}/accept`, otherCustomer, undefined, 'POST')).status === 404);
+  check('worker blocked from the accept route', (await call(`/api/customer/jobs/${input.id}/accept`, wt, undefined, 'POST')).status === 403);
+  // The price is not a parameter: a body naming a different figure changes nothing.
+  const accepted = await call(`/api/customer/jobs/${input.id}/accept`, ct, { quotedPrice: 1, agreedPrice: 1, amount: 1 }, 'POST');
+  check('customer accepts and the agreed price is the quoted one', accepted.status === 200 && accepted.body.job.status === 'ACCEPTED' && accepted.body.job.agreedPrice === 1450);
+  check('a customer-supplied price is ignored', accepted.body.job.quotedPrice === 1450);
+  const history = accepted.body.job.stateHistory;
+  check('acceptance is recorded as the customer acting', history[history.length - 1].state === 'ACCEPTED' && history[history.length - 1].by === customer.user.uid);
+  const replay = await call(`/api/customer/jobs/${input.id}/accept`, ct, undefined, 'POST');
+  check('accepting twice is idempotent, not an error', replay.status === 200 && replay.body.alreadyAccepted === true && replay.body.job.agreedPrice === 1450);
+  check('worker sees the agreed price on their own copy', (await call('/api/jobs', wt)).body.jobs.find((j: any) => j.id === input.id).agreedPrice === 1450);
+  const notQuoted = { ...input, id: 'customer-demo-request-2', title: 'Second request' };
+  await call('/api/customer/jobs', ct, notQuoted);
+  check('a request with no quote cannot be accepted', (await call(`/api/customer/jobs/${notQuoted.id}/accept`, ct, undefined, 'POST')).status === 409);
+  check('accepting an unknown job is a 404', (await call('/api/customer/jobs/no-such-job/accept', ct, undefined, 'POST')).status === 404);
+  // A worker's own unlinked job keeps the one-tap path: nobody else can agree.
+  const soloNoPrice = await call('/api/jobs', wt, { title: 'Self recorded, unpriced', amount: 70 });
+  check('worker own job quotes with no price at all', (await call(`/api/jobs/${soloNoPrice.body.job.id}/transition`, wt, { state: 'QUOTED' })).status === 200);
+  const solo = await call(`/api/jobs/${ownJob.body.job.id}/transition`, wt, { state: 'QUOTED', quotedPrice: 300 });
+  check('worker own job still quotes', solo.status === 200 && solo.body.job.quotedPrice === 300);
+  check('worker own job still self-accepts', (await call(`/api/jobs/${ownJob.body.job.id}/transition`, wt, { state: 'ACCEPTED' })).status === 200);
+
   const refresh = await call('/api/auth/refresh', '', { refreshToken: customer.refreshToken });
   check('refresh preserves customer access restrictions', refresh.status === 200 && (await call('/api/passport/me', refresh.body.accessToken)).status === 403);
 

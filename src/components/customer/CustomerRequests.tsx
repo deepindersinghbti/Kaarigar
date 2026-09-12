@@ -26,6 +26,7 @@ export const CustomerRequests: React.FC<CustomerRequestsProps> = ({ currentLangu
   const [jobs, setJobs] = useState<JobItem[] | null>(null);
   const [error, setError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [acceptingId, setAcceptingId] = useState<string | null>(null);
 
   const stateLabel = getScreenCopy(currentLanguage).jobs.state;
 
@@ -43,6 +44,28 @@ export const CustomerRequests: React.FC<CustomerRequestsProps> = ({ currentLangu
   }, []);
 
   useEffect(() => { void load(); }, [load]);
+
+  /**
+   * Accepting sends no price. The server copies the figure it already stored, so
+   * the only thing this can do is agree to the number already on screen.
+   *
+   * The returned job replaces the row in place rather than triggering a reload:
+   * the response IS the authoritative job, and re-listing would show the same
+   * thing one round trip later.
+   */
+  const accept = async (jobId: string) => {
+    setAcceptingId(jobId);
+    setError('');
+    try {
+      const updated = await api.acceptQuote(jobId);
+      setJobs((prev) => (prev ?? []).map((j) => (j.id === updated.id ? updated : j)));
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 401) return;
+      setError(e instanceof Error ? e.message : 'दाम स्वीकार नहीं हो सका।');
+    } finally {
+      setAcceptingId(null);
+    }
+  };
 
   if (jobs === null && !error) {
     return (
@@ -119,6 +142,34 @@ export const CustomerRequests: React.FC<CustomerRequestsProps> = ({ currentLangu
           </div>
 
           {job.notes && <p className="mt-2 text-sm text-gray-600">{job.notes}</p>}
+
+          {/*
+            The quote and its Accept button. Only a QUOTED request offers this;
+            the server refuses acceptance from any other state, so showing the
+            button more widely would only manufacture a 409.
+          */}
+          {job.status === 'QUOTED' && typeof job.quotedPrice === 'number' && (
+            <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 p-3 space-y-2">
+              <p className="text-sm font-bold text-amber-900">
+                कारीगर का दाम: <span className="font-extrabold">₹{job.quotedPrice}</span>
+              </p>
+              <button
+                type="button"
+                onClick={() => void accept(job.id)}
+                disabled={acceptingId === job.id}
+                className="w-full min-h-12 rounded-2xl bg-orange-500 text-white font-extrabold disabled:opacity-50 active:scale-[0.98] transition"
+              >
+                {acceptingId === job.id ? 'भेज रहे हैं…' : 'यह दाम स्वीकार करें'}
+              </button>
+            </div>
+          )}
+
+          {/* Once agreed, the figure is shown as settled fact, with no control. */}
+          {typeof job.agreedPrice === 'number' && job.status !== 'QUOTED' && (
+            <p className="mt-3 text-sm font-bold text-green-800 bg-green-50 border border-green-200 rounded-2xl px-3 py-2">
+              तय दाम: <span className="font-extrabold">₹{job.agreedPrice}</span>
+            </p>
+          )}
         </div>
       ))}
     </div>

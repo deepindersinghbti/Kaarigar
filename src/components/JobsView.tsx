@@ -35,7 +35,14 @@ export const JOB_BADGE_PRESENTATION: Record<JobBadge, { className: string }> = {
   cancelled: { className: 'text-red-700 bg-red-50 border-red-200' },
 };
 
-/** The single judge-demo path. Cancellation remains available through the API. */
+/**
+ * The single judge-demo path. Cancellation remains available through the API.
+ *
+ * QUOTED -> ACCEPTED stays listed because a worker's OWN job (no customerId)
+ * still advances that way. On a customer's request the server refuses it - the
+ * customer accepts - and the card below renders a waiting notice instead of a
+ * button, so the refused edge is never offered.
+ */
 const HAPPY_PATH_NEXT: Partial<Record<JobState, JobState>> = {
   REQUESTED: 'QUOTED',
   QUOTED: 'ACCEPTED',
@@ -52,7 +59,7 @@ interface JobsViewProps {
   currentLanguage: SupportedLanguage;
   onAddJobVoice: () => void;
   onOpenQuote: () => void;
-  onTransitionJob?: (jobId: string, state: JobState) => Promise<void>;
+  onTransitionJob?: (jobId: string, state: JobState, quotedPrice?: number) => Promise<void>;
   /**
    * Sync state per record (section 9.1). A function rather than a field on the
    * job because the outbox is the authority on what has actually reached the
@@ -78,6 +85,7 @@ export const JobsView: React.FC<JobsViewProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [transitioningJobId, setTransitioningJobId] = useState<string | null>(null);
   const [transitionError, setTransitionError] = useState('');
+  const [quoteDrafts, setQuoteDrafts] = useState<Record<string, string>>({});
 
   const todayStr = todayIso();
 
@@ -100,17 +108,35 @@ export const JobsView: React.FC<JobsViewProps> = ({
 
   const totalAmount = filteredJobs.reduce((sum, j) => sum + j.amount, 0);
 
-  const advanceJob = async (jobId: string, state: JobState) => {
+  const advanceJob = async (jobId: string, state: JobState, quotedPrice?: number) => {
     if (!onTransitionJob) return;
     setTransitioningJobId(jobId);
     setTransitionError('');
     try {
-      await onTransitionJob(jobId, state);
+      await onTransitionJob(jobId, state, quotedPrice);
     } catch (error) {
       setTransitionError(error instanceof Error ? error.message : copy.updateError);
     } finally {
       setTransitioningJobId(null);
     }
+  };
+
+  /**
+   * Per-job price drafts, keyed by job id rather than a single field, so two
+   * open cards cannot overwrite each other's number.
+   */
+  const sendQuote = async (jobId: string) => {
+    const raw = (quoteDrafts[jobId] ?? '').trim();
+    const price = Number(raw);
+    if (!raw || !Number.isFinite(price) || price <= 0) {
+      setTransitionError(copy.quoteInvalid);
+      return;
+    }
+    await advanceJob(jobId, 'QUOTED', price);
+    setQuoteDrafts((prev) => {
+      const { [jobId]: _sent, ...rest } = prev;
+      return rest;
+    });
   };
 
   return (
@@ -348,7 +374,47 @@ export const JobsView: React.FC<JobsViewProps> = ({
                 <p className="text-xs text-gray-500">
                   {copy.lifecycle}: <span className="font-extrabold text-gray-800">{copy.state[job.status]}</span>
                 </p>
-                {nextState && (
+                {/*
+                  A customer's request needs a price before it can move, and is
+                  then the customer's to accept - so neither of those two edges
+                  is a one-tap button on this screen.
+                */}
+                {job.customerId && job.status === 'REQUESTED' ? (
+                  <div className="flex items-center gap-2">
+                    <label className="sr-only" htmlFor={`quote-${job.id}`}>{copy.quoteLabel}</label>
+                    <input
+                      id={`quote-${job.id}`}
+                      type="number"
+                      inputMode="numeric"
+                      min="1"
+                      value={quoteDrafts[job.id] ?? ''}
+                      onChange={(e) => setQuoteDrafts((prev) => ({ ...prev, [job.id]: e.target.value }))}
+                      placeholder={copy.quotePlaceholder}
+                      disabled={!canTransition || isTransitioning}
+                      className="h-10 w-28 rounded-xl border border-gray-300 px-3 text-sm font-bold text-gray-900 disabled:opacity-45"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void sendQuote(job.id)}
+                      disabled={!canTransition || isTransitioning}
+                      className="inline-flex items-center justify-center gap-1.5 min-h-10 px-4 py-2 rounded-full bg-gray-900 text-white text-xs font-extrabold disabled:opacity-45 disabled:cursor-not-allowed active:scale-[0.98] transition"
+                      title={
+                        !onTransitionJob
+                          ? copy.apiOnly
+                          : syncState !== 'synced'
+                            ? copy.waitForSync
+                            : undefined
+                      }
+                    >
+                      {isTransitioning ? copy.updating : copy.quoteSend}
+                    </button>
+                  </div>
+                ) : job.customerId && job.status === 'QUOTED' ? (
+                  <p className="text-xs font-extrabold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-3 py-1.5">
+                    {copy.quotedAwaiting}
+                    {typeof job.quotedPrice === 'number' && <> · ₹{job.quotedPrice}</>}
+                  </p>
+                ) : nextState && (
                   <button
                     type="button"
                     onClick={() => void advanceJob(job.id, nextState)}

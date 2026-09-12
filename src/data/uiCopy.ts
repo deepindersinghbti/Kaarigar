@@ -86,6 +86,12 @@ export interface JobsCopy {
   updating: string;
   apiOnly: string;
   waitForSync: string;
+  /** Naming a price on a customer's request, and waiting for their answer. */
+  quoteLabel: string;
+  quotePlaceholder: string;
+  quoteSend: string;
+  quoteInvalid: string;
+  quotedAwaiting: string;
   updateError: string;
   state: Record<JobState, string>;
   action: Partial<Record<JobState, string>>;
@@ -607,6 +613,11 @@ const jobsHi: JobsCopy = {
   updating: 'अपडेट हो रहा है…',
   apiOnly: 'लाइफसाइकल कंट्रोल API डेमो मोड में उपलब्ध है।',
   waitForSync: 'स्थिति बदलने से पहले काम के सुरक्षित होने तक रुकें।',
+  quoteLabel: 'अपना दाम बताएं',
+  quotePlaceholder: 'दाम ₹',
+  quoteSend: 'दाम भेजें',
+  quoteInvalid: 'दाम शून्य से बड़ा होना चाहिए।',
+  quotedAwaiting: 'ग्राहक की मंज़ूरी का इंतज़ार है।',
   updateError: 'काम अपडेट नहीं हो सका।',
   state: {
     REQUESTED: 'अनुरोध किया गया', QUOTED: 'कोट भेजा गया', ACCEPTED: 'स्वीकार किया गया',
@@ -640,6 +651,11 @@ const jobsEn: JobsCopy = {
   updating: 'Updating…',
   apiOnly: 'Lifecycle controls require API demo mode.',
   waitForSync: 'Wait for this job to sync before changing its state.',
+  quoteLabel: 'Name your price',
+  quotePlaceholder: 'Price ₹',
+  quoteSend: 'Send price',
+  quoteInvalid: 'The price must be greater than zero.',
+  quotedAwaiting: 'Waiting for the customer to accept.',
   updateError: 'Could not update the job.',
   state: {
     REQUESTED: 'Requested', QUOTED: 'Quoted', ACCEPTED: 'Accepted', SCHEDULED: 'Scheduled',
@@ -673,6 +689,11 @@ const jobsPa: JobsCopy = {
   updating: 'ਅਪਡੇਟ ਹੋ ਰਿਹਾ ਹੈ…',
   apiOnly: 'ਕੰਮ ਦੀ ਸਥਿਤੀ ਦਾ ਨਿਯੰਤਰਣ ਡੈਮੋ ਮੋਡ ਵਿੱਚ ਉਪਲਬਧ ਹੈ।',
   waitForSync: 'ਸਥਿਤੀ ਬਦਲਣ ਤੋਂ ਪਹਿਲਾਂ ਕੰਮ ਸੁਰੱਖਿਅਤ ਹੋਣ ਤੱਕ ਉਡੀਕ ਕਰੋ।',
+  quoteLabel: 'ਆਪਣਾ ਮੁੱਲ ਦੱਸੋ',
+  quotePlaceholder: 'ਮੁੱਲ ₹',
+  quoteSend: 'ਮੁੱਲ ਭੇਜੋ',
+  quoteInvalid: 'ਮੁੱਲ ਸਿਫ਼ਰ ਤੋਂ ਵੱਧ ਹੋਣਾ ਚਾਹੀਦਾ ਹੈ।',
+  quotedAwaiting: 'ਗਾਹਕ ਦੀ ਮਨਜ਼ੂਰੀ ਦੀ ਉਡੀਕ ਹੈ।',
   updateError: 'ਕੰਮ ਅਪਡੇਟ ਨਹੀਂ ਹੋ ਸਕਿਆ।',
   state: {
     REQUESTED: 'ਬੇਨਤੀ ਕੀਤੀ',
