@@ -24,6 +24,8 @@ export interface CustomerCopy {
     decline: string; declining: string; declineError: string; declined: string;
     cancel: string; cancelling: string; cancelError: string; cancelConfirm: string;
     timelineShow: string; timelineHide: string; timelineBy: (isYou: boolean) => string; call: string;
+    done: string; confirm: string; confirming: string; confirmError: string;
+    dispute: string; disputing: string; disputeError: string; disputed: string; disputeConfirm: string;
   };
   trades: Record<Trade, string>;
 }
@@ -37,7 +39,9 @@ const CUSTOMER_COPY: Record<SupportedLanguage, CustomerCopy> = {
     requestList: { loading: 'Loading…', loadError: 'Could not load requests.', count: (count) => `${count} request${count === 1 ? '' : 's'}`, refresh: 'Refresh', empty: 'No requests yet.', find: 'Find a Kaarigar', quote: "Kaarigar's quote:", accepting: 'Accepting…', accept: 'Accept this price', agreed: 'Agreed price:', acceptError: 'Could not accept the price.',
       decline: 'Ask for another price', declining: 'Sending…', declineError: 'Could not decline the price.', declined: 'You asked for another price. Waiting for the kaarigar.',
       cancel: 'Cancel request', cancelling: 'Cancelling…', cancelError: 'Could not cancel the request.', cancelConfirm: 'Cancel this request? The kaarigar will be told it is no longer needed.',
-      timelineShow: 'Show progress', timelineHide: 'Hide progress', timelineBy: (isYou) => (isYou ? 'by you' : 'by the kaarigar'), call: 'Call' },
+      timelineShow: 'Show progress', timelineHide: 'Hide progress', timelineBy: (isYou) => (isYou ? 'by you' : 'by the kaarigar'), call: 'Call',
+      done: 'The kaarigar says this work is done.', confirm: 'Yes, it is done', confirming: 'Confirming…', confirmError: 'Could not confirm.',
+      dispute: 'No, it is not done', disputing: 'Sending…', disputeError: 'Could not send that.', disputed: 'You said this is not done. The kaarigar can return and finish it.', disputeConfirm: 'Tell the kaarigar this work is not done?' },
     trades: { Electrician: 'Electrician', Plumber: 'Plumber' },
   },
   hi: {
@@ -48,7 +52,9 @@ const CUSTOMER_COPY: Record<SupportedLanguage, CustomerCopy> = {
     requestList: { loading: 'लोड हो रहा है…', loadError: 'अनुरोध लोड नहीं हो सके।', count: (count) => `${count} अनुरोध`, refresh: 'ताज़ा करें', empty: 'अभी तक कोई अनुरोध नहीं।', find: 'कारीगर खोजें', quote: 'कारीगर का दाम:', accepting: 'भेज रहे हैं…', accept: 'यह दाम स्वीकार करें', agreed: 'तय दाम:', acceptError: 'दाम स्वीकार नहीं हो सका।',
       decline: 'दूसरा दाम बताने को कहें', declining: 'भेज रहे हैं…', declineError: 'दाम अस्वीकार नहीं हो सका।', declined: 'आपने दूसरा दाम माँगा है। कारीगर के जवाब का इंतज़ार है।',
       cancel: 'अनुरोध रद्द करें', cancelling: 'रद्द कर रहे हैं…', cancelError: 'अनुरोध रद्द नहीं हो सका।', cancelConfirm: 'यह अनुरोध रद्द करें? कारीगर को बता दिया जाएगा कि अब ज़रूरत नहीं है।',
-      timelineShow: 'प्रगति देखें', timelineHide: 'प्रगति छिपाएँ', timelineBy: (isYou) => (isYou ? 'आपके द्वारा' : 'कारीगर द्वारा'), call: 'कॉल करें' },
+      timelineShow: 'प्रगति देखें', timelineHide: 'प्रगति छिपाएँ', timelineBy: (isYou) => (isYou ? 'आपके द्वारा' : 'कारीगर द्वारा'), call: 'कॉल करें',
+      done: 'कारीगर का कहना है कि यह काम पूरा हो गया है।', confirm: 'हाँ, काम पूरा हुआ', confirming: 'पुष्टि हो रही है…', confirmError: 'पुष्टि नहीं हो सकी।',
+      dispute: 'नहीं, काम पूरा नहीं हुआ', disputing: 'भेज रहे हैं…', disputeError: 'यह भेजा नहीं जा सका।', disputed: 'आपने कहा कि काम पूरा नहीं हुआ। कारीगर लौटकर इसे पूरा कर सकता है।', disputeConfirm: 'कारीगर को बताएँ कि यह काम पूरा नहीं हुआ?' },
     trades: { Electrician: 'इलेक्ट्रीशियन', Plumber: 'प्लंबर' },
   },
   pa: {
@@ -59,7 +65,9 @@ const CUSTOMER_COPY: Record<SupportedLanguage, CustomerCopy> = {
     requestList: { loading: 'ਲੋਡ ਹੋ ਰਿਹਾ ਹੈ…', loadError: 'ਬੇਨਤੀਆਂ ਲੋਡ ਨਹੀਂ ਹੋ ਸਕੀਆਂ।', count: (count) => `${count} ਬੇਨਤੀਆਂ`, refresh: 'ਤਾਜ਼ਾ ਕਰੋ', empty: 'ਹਾਲੇ ਕੋਈ ਬੇਨਤੀ ਨਹੀਂ ਹੈ।', find: 'ਕਾਰੀਗਰ ਲੱਭੋ', quote: 'ਕਾਰੀਗਰ ਦੀ ਕੀਮਤ:', accepting: 'ਭੇਜਿਆ ਜਾ ਰਿਹਾ ਹੈ…', accept: 'ਇਹ ਕੀਮਤ ਮਨਜ਼ੂਰ ਕਰੋ', agreed: 'ਤੈਅ ਕੀਮਤ:', acceptError: 'ਕੀਮਤ ਮਨਜ਼ੂਰ ਨਹੀਂ ਹੋ ਸਕੀ।',
       decline: 'ਹੋਰ ਕੀਮਤ ਦੱਸਣ ਲਈ ਕਹੋ', declining: 'ਭੇਜਿਆ ਜਾ ਰਿਹਾ ਹੈ…', declineError: 'ਕੀਮਤ ਨਾਮਨਜ਼ੂਰ ਨਹੀਂ ਹੋ ਸਕੀ।', declined: 'ਤੁਸੀਂ ਹੋਰ ਕੀਮਤ ਮੰਗੀ ਹੈ। ਕਾਰੀਗਰ ਦੇ ਜਵਾਬ ਦੀ ਉਡੀਕ ਹੈ।',
       cancel: 'ਬੇਨਤੀ ਰੱਦ ਕਰੋ', cancelling: 'ਰੱਦ ਕੀਤੀ ਜਾ ਰਹੀ ਹੈ…', cancelError: 'ਬੇਨਤੀ ਰੱਦ ਨਹੀਂ ਹੋ ਸਕੀ।', cancelConfirm: 'ਇਹ ਬੇਨਤੀ ਰੱਦ ਕਰਨੀ ਹੈ? ਕਾਰੀਗਰ ਨੂੰ ਦੱਸ ਦਿੱਤਾ ਜਾਵੇਗਾ ਕਿ ਹੁਣ ਲੋੜ ਨਹੀਂ ਹੈ।',
-      timelineShow: 'ਤਰੱਕੀ ਵੇਖੋ', timelineHide: 'ਤਰੱਕੀ ਲੁਕਾਓ', timelineBy: (isYou) => (isYou ? 'ਤੁਹਾਡੇ ਵੱਲੋਂ' : 'ਕਾਰੀਗਰ ਵੱਲੋਂ'), call: 'ਕਾਲ ਕਰੋ' },
+      timelineShow: 'ਤਰੱਕੀ ਵੇਖੋ', timelineHide: 'ਤਰੱਕੀ ਲੁਕਾਓ', timelineBy: (isYou) => (isYou ? 'ਤੁਹਾਡੇ ਵੱਲੋਂ' : 'ਕਾਰੀਗਰ ਵੱਲੋਂ'), call: 'ਕਾਲ ਕਰੋ',
+      done: 'ਕਾਰੀਗਰ ਦਾ ਕਹਿਣਾ ਹੈ ਕਿ ਇਹ ਕੰਮ ਮੁਕੰਮਲ ਹੋ ਗਿਆ ਹੈ।', confirm: 'ਹਾਂ, ਕੰਮ ਪੂਰਾ ਹੋ ਗਿਆ', confirming: 'ਪੁਸ਼ਟੀ ਹੋ ਰਹੀ ਹੈ…', confirmError: 'ਪੁਸ਼ਟੀ ਨਹੀਂ ਹੋ ਸਕੀ।',
+      dispute: 'ਨਹੀਂ, ਕੰਮ ਪੂਰਾ ਨਹੀਂ ਹੋਇਆ', disputing: 'ਭੇਜਿਆ ਜਾ ਰਿਹਾ ਹੈ…', disputeError: 'ਇਹ ਭੇਜਿਆ ਨਹੀਂ ਜਾ ਸਕਿਆ।', disputed: 'ਤੁਸੀਂ ਕਿਹਾ ਕਿ ਕੰਮ ਪੂਰਾ ਨਹੀਂ ਹੋਇਆ। ਕਾਰੀਗਰ ਵਾਪਸ ਆ ਕੇ ਇਸਨੂੰ ਪੂਰਾ ਕਰ ਸਕਦਾ ਹੈ।', disputeConfirm: 'ਕਾਰੀਗਰ ਨੂੰ ਦੱਸਣਾ ਹੈ ਕਿ ਇਹ ਕੰਮ ਪੂਰਾ ਨਹੀਂ ਹੋਇਆ?' },
     trades: { Electrician: 'ਇਲੈਕਟ੍ਰੀਸ਼ੀਅਨ', Plumber: 'ਪਲੰਬਰ' },
   },
   kn: {
@@ -70,7 +78,9 @@ const CUSTOMER_COPY: Record<SupportedLanguage, CustomerCopy> = {
     requestList: { loading: 'ಲೋಡ್ ಆಗುತ್ತಿದೆ…', loadError: 'ವಿನಂತಿಗಳನ್ನು ಲೋಡ್ ಮಾಡಲು ಸಾಧ್ಯವಾಗಲಿಲ್ಲ.', count: (count) => `${count} ವಿನಂತಿಗಳು`, refresh: 'ರಿಫ್ರೆಶ್ ಮಾಡಿ', empty: 'ಇನ್ನೂ ಯಾವುದೇ ವಿನಂತಿಗಳಿಲ್ಲ.', find: 'ಕಾರಿಗಾರರನ್ನು ಹುಡುಕಿ', quote: 'ಕಾರಿಗಾರರ ದರ:', accepting: 'ಸ್ವೀಕರಿಸಲಾಗುತ್ತಿದೆ…', accept: 'ಈ ದರ ಒಪ್ಪಿಕೊಳ್ಳಿ', agreed: 'ಒಪ್ಪಿದ ದರ:', acceptError: 'ದರವನ್ನು ಒಪ್ಪಿಕೊಳ್ಳಲು ಸಾಧ್ಯವಾಗಲಿಲ್ಲ.',
       decline: 'ಬೇರೆ ದರ ತಿಳಿಸಲು ಕೇಳಿ', declining: 'ಕಳುಹಿಸಲಾಗುತ್ತಿದೆ…', declineError: 'ದರವನ್ನು ನಿರಾಕರಿಸಲು ಸಾಧ್ಯವಾಗಲಿಲ್ಲ.', declined: 'ನೀವು ಬೇರೆ ದರ ಕೇಳಿದ್ದೀರಿ. ಕಾರಿಗಾರರ ಉತ್ತರಕ್ಕಾಗಿ ಕಾಯಲಾಗುತ್ತಿದೆ.',
       cancel: 'ವಿನಂತಿ ರದ್ದುಗೊಳಿಸಿ', cancelling: 'ರದ್ದುಗೊಳಿಸಲಾಗುತ್ತಿದೆ…', cancelError: 'ವಿನಂತಿಯನ್ನು ರದ್ದುಗೊಳಿಸಲು ಸಾಧ್ಯವಾಗಲಿಲ್ಲ.', cancelConfirm: 'ಈ ವಿನಂತಿಯನ್ನು ರದ್ದುಗೊಳಿಸಬೇಕೇ? ಇನ್ನು ಅಗತ್ಯವಿಲ್ಲ ಎಂದು ಕಾರಿಗಾರರಿಗೆ ತಿಳಿಸಲಾಗುವುದು.',
-      timelineShow: 'ಪ್ರಗತಿ ನೋಡಿ', timelineHide: 'ಪ್ರಗತಿ ಮರೆಮಾಡಿ', timelineBy: (isYou) => (isYou ? 'ನಿಮ್ಮಿಂದ' : 'ಕಾರಿಗಾರರಿಂದ'), call: 'ಕರೆ ಮಾಡಿ' },
+      timelineShow: 'ಪ್ರಗತಿ ನೋಡಿ', timelineHide: 'ಪ್ರಗತಿ ಮರೆಮಾಡಿ', timelineBy: (isYou) => (isYou ? 'ನಿಮ್ಮಿಂದ' : 'ಕಾರಿಗಾರರಿಂದ'), call: 'ಕರೆ ಮಾಡಿ',
+      done: 'ಈ ಕೆಲಸ ಮುಗಿದಿದೆ ಎಂದು ಕಾರಿಗಾರರು ಹೇಳಿದ್ದಾರೆ.', confirm: 'ಹೌದು, ಮುಗಿದಿದೆ', confirming: 'ದೃಢೀಕರಿಸಲಾಗುತ್ತಿದೆ…', confirmError: 'ದೃಢೀಕರಿಸಲು ಸಾಧ್ಯವಾಗಲಿಲ್ಲ.',
+      dispute: 'ಇಲ್ಲ, ಮುಗಿದಿಲ್ಲ', disputing: 'ಕಳುಹಿಸಲಾಗುತ್ತಿದೆ…', disputeError: 'ಅದನ್ನು ಕಳುಹಿಸಲು ಸಾಧ್ಯವಾಗಲಿಲ್ಲ.', disputed: 'ಕೆಲಸ ಮುಗಿದಿಲ್ಲ ಎಂದು ನೀವು ಹೇಳಿದ್ದೀರಿ. ಕಾರಿಗಾರರು ಮರಳಿ ಬಂದು ಪೂರ್ಣಗೊಳಿಸಬಹುದು.', disputeConfirm: 'ಈ ಕೆಲಸ ಮುಗಿದಿಲ್ಲ ಎಂದು ಕಾರಿಗಾರರಿಗೆ ತಿಳಿಸಬೇಕೇ?' },
     trades: { Electrician: 'ವಿದ್ಯುತ್ ತಂತ್ರಜ್ಞ', Plumber: 'ಪ್ಲಂಬರ್' },
   },
   mr: {
@@ -81,7 +91,9 @@ const CUSTOMER_COPY: Record<SupportedLanguage, CustomerCopy> = {
     requestList: { loading: 'लोड होत आहे…', loadError: 'विनंत्या लोड करता आल्या नाहीत.', count: (count) => `${count} विनंत्या`, refresh: 'रीफ्रेश करा', empty: 'अजून कोणतीही विनंती नाही.', find: 'कारागीर शोधा', quote: 'कारागिराचा दर:', accepting: 'स्वीकारत आहे…', accept: 'हा दर स्वीकारा', agreed: 'ठरलेला दर:', acceptError: 'दर स्वीकारता आला नाही.',
       decline: 'दुसरा दर सांगण्यास सांगा', declining: 'पाठवत आहे…', declineError: 'दर नाकारता आला नाही.', declined: 'तुम्ही दुसरा दर मागितला आहे. कारागिराच्या उत्तराची वाट पाहत आहोत.',
       cancel: 'विनंती रद्द करा', cancelling: 'रद्द करत आहे…', cancelError: 'विनंती रद्द करता आली नाही.', cancelConfirm: 'ही विनंती रद्द करायची? आता गरज नाही असे कारागिराला कळवले जाईल.',
-      timelineShow: 'प्रगती पहा', timelineHide: 'प्रगती लपवा', timelineBy: (isYou) => (isYou ? 'तुमच्याकडून' : 'कारागिराकडून'), call: 'कॉल करा' },
+      timelineShow: 'प्रगती पहा', timelineHide: 'प्रगती लपवा', timelineBy: (isYou) => (isYou ? 'तुमच्याकडून' : 'कारागिराकडून'), call: 'कॉल करा',
+      done: 'हे काम पूर्ण झाले आहे असे कारागीर सांगतात.', confirm: 'होय, काम पूर्ण झाले', confirming: 'पुष्टी करत आहे…', confirmError: 'पुष्टी करता आली नाही.',
+      dispute: 'नाही, काम पूर्ण झाले नाही', disputing: 'पाठवत आहे…', disputeError: 'ते पाठवता आले नाही.', disputed: 'तुम्ही सांगितले की काम पूर्ण झाले नाही. कारागीर परत येऊन ते पूर्ण करू शकतो.', disputeConfirm: 'हे काम पूर्ण झाले नाही असे कारागिराला कळवायचे?' },
     trades: { Electrician: 'इलेक्ट्रिशियन', Plumber: 'प्लंबर' },
   },
 };

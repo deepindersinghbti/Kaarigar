@@ -9,7 +9,7 @@ import { getScreenCopy } from '../../data/uiCopy';
 import { getCustomerCopy, getCustomerTrade } from './customerCopy';
 
 /** Which control on a row is mid-flight. One row, one action at a time. */
-type PendingAction = 'accept' | 'decline' | 'cancel';
+type PendingAction = 'accept' | 'decline' | 'cancel' | 'confirm' | 'dispute';
 
 /**
  * Mirrors CUSTOMER_CANCELLABLE in server/routes/customer.ts, which is the
@@ -87,7 +87,13 @@ export const CustomerRequests: React.FC<CustomerRequestsProps> = ({ currentLangu
     setPending({ id: jobId, action });
     setError('');
     try {
-      const call = action === 'accept' ? api.acceptQuote : action === 'decline' ? api.declineQuote : api.cancelRequest;
+      const call = {
+        accept: api.acceptQuote,
+        decline: api.declineQuote,
+        cancel: api.cancelRequest,
+        confirm: api.confirmCompletion,
+        dispute: api.disputeCompletion,
+      }[action];
       const updated = await call(jobId);
       setJobs((prev) => (prev ?? []).map((j) => (j.id === updated.id ? updated : j)));
     } catch (e) {
@@ -97,11 +103,13 @@ export const CustomerRequests: React.FC<CustomerRequestsProps> = ({ currentLangu
         void load();
         return;
       }
-      setError(
-        action === 'accept' ? copy.requestList.acceptError
-          : action === 'decline' ? copy.requestList.declineError
-          : copy.requestList.cancelError
-      );
+      setError({
+        accept: copy.requestList.acceptError,
+        decline: copy.requestList.declineError,
+        cancel: copy.requestList.cancelError,
+        confirm: copy.requestList.confirmError,
+        dispute: copy.requestList.disputeError,
+      }[action]);
     } finally {
       setPending(null);
     }
@@ -115,6 +123,17 @@ export const CustomerRequests: React.FC<CustomerRequestsProps> = ({ currentLangu
   const confirmCancel = (jobId: string) => {
     if (!window.confirm(copy.requestList.cancelConfirm)) return;
     void act(jobId, 'cancel');
+  };
+
+  /**
+   * Disputing asks first for the same reason cancelling does, though not
+   * because it is terminal - DISPUTED goes back to IN_PROGRESS. It asks because
+   * it tells another person their work was not good enough, and that is not
+   * something to do by mis-tapping a button next to "Yes, it is done".
+   */
+  const confirmDispute = (jobId: string) => {
+    if (!window.confirm(copy.requestList.disputeConfirm)) return;
+    void act(jobId, 'dispute');
   };
 
   if (jobs === null && !error) {
@@ -249,6 +268,41 @@ export const CustomerRequests: React.FC<CustomerRequestsProps> = ({ currentLangu
                 {pending?.id === job.id && pending.action === 'decline' ? copy.requestList.declining : copy.requestList.decline}
               </button>
             </div>
+          )}
+
+          {/*
+            The kaarigar's completion claim, and the customer's answer to it.
+            Deliberately worded as a claim - "the kaarigar says this work is
+            done" - because until one of these buttons is pressed that is
+            exactly what it is, and the job's own badge already reads
+            "completed" either way.
+          */}
+          {job.status === 'COMPLETED' && (
+            <div className="mt-3 rounded-2xl border border-sky-200 bg-sky-50 p-3 space-y-2">
+              <p className="text-sm font-bold text-sky-900">{copy.requestList.done}</p>
+              <button
+                type="button"
+                onClick={() => void act(job.id, 'confirm')}
+                disabled={pending?.id === job.id}
+                className="w-full min-h-12 rounded-2xl bg-orange-500 text-white font-extrabold disabled:opacity-50 active:scale-[0.98] transition"
+              >
+                {pending?.id === job.id && pending.action === 'confirm' ? copy.requestList.confirming : copy.requestList.confirm}
+              </button>
+              <button
+                type="button"
+                onClick={() => confirmDispute(job.id)}
+                disabled={pending?.id === job.id}
+                className="w-full min-h-12 rounded-2xl border border-sky-300 bg-white text-sky-900 font-extrabold disabled:opacity-50 active:scale-[0.98] transition"
+              >
+                {pending?.id === job.id && pending.action === 'dispute' ? copy.requestList.disputing : copy.requestList.dispute}
+              </button>
+            </div>
+          )}
+
+          {job.status === 'DISPUTED' && (
+            <p className="mt-3 text-sm font-bold text-sky-900 bg-sky-50 border border-sky-200 rounded-2xl px-3 py-2">
+              {copy.requestList.disputed}
+            </p>
           )}
 
           {/*

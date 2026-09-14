@@ -338,15 +338,20 @@ const CUSTOMER_CANCELLABLE: JobState[] = ['REQUESTED', 'QUOTED', 'ACCEPTED'];
  *
  * REQUESTED and QUOTED are excluded because nothing has been agreed yet;
  * browsing and asking for prices must not be a way to harvest phone numbers
- * from the directory. CANCELLED and DISPUTED are excluded because whatever
- * engagement existed is over.
+ * from the directory. CANCELLED is excluded because the engagement is over.
+ *
+ * DISPUTED IS INCLUDED, which it was not when this list was first written. Back
+ * then the state was unreachable and the assumption was that a dispute ended
+ * the engagement. It does not: DISPUTED -> IN_PROGRESS means the kaarigar comes
+ * back to put the work right, and a customer who has just said "this is not
+ * done" is the last person who should lose the ability to ring them.
  *
  * This is NOT a relaxation of the public projection rule. That rule governs
  * PUBLIC_PROJECTION in data/profiles.ts, which backs /p/:handle and the browse
  * directory - responses to anyone, about any worker. This is a response to one
  * authenticated customer about the worker on their own job.
  */
-const CONTACT_VISIBLE_STATES: JobState[] = ['ACCEPTED', 'SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'SETTLED', 'REVIEWED'];
+const CONTACT_VISIBLE_STATES: JobState[] = ['ACCEPTED', 'SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'SETTLED', 'REVIEWED', 'DISPUTED'];
 
 customerRouter.post('/jobs/:id/cancel', requireAuth, async (req: Request, res: Response) => {
   if (!dbGuard(res)) return;
@@ -396,6 +401,86 @@ customerRouter.post('/jobs/:id/cancel', requireAuth, async (req: Request, res: R
     return res.status(500).json({ error: 'cancel_failed', message: 'Could not cancel the request.' });
   }
 });
+
+/**
+ * The customer's two answers to a completion claim.
+ *
+ * POST /jobs/:id/confirm  - yes, it is done      -> SETTLED
+ * POST /jobs/:id/dispute  - no, it is not        -> DISPUTED
+ *
+ * Both are the same shape as accept one step earlier, and share a helper for
+ * the same reason `act` does on the client: the two differ only in the target
+ * state, and writing them twice is how the ownership filter or the atomic
+ * guard ends up present in one and missing from the other.
+ *
+ * NEITHER READS THE BODY. There is no note, no amount, no evidence field -
+ * confirming says only "done", disputing says only "not done". A dispute that
+ * carried a reason would need moderation to be worth anything, and nothing
+ * here moderates it.
+ *
+ * `by` on the history entry is the CUSTOMER's uid, which is the whole point:
+ * SETTLED on a customer's job is the second state in its history that the
+ * worker could not have written alone.
+ */
+async function answerCompletion(
+  req: Request,
+  res: Response,
+  next: Extract<JobState, 'SETTLED' | 'DISPUTED'>,
+) {
+  if (!dbGuard(res)) return;
+
+  if (!JOB_TRANSITIONS.COMPLETED.includes(next)) {
+    console.error(`[customer] JOB_TRANSITIONS no longer allows COMPLETED -> ${next}`);
+    return res.status(500).json({ error: 'transition_unavailable', message: 'Answering a completed job is not currently possible.' });
+  }
+
+  try {
+    const db = getDb();
+    const uid = req.user!.uid;
+
+    const job = await db.collection(JOBS).findOne({ _id: req.params.id as never, customerId: uid });
+    if (!job) {
+      return res.status(404).json({ error: 'job_not_found', message: 'No such request for this customer.' });
+    }
+
+    // Same retry philosophy as accept and decline: the state they asked for is
+    // the state that holds, so a double tap is success rather than a conflict.
+    if (job.status !== 'COMPLETED') {
+      if (job.status === next) {
+        const { _id, ...j } = job;
+        return res.json({ job: { ...j, id: String(_id) }, alreadyAnswered: true });
+      }
+      return res.status(409).json({
+        error: 'not_completed',
+        message: `Only a completed job can be confirmed or disputed. This one is ${String(job.status)}.`,
+        status: job.status,
+      });
+    }
+
+    const entry: JobStateTransition = { state: next, at: new Date().toISOString(), by: uid };
+    const updated = await db.collection(JOBS).findOneAndUpdate(
+      { _id: req.params.id as never, customerId: uid, status: 'COMPLETED' },
+      { $set: { status: next }, $push: { stateHistory: entry as never } },
+      { returnDocument: 'after' }
+    );
+
+    if (!updated) {
+      return res.status(409).json({
+        error: 'concurrent_transition',
+        message: 'The job changed while you were answering it. Reload and try again.',
+      });
+    }
+
+    const { _id, ...j } = updated;
+    return res.json({ job: { ...j, id: String(_id) } });
+  } catch (err) {
+    console.error(`[customer] POST /jobs/:id/${next === 'SETTLED' ? 'confirm' : 'dispute'} failed:`, err);
+    return res.status(500).json({ error: 'completion_answer_failed', message: 'Could not record your answer.' });
+  }
+}
+
+customerRouter.post('/jobs/:id/confirm', requireAuth, (req, res) => answerCompletion(req, res, 'SETTLED'));
+customerRouter.post('/jobs/:id/dispute', requireAuth, (req, res) => answerCompletion(req, res, 'DISPUTED'));
 
 customerRouter.get('/jobs', requireAuth, async (req: Request, res: Response) => {
   if (!dbGuard(res)) return;

@@ -127,12 +127,12 @@ export type JobState =
 /**
  * Legal transitions. Enforced server-side on every state change.
  *
- * DISPUTED has NO INBOUND EDGE in the locked scope: the state is
- * representable so the data can be honest, but not reachable, because the
- * dispute flow is cut. That is what keeps the two-role principle intact here
- * too - the guard is this table, not the union, so nothing compiles into
- * existence that guards nothing. When disputes get built it is one array
- * entry, not an enum migration across three tracks.
+ * DISPUTED was unreachable in the locked scope - representable so the data
+ * could be honest, but with no inbound edge, because the dispute flow was cut.
+ * It is reachable now, and the cost of getting there was exactly what the
+ * original note predicted: two array entries, no enum migration and no change
+ * to any of the three tracks' imports. Keeping the guard in this table rather
+ * than in the union is what made that true.
  */
 export const JOB_TRANSITIONS: Record<JobState, JobState[]> = {
   REQUESTED:   ['QUOTED', 'CANCELLED'],
@@ -156,11 +156,28 @@ export const JOB_TRANSITIONS: Record<JobState, JobState[]> = {
   ACCEPTED:    ['SCHEDULED', 'CANCELLED'],
   SCHEDULED:   ['IN_PROGRESS', 'CANCELLED'],
   IN_PROGRESS: ['COMPLETED', 'CANCELLED'],
-  COMPLETED:   ['SETTLED'],
+  /**
+   * COMPLETED is the WORKER'S CLAIM that the job is done. SETTLED is the
+   * customer agreeing with it, and DISPUTED is the customer saying it is not.
+   *
+   * The two are the same shape as QUOTED -> ACCEPTED one step earlier: the
+   * worker asserts, the customer answers, and the answer is what the record
+   * rests on. On a job with a customerId the worker cannot take either edge -
+   * see the transition route. On a job without one there is nobody to ask, so
+   * COMPLETED -> SETTLED stays the worker's own one-tap path.
+   */
+  COMPLETED:   ['SETTLED', 'DISPUTED'],
   SETTLED:     ['REVIEWED'],
   REVIEWED:    [],
   CANCELLED:   [],
-  DISPUTED:    [],
+  /**
+   * DISPUTED is no longer terminal. A dispute the worker cannot answer would
+   * freeze the job forever and leave a permanent mark on their record with no
+   * route to put it right, which is a worse outcome than the gap it replaced.
+   * Going back to IN_PROGRESS is that route: the kaarigar returns to the work,
+   * completes it again, and the customer answers again.
+   */
+  DISPUTED:    ['IN_PROGRESS'],
 };
 
 /** Display buckets. Total by construction - adding a JobState breaks the build. */
