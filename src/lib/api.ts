@@ -242,6 +242,38 @@ export const api = {
   },
 
   /**
+   * Refuse the price without giving up the job: the server puts the request
+   * back to REQUESTED and clears the quote, so the kaarigar can send another.
+   *
+   * NO PRICE IS SENT, for the same reason acceptQuote sends none. Declining
+   * says "not this number", not "this number instead" - naming a counter-offer
+   * is negotiation and does not exist yet.
+   */
+  async declineQuote(jobId: string): Promise<JobItem> {
+    const body = await request<{ job: JobItem }>(
+      `/api/customer/jobs/${encodeURIComponent(jobId)}/decline`,
+      { method: 'POST' }
+    );
+    return body.job;
+  },
+
+  /**
+   * Call the request off entirely.
+   *
+   * The server accepts this only while the job is REQUESTED, QUOTED or
+   * ACCEPTED. Once the kaarigar has scheduled or started, it answers 409 and
+   * the customer is told to call them - see the cancel route's own note on why
+   * that is narrower than JOB_TRANSITIONS allows.
+   */
+  async cancelRequest(jobId: string): Promise<JobItem> {
+    const body = await request<{ job: JobItem }>(
+      `/api/customer/jobs/${encodeURIComponent(jobId)}/cancel`,
+      { method: 'POST' }
+    );
+    return body.job;
+  },
+
+  /**
    * Mint the review link a worker sends to their customer.
    *
    * Owner-scoped server-side: minting for a job you do not own answers 404, so

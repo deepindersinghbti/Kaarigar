@@ -33,6 +33,28 @@ without asking. `JobItem` already has `customerId?: string`.
   the worker: `QUOTED -> ACCEPTED` on the worker's transition route
   is refused for those. Jobs with no `customerId` are the worker's
   own record and keep the one-tap path.
+- `QUOTED -> REQUESTED` is the DECLINE edge: the price is refused,
+  the work is still wanted, and the kaarigar re-quotes down the
+  existing `REQUESTED -> QUOTED` path. Anything taking this edge
+  MUST clear `quotedPrice` — both `POST /api/customer/jobs/:id/decline`
+  and the `REQUESTED` branch of the worker's transition route do.
+  A `REQUESTED` job holding a withdrawn price shows the customer a
+  number nobody stands behind, and `quoted_price_required` reads as
+  satisfied because the field is populated.
+- `REQUESTED` alone does not mean declined — a new request is
+  `REQUESTED` too, and decline clears the price, so neither status
+  nor price separates them. `stateHistory` does: now `REQUESTED`
+  and ever `QUOTED` means declined. The decline route's
+  idempotent-replay branch depends on this; without it, declining a
+  quote nobody sent reports success.
+- Customer cancel (`POST /api/customer/jobs/:id/cancel`) is
+  deliberately NARROWER than `JOB_TRANSITIONS`. The table allows
+  `CANCELLED` from `SCHEDULED` and `IN_PROGRESS` and the worker's
+  route still does; the customer's stops at `ACCEPTED`, because past
+  that the kaarigar has committed a slot or started work.
+  `CUSTOMER_CANCELLABLE` in `routes/customer.ts` is the authority —
+  the copy in `CustomerRequests.tsx` only decides whether to draw
+  the button.
 - Quoting a customer's request requires a price; quoting the
   worker's own job does not. Requiring it everywhere breaks the
   worker lifecycle walk — 12 regressions, all downstream of one
@@ -87,7 +109,12 @@ second form adds the worker lifecycle suite — run it for ANY change to
 ## Known gaps (post-SIH, not now)
 - `DISPUTED` is orphaned in `JOB_TRANSITIONS` (`DISPUTED: []`, and
   no state lists it as a target, so nothing can reach it).
-- No negotiation (the customer accepts or does nothing — there is no
-  counter-offer), no customer-side completion confirmation, no
-  payment verification, no nearest-worker matching.
+- No counter-offer. The customer can accept, decline or cancel, but
+  cannot name a figure of their own — declining says "not this
+  number", never "this number instead". Adding one means a THIRD
+  price field, not overloading `quotedPrice` or `agreedPrice`.
+- No customer-side completion confirmation: `COMPLETED` is still
+  the worker's unverified word, and `COMPLETED -> SETTLED` is not
+  gated on `customerId` the way `QUOTED -> ACCEPTED` is.
+- No payment verification, no nearest-worker matching.
 - Workers see new customer requests only on reload; no push.

@@ -114,6 +114,60 @@ try {
   await call('/api/customer/jobs', ct, notQuoted);
   check('a request with no quote cannot be accepted', (await call(`/api/customer/jobs/${notQuoted.id}/accept`, ct, undefined, 'POST')).status === 409);
   check('accepting an unknown job is a 404', (await call('/api/customer/jobs/no-such-job/accept', ct, undefined, 'POST')).status === 404);
+
+  // Decline: the price is refused, the job is not. It returns to REQUESTED with
+  // the withdrawn quote cleared, and the worker can quote again down the edge
+  // that already existed.
+  check('a request with no quote cannot be declined', (await call(`/api/customer/jobs/${notQuoted.id}/decline`, ct, undefined, 'POST')).status === 409);
+  check('declining an unknown job is a 404', (await call('/api/customer/jobs/no-such-job/decline', ct, undefined, 'POST')).status === 404);
+  const toDecline = { ...input, id: 'customer-demo-request-3', title: 'Third request' };
+  await call('/api/customer/jobs', ct, toDecline);
+  await call(`/api/jobs/${toDecline.id}/transition`, wt, { state: 'QUOTED', quotedPrice: 9000 });
+  check('worker blocked from the decline route', (await call(`/api/customer/jobs/${toDecline.id}/decline`, wt, undefined, 'POST')).status === 403);
+  check('another customer cannot decline this quote', (await call(`/api/customer/jobs/${toDecline.id}/decline`, otherCustomer, undefined, 'POST')).status === 404);
+  const declined = await call(`/api/customer/jobs/${toDecline.id}/decline`, ct, { quotedPrice: 10, agreedPrice: 10 }, 'POST');
+  check('decline returns the request to REQUESTED', declined.status === 200 && declined.body.job.status === 'REQUESTED');
+  check('decline clears the withdrawn quote', declined.body.job.quotedPrice == null);
+  check('decline agrees to nothing', declined.body.job.agreedPrice == null);
+  const dHistory = declined.body.job.stateHistory;
+  check('decline is recorded as the customer acting', dHistory[dHistory.length - 1].state === 'REQUESTED' && dHistory[dHistory.length - 1].by === customer.user.uid);
+  check('declining twice is idempotent, not an error', (await call(`/api/customer/jobs/${toDecline.id}/decline`, ct, undefined, 'POST')).body.alreadyDeclined === true);
+  const requoted = await call(`/api/jobs/${toDecline.id}/transition`, wt, { state: 'QUOTED', quotedPrice: 800 });
+  check('worker can quote again after a decline', requoted.status === 200 && requoted.body.job.quotedPrice === 800);
+  check('the second quote is the one that can be accepted', (await call(`/api/customer/jobs/${toDecline.id}/accept`, ct, undefined, 'POST')).body.job.agreedPrice === 800);
+  // A customer-linked job sent back to REQUESTED by the WORKER must clear the
+  // price too, or quoted_price_required reads as satisfied on a withdrawn quote.
+  const withdraw = { ...input, id: 'customer-demo-request-4', title: 'Fourth request' };
+  await call('/api/customer/jobs', ct, withdraw);
+  await call(`/api/jobs/${withdraw.id}/transition`, wt, { state: 'QUOTED', quotedPrice: 700 });
+  const pulled = await call(`/api/jobs/${withdraw.id}/transition`, wt, { state: 'REQUESTED' });
+  check('worker withdrawing a quote also clears the price', pulled.status === 200 && pulled.body.job.quotedPrice == null);
+
+  // Cancel: narrower than JOB_TRANSITIONS on purpose - the customer's button
+  // stops at ACCEPTED, though the worker's route still cancels later states.
+  check('cancelling an unknown job is a 404', (await call('/api/customer/jobs/no-such-job/cancel', ct, undefined, 'POST')).status === 404);
+  check('worker blocked from the cancel route', (await call(`/api/customer/jobs/${withdraw.id}/cancel`, wt, undefined, 'POST')).status === 403);
+  check('another customer cannot cancel this request', (await call(`/api/customer/jobs/${withdraw.id}/cancel`, otherCustomer, undefined, 'POST')).status === 404);
+  const cancelled = await call(`/api/customer/jobs/${withdraw.id}/cancel`, ct, undefined, 'POST');
+  check('customer cancels a REQUESTED request', cancelled.status === 200 && cancelled.body.job.status === 'CANCELLED');
+  const cHistory = cancelled.body.job.stateHistory;
+  check('cancellation is recorded as the customer acting', cHistory[cHistory.length - 1].state === 'CANCELLED' && cHistory[cHistory.length - 1].by === customer.user.uid);
+  check('cancelling twice is idempotent, not an error', (await call(`/api/customer/jobs/${withdraw.id}/cancel`, ct, undefined, 'POST')).body.alreadyCancelled === true);
+  check('a cancelled request can no longer be accepted', (await call(`/api/customer/jobs/${withdraw.id}/accept`, ct, undefined, 'POST')).status === 409);
+  // input.id is ACCEPTED, so it is still inside the customer's window.
+  const lateCancel = { ...input, id: 'customer-demo-request-5', title: 'Fifth request' };
+  await call('/api/customer/jobs', ct, lateCancel);
+  await call(`/api/jobs/${lateCancel.id}/transition`, wt, { state: 'QUOTED', quotedPrice: 500 });
+  await call(`/api/customer/jobs/${lateCancel.id}/accept`, ct, undefined, 'POST');
+  check('customer can still cancel an ACCEPTED request', (await call(`/api/customer/jobs/${lateCancel.id}/cancel`, ct, undefined, 'POST')).status === 200);
+  const started = { ...input, id: 'customer-demo-request-6', title: 'Sixth request' };
+  await call('/api/customer/jobs', ct, started);
+  await call(`/api/jobs/${started.id}/transition`, wt, { state: 'QUOTED', quotedPrice: 500 });
+  await call(`/api/customer/jobs/${started.id}/accept`, ct, undefined, 'POST');
+  await call(`/api/jobs/${started.id}/transition`, wt, { state: 'SCHEDULED' });
+  const tooLate = await call(`/api/customer/jobs/${started.id}/cancel`, ct, undefined, 'POST');
+  check('customer cannot cancel once the kaarigar has scheduled', tooLate.status === 409 && tooLate.body.error === 'not_cancellable');
+  check('the worker can still cancel a scheduled job', (await call(`/api/jobs/${started.id}/transition`, wt, { state: 'CANCELLED' })).status === 200);
   // A worker's own unlinked job keeps the one-tap path: nobody else can agree.
   const soloNoPrice = await call('/api/jobs', wt, { title: 'Self recorded, unpriced', amount: 70 });
   check('worker own job quotes with no price at all', (await call(`/api/jobs/${soloNoPrice.body.job.id}/transition`, wt, { state: 'QUOTED' })).status === 200);

@@ -1,11 +1,27 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { MapPin, IndianRupee, Calendar, RefreshCw } from 'lucide-react';
+import { MapPin, IndianRupee, Calendar, RefreshCw, ChevronDown, ChevronUp, Check } from 'lucide-react';
 import { api, ApiError } from '../../lib/api';
-import { JOB_BADGE, type JobItem, type SupportedLanguage } from '../../types';
+import { useAuth } from '../../auth/AuthProvider';
+import { JOB_BADGE, type JobItem, type JobState, type SupportedLanguage } from '../../types';
 import { JOB_BADGE_PRESENTATION } from '../JobsView';
 import { getScreenCopy } from '../../data/uiCopy';
 import { getCustomerCopy } from './customerCopy';
+
+/** Which control on a row is mid-flight. One row, one action at a time. */
+type PendingAction = 'accept' | 'decline' | 'cancel';
+
+/**
+ * Mirrors CUSTOMER_CANCELLABLE in server/routes/customer.ts, which is the
+ * authority - this list only decides whether to DRAW the button.
+ *
+ * Deliberately not derived from JOB_TRANSITIONS: the table permits CANCELLED
+ * from SCHEDULED and IN_PROGRESS too, and the customer's narrower rule is a
+ * product decision the server owns. If the two ever drift, the server refuses
+ * with a 409 that `act` already surfaces and reloads behind - the failure mode
+ * is an honest error, not a bad write.
+ */
+const CUSTOMER_CANCELLABLE: JobState[] = ['REQUESTED', 'QUOTED', 'ACCEPTED'];
 
 interface CustomerRequestsProps {
   currentLanguage: SupportedLanguage;
@@ -27,8 +43,10 @@ export const CustomerRequests: React.FC<CustomerRequestsProps> = ({ currentLangu
   const [jobs, setJobs] = useState<JobItem[] | null>(null);
   const [error, setError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
-  const [acceptingId, setAcceptingId] = useState<string | null>(null);
+  const [pending, setPending] = useState<{ id: string; action: PendingAction } | null>(null);
+  const [openTimelineId, setOpenTimelineId] = useState<string | null>(null);
 
+  const { user } = useAuth();
   const stateLabel = getScreenCopy(currentLanguage).jobs.state;
   const copy = getCustomerCopy(currentLanguage);
 
@@ -48,25 +66,55 @@ export const CustomerRequests: React.FC<CustomerRequestsProps> = ({ currentLangu
   useEffect(() => { void load(); }, [load]);
 
   /**
-   * Accepting sends no price. The server copies the figure it already stored, so
-   * the only thing this can do is agree to the number already on screen.
+   * The three answers a customer can give, all through one path.
+   *
+   * NONE OF THEM SEND A PRICE. Accept copies the stored quotedPrice server-side,
+   * decline clears it, cancel ends the job - so there is no number on this
+   * screen a client could put on the wire. Keeping them in one helper is what
+   * makes that property visible at a glance instead of spread over three
+   * near-identical functions that could quietly drift apart.
    *
    * The returned job replaces the row in place rather than triggering a reload:
    * the response IS the authoritative job, and re-listing would show the same
    * thing one round trip later.
+   *
+   * A server-side refusal (409 on a job that moved on) is shown as its own
+   * message and followed by a reload, because at that point the row on screen
+   * is known to be stale and the error is about a job the customer can no
+   * longer see correctly.
    */
-  const accept = async (jobId: string) => {
-    setAcceptingId(jobId);
+  const act = async (jobId: string, action: PendingAction) => {
+    setPending({ id: jobId, action });
     setError('');
     try {
-      const updated = await api.acceptQuote(jobId);
+      const call = action === 'accept' ? api.acceptQuote : action === 'decline' ? api.declineQuote : api.cancelRequest;
+      const updated = await call(jobId);
       setJobs((prev) => (prev ?? []).map((j) => (j.id === updated.id ? updated : j)));
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) return;
-      setError(copy.requestList.acceptError);
+      if (e instanceof ApiError && e.status === 409) {
+        setError(e.message);
+        void load();
+        return;
+      }
+      setError(
+        action === 'accept' ? copy.requestList.acceptError
+          : action === 'decline' ? copy.requestList.declineError
+          : copy.requestList.cancelError
+      );
     } finally {
-      setAcceptingId(null);
+      setPending(null);
     }
+  };
+
+  /**
+   * Cancel is the only one that asks first. Accept and decline both leave the
+   * job alive and reversible by the other side; cancel is terminal - CANCELLED
+   * lists no onward transition - so a misplaced tap cannot be undone from here.
+   */
+  const confirmCancel = (jobId: string) => {
+    if (!window.confirm(copy.requestList.cancelConfirm)) return;
+    void act(jobId, 'cancel');
   };
 
   if (jobs === null && !error) {
@@ -157,13 +205,37 @@ export const CustomerRequests: React.FC<CustomerRequestsProps> = ({ currentLangu
               </p>
               <button
                 type="button"
-                onClick={() => void accept(job.id)}
-                disabled={acceptingId === job.id}
+                onClick={() => void act(job.id, 'accept')}
+                disabled={pending?.id === job.id}
                 className="w-full min-h-12 rounded-2xl bg-orange-500 text-white font-extrabold disabled:opacity-50 active:scale-[0.98] transition"
               >
-                {acceptingId === job.id ? copy.requestList.accepting : copy.requestList.accept}
+                {pending?.id === job.id && pending.action === 'accept' ? copy.requestList.accepting : copy.requestList.accept}
+              </button>
+              {/*
+                Decline sits under Accept and is deliberately quieter: it is the
+                secondary answer, and it does not end the job - the request goes
+                back to REQUESTED and the kaarigar can quote again.
+              */}
+              <button
+                type="button"
+                onClick={() => void act(job.id, 'decline')}
+                disabled={pending?.id === job.id}
+                className="w-full min-h-12 rounded-2xl border border-amber-300 bg-white text-amber-900 font-extrabold disabled:opacity-50 active:scale-[0.98] transition"
+              >
+                {pending?.id === job.id && pending.action === 'decline' ? copy.requestList.declining : copy.requestList.decline}
               </button>
             </div>
+          )}
+
+          {/*
+            A request that has been quoted at least once and is back at
+            REQUESTED was declined. stateHistory is the only way to tell that
+            apart from a brand-new request, since decline clears quotedPrice.
+          */}
+          {job.status === 'REQUESTED' && job.stateHistory?.some((t) => t.state === 'QUOTED') && (
+            <p className="mt-3 text-sm font-bold text-amber-900 bg-amber-50 border border-amber-200 rounded-2xl px-3 py-2">
+              {copy.requestList.declined}
+            </p>
           )}
 
           {/* Once agreed, the figure is shown as settled fact, with no control. */}
@@ -171,6 +243,59 @@ export const CustomerRequests: React.FC<CustomerRequestsProps> = ({ currentLangu
             <p className="mt-3 text-sm font-bold text-green-800 bg-green-50 border border-green-200 rounded-2xl px-3 py-2">
               {copy.requestList.agreed} <span className="font-extrabold">₹{job.agreedPrice}</span>
             </p>
+          )}
+
+          <div className="mt-3 flex items-center gap-2 border-t border-gray-100 pt-3">
+            <button
+              type="button"
+              onClick={() => setOpenTimelineId((prev) => (prev === job.id ? null : job.id))}
+              aria-expanded={openTimelineId === job.id}
+              className="h-10 px-3 rounded-xl text-gray-600 font-bold text-xs flex items-center gap-1.5 active:scale-[0.98] transition"
+            >
+              {openTimelineId === job.id ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              {openTimelineId === job.id ? copy.requestList.timelineHide : copy.requestList.timelineShow}
+            </button>
+
+            {/*
+              Cancel is offered only for the states the server actually accepts
+              it from. Past ACCEPTED the kaarigar has committed time, the route
+              answers 409, and a button here would only produce that error - so
+              the control is absent rather than disabled-with-an-explanation.
+            */}
+            {CUSTOMER_CANCELLABLE.includes(job.status) && (
+              <button
+                type="button"
+                onClick={() => confirmCancel(job.id)}
+                disabled={pending?.id === job.id}
+                className="ml-auto h-10 px-3 rounded-xl border border-gray-200 bg-white text-red-700 font-bold text-xs disabled:opacity-50 active:scale-[0.98] transition"
+              >
+                {pending?.id === job.id && pending.action === 'cancel' ? copy.requestList.cancelling : copy.requestList.cancel}
+              </button>
+            )}
+          </div>
+
+          {/*
+            The timeline is stateHistory rendered straight, oldest first. It is
+            the customer's evidence of who moved the job and when - `by` is a
+            uid, so the only thing worth saying about it is whether it was them
+            or the kaarigar, which is exactly what makes ACCEPTED different from
+            a state the worker asserted alone.
+          */}
+          {openTimelineId === job.id && (
+            <ol className="mt-1 space-y-1.5">
+              {(job.stateHistory ?? []).map((t, i) => (
+                <li key={`${t.state}-${t.at}-${i}`} className="flex items-start gap-2 text-xs">
+                  <Check className="w-3.5 h-3.5 mt-0.5 shrink-0 text-gray-400" />
+                  <span className="font-extrabold text-gray-700">{stateLabel[t.state]}</span>
+                  <span className="text-gray-400 font-semibold">
+                    {new Date(t.at).toLocaleString()} · {copy.requestList.timelineBy(t.by === user?.uid)}
+                  </span>
+                </li>
+              ))}
+              {(job.stateHistory ?? []).length === 0 && (
+                <li className="text-xs text-gray-400 font-semibold">—</li>
+              )}
+            </ol>
           )}
         </div>
       ))}

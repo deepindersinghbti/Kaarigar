@@ -208,10 +208,17 @@ jobsRouter.post('/:id/transition', requireAuth, async (req: Request, res: Respon
     }
 
     const entry: JobStateTransition = { state: next, at: new Date().toISOString(), by: uid };
+    /**
+     * Going back to REQUESTED withdraws the quote, so the price goes with it.
+     * See the QUOTED note in JOB_TRANSITIONS: a REQUESTED job holding a price
+     * nobody stands behind is worse than one holding none, because the checks
+     * that protect a blank quote all read as satisfied.
+     */
     const updated = await db.collection(JOBS).findOneAndUpdate(
       { _id: req.params.id as never, kaarigarId: uid, status: current },  // guards against a concurrent transition
       {
         $set: { status: next, ...(quotedPrice !== undefined ? { quotedPrice } : {}) },
+        ...(next === 'REQUESTED' ? { $unset: { quotedPrice: '' } } : {}),
         $push: { stateHistory: entry as never },
       },
       { returnDocument: 'after' }
