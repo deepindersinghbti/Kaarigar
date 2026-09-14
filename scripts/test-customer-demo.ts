@@ -175,6 +175,52 @@ try {
   check('worker own job still quotes', solo.status === 200 && solo.body.job.quotedPrice === 300);
   check('worker own job still self-accepts', (await call(`/api/jobs/${ownJob.body.job.id}/transition`, wt, { state: 'ACCEPTED' })).status === 200);
 
+  // Completion: COMPLETED is the worker's claim, SETTLED and DISPUTED are the
+  // customer's answers to it. Walk a job all the way down to COMPLETED first.
+  const walk = { ...input, id: 'customer-demo-request-8', title: 'Eighth request' };
+  await call('/api/customer/jobs', ct, walk);
+  await call(`/api/jobs/${walk.id}/transition`, wt, { state: 'QUOTED', quotedPrice: 1200 });
+  await call(`/api/customer/jobs/${walk.id}/accept`, ct, undefined, 'POST');
+  await call(`/api/jobs/${walk.id}/transition`, wt, { state: 'SCHEDULED' });
+  await call(`/api/jobs/${walk.id}/transition`, wt, { state: 'IN_PROGRESS' });
+  const completed = await call(`/api/jobs/${walk.id}/transition`, wt, { state: 'COMPLETED' });
+  check('worker can still mark a customer job COMPLETED', completed.status === 200 && completed.body.job.status === 'COMPLETED');
+  const selfSettle = await call(`/api/jobs/${walk.id}/transition`, wt, { state: 'SETTLED' });
+  check('worker cannot settle their own completion claim', selfSettle.status === 403 && selfSettle.body.error === 'customer_confirms_completion');
+  check('worker cannot dispute on the customer behalf', (await call(`/api/jobs/${walk.id}/transition`, wt, { state: 'DISPUTED' })).status === 403);
+  check('worker blocked from the confirm route', (await call(`/api/customer/jobs/${walk.id}/confirm`, wt, undefined, 'POST')).status === 403);
+  check('another customer cannot confirm this job', (await call(`/api/customer/jobs/${walk.id}/confirm`, otherCustomer, undefined, 'POST')).status === 404);
+  check('confirming an unknown job is a 404', (await call('/api/customer/jobs/no-such-job/confirm', ct, undefined, 'POST')).status === 404);
+  check('a job that is not COMPLETED cannot be confirmed', (await call(`/api/customer/jobs/${notQuoted.id}/confirm`, ct, undefined, 'POST')).status === 409);
+
+  // Dispute, then the way back: the worker returns, re-completes, and the
+  // customer answers again. This is the edge that makes DISPUTED non-terminal.
+  const disputed = await call(`/api/customer/jobs/${walk.id}/dispute`, ct, undefined, 'POST');
+  check('customer disputes a completion claim', disputed.status === 200 && disputed.body.job.status === 'DISPUTED');
+  const dsHistory = disputed.body.job.stateHistory;
+  check('the dispute is recorded as the customer acting', dsHistory[dsHistory.length - 1].state === 'DISPUTED' && dsHistory[dsHistory.length - 1].by === customer.user.uid);
+  check('disputing twice is idempotent, not an error', (await call(`/api/customer/jobs/${walk.id}/dispute`, ct, undefined, 'POST')).body.alreadyAnswered === true);
+  check('a disputed job cannot be confirmed without being redone', (await call(`/api/customer/jobs/${walk.id}/confirm`, ct, undefined, 'POST')).status === 409);
+  const disputedRow = (await call('/api/customer/jobs', ct)).body.jobs.find((j: any) => j.id === walk.id);
+  check('the phone stays reachable during a dispute', typeof disputedRow.kaarigar.phone === 'string' && disputedRow.kaarigar.phone.length > 0);
+  const resumed = await call(`/api/jobs/${walk.id}/transition`, wt, { state: 'IN_PROGRESS' });
+  check('worker can return to a disputed job', resumed.status === 200 && resumed.body.job.status === 'IN_PROGRESS');
+  await call(`/api/jobs/${walk.id}/transition`, wt, { state: 'COMPLETED' });
+  const settled = await call(`/api/customer/jobs/${walk.id}/confirm`, ct, { agreedPrice: 1, amount: 1 }, 'POST');
+  check('customer confirms the redone work', settled.status === 200 && settled.body.job.status === 'SETTLED');
+  check('confirming changes no price', settled.body.job.agreedPrice === 1200);
+  const stHistory = settled.body.job.stateHistory;
+  check('settlement is recorded as the customer acting', stHistory[stHistory.length - 1].state === 'SETTLED' && stHistory[stHistory.length - 1].by === customer.user.uid);
+  check('confirming twice is idempotent, not an error', (await call(`/api/customer/jobs/${walk.id}/confirm`, ct, undefined, 'POST')).body.alreadyAnswered === true);
+  check('the worker can still review a settled job', (await call(`/api/jobs/${walk.id}/transition`, wt, { state: 'REVIEWED' })).status === 200);
+  // The worker's own unlinked job keeps its one-tap settlement - there is
+  // nobody else to ask, exactly as with ACCEPTED.
+  const solo2 = await call('/api/jobs', wt, { title: 'Self recorded, settled alone', amount: 90 });
+  for (const state of ['QUOTED', 'ACCEPTED', 'SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'SETTLED']) {
+    await call(`/api/jobs/${solo2.body.job.id}/transition`, wt, { state });
+  }
+  check('worker own job still settles with no customer', (await call('/api/jobs', wt)).body.jobs.find((j: any) => j.id === solo2.body.job.id).status === 'SETTLED');
+
   // The kaarigar on each request, and the phone gate. Name/handle/trade always;
   // the number only once the job is ACCEPTED or later.
   const listed = (await call('/api/customer/jobs', ct)).body.jobs;

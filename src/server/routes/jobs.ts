@@ -194,6 +194,27 @@ jobsRouter.post('/:id/transition', requireAuth, async (req: Request, res: Respon
       });
     }
 
+    /**
+     * The same rule one step later: COMPLETED is the worker's CLAIM that the
+     * job is done, and the answer to it belongs to the customer.
+     *
+     * Letting the worker take COMPLETED -> SETTLED on a customer's job would
+     * make "settled" mean nothing more than "the worker said so twice", which
+     * is exactly the reading CUSTOMER_DEMO.md warns against. DISPUTED is
+     * refused here for the mirror-image reason: a worker cannot mark their own
+     * work disputed on the customer's behalf either.
+     *
+     * Jobs with no customerId keep the one-tap path, same as ACCEPTED above -
+     * the worker's own record of work for someone with no account, with nobody
+     * to ask.
+     */
+    if ((next === 'SETTLED' || next === 'DISPUTED') && job.customerId) {
+      return res.status(403).json({
+        error: 'customer_confirms_completion',
+        message: 'This job belongs to a customer, so only they can confirm or dispute that it is done.',
+      });
+    }
+
     const current = job.status as JobState;
     const allowed = JOB_TRANSITIONS[current];
 

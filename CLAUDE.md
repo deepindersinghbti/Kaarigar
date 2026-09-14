@@ -43,6 +43,18 @@ without asking. `JobItem` already has `customerId?: string`.
   ever `QUOTED` means declined. The decline route's idempotent replay
   depends on this; without it, declining a quote nobody sent reports
   success.
+- `COMPLETED` is the worker's CLAIM that the job is done. On a job with
+  a `customerId` the worker's transition route refuses BOTH
+  `COMPLETED -> SETTLED` and `COMPLETED -> DISPUTED` — the answer is the
+  customer's, via `POST /api/customer/jobs/:id/confirm` or `/dispute`.
+  Same shape as `QUOTED -> ACCEPTED` one step earlier. Jobs with no
+  `customerId` keep the one-tap settle. Never present a `COMPLETED`
+  customer job as verified; `SETTLED` is the verified one.
+- `DISPUTED` is reachable now and is NOT terminal:
+  `DISPUTED -> IN_PROGRESS` lets the kaarigar return, redo the work and
+  re-complete it. A dispute with no way out would freeze the job and
+  mark the worker's record permanently. Neither confirm nor dispute
+  reads the body — no reason, no amount, no evidence.
 - Customer cancel stops at `ACCEPTED`, narrower than `JOB_TRANSITIONS`
   — past that the kaarigar has committed a slot. The worker's route
   still cancels later states. `CUSTOMER_CANCELLABLE` in
@@ -61,11 +73,14 @@ without asking. `JobItem` already has `customerId?: string`.
   assigned kaarigar onto each row via `findAssignedKaarigars` — its
   OWN allowlist (handle, name, trade, phone), never a widening of
   `PUBLIC_PROJECTION`. The phone is released only in
-  `CONTACT_VISIBLE_STATES` (`ACCEPTED` onward, excluding `CANCELLED`
-  and `DISPUTED`): browsing and asking for quotes must not become a
-  way to harvest numbers out of the directory. The gate is per job
-  state, so it lives in the route rather than the query — one worker
-  can hold several of a customer's jobs in different states.
+  `CONTACT_VISIBLE_STATES` (`ACCEPTED` onward, plus `DISPUTED`,
+  excluding `CANCELLED`): browsing and asking for quotes must not
+  become a way to harvest numbers out of the directory. `DISPUTED` is
+  in the list because it resolves via `DISPUTED -> IN_PROGRESS` — the
+  kaarigar comes back, so the customer must still be able to ring
+  them. The gate is per job state, so it lives in the route rather
+  than the query — one worker can hold several of a customer's jobs
+  in different states.
 
 ## Customer screens
 Mount the customer tree as a SIBLING of `App` in `main.tsx`, never a
@@ -112,14 +127,12 @@ second form adds the worker lifecycle suite — run it for ANY change to
 `/api/jobs/:id/transition`, which both roles depend on.
 
 ## Known gaps (post-SIH, not now)
-- `DISPUTED` is orphaned in `JOB_TRANSITIONS` (`DISPUTED: []`, and
-  no state lists it as a target, so nothing can reach it).
 - No counter-offer. The customer can accept, decline or cancel, but
   cannot name a figure of their own — declining says "not this
   number", never "this number instead". Adding one means a THIRD
   price field, not overloading `quotedPrice` or `agreedPrice`.
-- No customer-side completion confirmation: `COMPLETED` is still
-  the worker's unverified word, and `COMPLETED -> SETTLED` is not
-  gated on `customerId` the way `QUOTED -> ACCEPTED` is.
+- A dispute records only that the customer rejected the completion
+  claim. No reason, no photo, no moderation, no timeout — a job can sit
+  in DISPUTED indefinitely if the kaarigar never returns.
 - No payment verification, no nearest-worker matching.
 - Workers see new customer requests only on reload; no push.

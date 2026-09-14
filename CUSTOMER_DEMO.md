@@ -1,6 +1,6 @@
 # Customer demo: Neha and Ramesh
 
-This release exposes customer browse, request submission, request tracking, a per-request progress timeline, and the customer's three answers — accept the quoted price, decline it, or cancel the request — at `/customer`. It is not a completed customer marketplace. Counter-offers, customer completion confirmation, payment verification, notifications, and nearest-worker matching are not implemented by this release.
+This release exposes customer browse, request submission, request tracking, a per-request progress timeline, the customer's three answers to a quote — accept, decline, or cancel — and their two answers to a completion claim — confirm or dispute — at `/customer`. It is not a completed customer marketplace. Counter-offers, payment verification, notifications, and nearest-worker matching are not implemented by this release, and a dispute carries no reason, evidence or moderation.
 
 ## Configure login
 
@@ -24,10 +24,15 @@ Neha's identifier is `0123456789`. This is a demo ID, not a real SMS destination
 7. Neha can **cancel** the request outright while it is `REQUESTED`, `QUOTED` or `ACCEPTED`. Once Ramesh has scheduled or started, her cancel answers `409` and tells her to call him — the state machine still lets *Ramesh* cancel at that point, which is the asymmetry we intend.
 8. **Show progress** on any request opens its `stateHistory`: every state, when it happened, and whether Neha or Ramesh caused it. The `ACCEPTED` row attributed to Neha is the point worth making — it is the one state on the job the kaarigar could not have written alone.
 9. Every request names the kaarigar it went to. Ramesh's phone number appears — with a **Call** button — only once that job is `ACCEPTED` or later. Before acceptance Neha sees his name, handle and trade but no number, so browsing and collecting quotes is not a route to harvesting phone numbers out of the directory. `GET /api/kaarigars` and the public passport page still withhold it at every stage.
-10. Request creation records Neha as the actor and starts at `REQUESTED`, with payment pending. The customer's opening amount is an estimate, not proof of payment.
-11. Customer and worker routes are role-gated on both the UI and API. Worker-created notes cannot attach themselves to Neha's account by supplying her customer ID.
+10. Ramesh marks the job **COMPLETED**. That is his CLAIM, not proof — the server refuses to let him take it on to `SETTLED` or `DISPUTED` himself, because the job carries Neha's customer ID. Neha sees "the kaarigar says this work is done" with two buttons.
+11. **Yes, it is done** settles the job. That `SETTLED` row in the history is attributed to Neha, so it is the second state on the job Ramesh could not have written alone — the first being `ACCEPTED`.
+12. **No, it is not done** puts the job in `DISPUTED` instead. This is not a dead end: Ramesh can move it back to `IN_PROGRESS`, finish the work, mark it complete again, and Neha answers again. Her phone link to him stays available throughout a dispute — that is when she is most likely to need it. Neither answer sends a reason; there is no moderation behind it and a dispute that carried one would imply there was.
+13. Request creation records Neha as the actor and starts at `REQUESTED`, with payment pending. The customer's opening amount is an estimate, not proof of payment.
+14. Customer and worker routes are role-gated on both the UI and API. Worker-created notes cannot attach themselves to Neha's account by supplying her customer ID.
 
-Existing worker lifecycle controls remain unchanged. Do not present worker-entered completion or payment as independently customer-verified evidence.
+Worker lifecycle controls are unchanged on the worker's own jobs — those with no customer ID still walk the whole line one tap at a time, including settling. On a job a customer raised, the worker keeps every state up to and including `COMPLETED` and loses only the two that answer it.
+
+A `SETTLED` customer job IS customer-verified completion, and the `stateHistory` row naming the customer is the evidence. A `COMPLETED` one is not — it is the worker's claim awaiting an answer. Do not present the two as the same thing, and do not present either as proof of payment: `paymentMethod` is still `pending` and nothing in this release verifies money changing hands.
 
 ## Verification
 

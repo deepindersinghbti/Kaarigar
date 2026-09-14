@@ -290,6 +290,36 @@ export const api = {
   },
 
   /**
+   * The customer's answer to the kaarigar's claim that the work is done.
+   *
+   * COMPLETED is the worker asserting it; SETTLED is this. Until one of these
+   * is called, a completed customer job is one party's word and must not be
+   * presented as anything more.
+   */
+  async confirmCompletion(jobId: string): Promise<JobItem> {
+    const body = await request<{ job: JobItem }>(
+      `/api/customer/jobs/${encodeURIComponent(jobId)}/confirm`,
+      { method: 'POST' }
+    );
+    return body.job;
+  },
+
+  /**
+   * The other answer: the work is not done.
+   *
+   * Sends no reason. A dispute is not the end of the job - the server puts it
+   * in DISPUTED, from which the kaarigar can return to IN_PROGRESS, fix the
+   * work and complete it again.
+   */
+  async disputeCompletion(jobId: string): Promise<JobItem> {
+    const body = await request<{ job: JobItem }>(
+      `/api/customer/jobs/${encodeURIComponent(jobId)}/dispute`,
+      { method: 'POST' }
+    );
+    return body.job;
+  },
+
+  /**
    * Mint the review link a worker sends to their customer.
    *
    * Owner-scoped server-side: minting for a job you do not own answers 404, so
