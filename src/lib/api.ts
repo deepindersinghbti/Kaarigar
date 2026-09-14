@@ -153,6 +153,22 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T;
 }
 
+/**
+ * A customer's own job, as GET /api/customer/jobs returns it: the stored
+ * JobItem plus the kaarigar it was sent to.
+ *
+ * DECLARED HERE RATHER THAN ON JobItem because types.ts is the frozen
+ * cross-track contract and this field is not stored on the job - the server
+ * joins it on for this one response. Widening JobItem would tell the worker
+ * screens and the sync layer that a field exists which, for them, never does.
+ *
+ * `phone` is present only while the job is ACCEPTED or later; before that the
+ * server omits it. Treat its absence as normal, not as an error.
+ */
+export type CustomerJobItem = JobItem & {
+  kaarigar?: { passportHandle: string; name: string; trade: string; phone?: string };
+};
+
 export const api = {
   async getProfile(): Promise<WorkerProfile> {
     const body = await request<{ profile: WorkerProfile }>('/api/passport/me');
@@ -242,6 +258,38 @@ export const api = {
   },
 
   /**
+   * Refuse the price without giving up the job: the server puts the request
+   * back to REQUESTED and clears the quote, so the kaarigar can send another.
+   *
+   * NO PRICE IS SENT, for the same reason acceptQuote sends none. Declining
+   * says "not this number", not "this number instead" - naming a counter-offer
+   * is negotiation and does not exist yet.
+   */
+  async declineQuote(jobId: string): Promise<JobItem> {
+    const body = await request<{ job: JobItem }>(
+      `/api/customer/jobs/${encodeURIComponent(jobId)}/decline`,
+      { method: 'POST' }
+    );
+    return body.job;
+  },
+
+  /**
+   * Call the request off entirely.
+   *
+   * The server accepts this only while the job is REQUESTED, QUOTED or
+   * ACCEPTED. Once the kaarigar has scheduled or started, it answers 409 and
+   * the customer is told to call them - see the cancel route's own note on why
+   * that is narrower than JOB_TRANSITIONS allows.
+   */
+  async cancelRequest(jobId: string): Promise<JobItem> {
+    const body = await request<{ job: JobItem }>(
+      `/api/customer/jobs/${encodeURIComponent(jobId)}/cancel`,
+      { method: 'POST' }
+    );
+    return body.job;
+  },
+
+  /**
    * Mint the review link a worker sends to their customer.
    *
    * Owner-scoped server-side: minting for a job you do not own answers 404, so
@@ -307,8 +355,8 @@ export const api = {
   },
 
   /** The caller's own requests, newest first. */
-  async listCustomerJobs(): Promise<JobItem[]> {
-    const body = await request<{ jobs: JobItem[] }>('/api/customer/jobs');
+  async listCustomerJobs(): Promise<CustomerJobItem[]> {
+    const body = await request<{ jobs: CustomerJobItem[] }>('/api/customer/jobs');
     return body.jobs;
   },
 

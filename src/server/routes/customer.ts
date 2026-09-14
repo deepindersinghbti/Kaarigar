@@ -4,8 +4,8 @@ import { getDb, isDbConnected } from '../db';
 import { requireAuth } from '../middleware/auth';
 import { JOBS, createJob, ensureJobIndexes } from '../data/jobs';
 import { JOB_TRANSITIONS } from '../../types';
-import type { JobStateTransition } from '../../types';
-import { listPublicProfiles, findOwnerIdByHandle } from '../data/profiles';
+import type { JobState, JobStateTransition } from '../../types';
+import { listPublicProfiles, findOwnerIdByHandle, findAssignedKaarigars } from '../data/profiles';
 import { optionalQueryString, queryString } from '../lib/query';
 import { DEMO_CUSTOMER_PHONE, DEMO_CUSTOMER_NAME } from '../auth/demoCustomer';
 
@@ -233,6 +233,170 @@ customerRouter.post('/jobs/:id/accept', requireAuth, async (req: Request, res: R
   }
 });
 
+/**
+ * POST /api/customer/jobs/:id/decline
+ *
+ * The other answer to a quote. The price is refused but the work is still
+ * wanted, so the request goes back to REQUESTED and the kaarigar can quote
+ * again - see the QUOTED note in JOB_TRANSITIONS.
+ *
+ * Like accept, this reads NO price from the body. A customer naming their own
+ * figure is negotiation, which this release does not have; declining says only
+ * "not this number".
+ *
+ * The withdrawn quotedPrice is unset rather than left in place. That is the
+ * invariant the state edge depends on, not a tidy-up.
+ */
+customerRouter.post('/jobs/:id/decline', requireAuth, async (req: Request, res: Response) => {
+  if (!dbGuard(res)) return;
+
+  if (!JOB_TRANSITIONS.QUOTED.includes('REQUESTED')) {
+    console.error('[customer] JOB_TRANSITIONS no longer allows QUOTED -> REQUESTED');
+    return res.status(500).json({ error: 'transition_unavailable', message: 'Declining a quote is not currently possible.' });
+  }
+
+  try {
+    const db = getDb();
+    const uid = req.user!.uid;
+
+    const job = await db.collection(JOBS).findOne({ _id: req.params.id as never, customerId: uid });
+    if (!job) {
+      return res.status(404).json({ error: 'job_not_found', message: 'No such request for this customer.' });
+    }
+
+    /**
+     * Declining twice is the same retry case accept handles: the state they
+     * asked for is the state that holds, so report it as success.
+     *
+     * BUT REQUESTED ALONE DOES NOT MEAN DECLINED. A brand-new request that has
+     * never been quoted sits in REQUESTED too, and decline clears quotedPrice,
+     * so the price cannot tell the two apart either. stateHistory can: a job
+     * now in REQUESTED that has ever been QUOTED got there by being declined.
+     * Without this a customer could "decline" a quote nobody has sent and be
+     * told it worked.
+     */
+    if (job.status !== 'QUOTED') {
+      const everQuoted = (job.stateHistory as JobStateTransition[] | undefined)?.some((t) => t.state === 'QUOTED');
+      if (job.status === 'REQUESTED' && everQuoted) {
+        const { _id, ...j } = job;
+        return res.json({ job: { ...j, id: String(_id) }, alreadyDeclined: true });
+      }
+      return res.status(409).json({
+        error: 'not_quoted',
+        message: `Only a quoted request can be declined. This one is ${String(job.status)}.`,
+        status: job.status,
+      });
+    }
+
+    const entry: JobStateTransition = { state: 'REQUESTED', at: new Date().toISOString(), by: uid };
+    const updated = await db.collection(JOBS).findOneAndUpdate(
+      { _id: req.params.id as never, customerId: uid, status: 'QUOTED' },
+      { $set: { status: 'REQUESTED' }, $unset: { quotedPrice: '' }, $push: { stateHistory: entry as never } },
+      { returnDocument: 'after' }
+    );
+
+    if (!updated) {
+      return res.status(409).json({
+        error: 'concurrent_transition',
+        message: 'The request changed while you were declining it. Reload and try again.',
+      });
+    }
+
+    const { _id, ...j } = updated;
+    return res.json({ job: { ...j, id: String(_id) } });
+  } catch (err) {
+    console.error('[customer] POST /jobs/:id/decline failed:', err);
+    return res.status(500).json({ error: 'decline_failed', message: 'Could not decline the quote.' });
+  }
+});
+
+/**
+ * POST /api/customer/jobs/:id/cancel
+ *
+ * The customer calls the whole thing off.
+ *
+ * NARROWER THAN THE STATE MACHINE ON PURPOSE. JOB_TRANSITIONS allows CANCELLED
+ * from SCHEDULED and IN_PROGRESS as well, and the worker's route still does -
+ * a worker who turns up to a locked door needs that. The CUSTOMER's button
+ * stops at ACCEPTED, because past that point the kaarigar has committed a slot
+ * or is already working, and a one-tap cancel would write off their day with no
+ * conversation. Those cases are a phone call, not a button.
+ *
+ * CUSTOMER_CANCELLABLE is the single list; the transition table is still
+ * consulted per state, so this cannot outlive an edge being removed from it.
+ */
+const CUSTOMER_CANCELLABLE: JobState[] = ['REQUESTED', 'QUOTED', 'ACCEPTED'];
+
+/**
+ * The job states in which a customer may see their kaarigar's phone number.
+ *
+ * The line is ACCEPTED: at that point a price has been agreed and the worker is
+ * coming to this person's home, so the two of them plainly need to be able to
+ * reach each other - and the cancel route above tells the customer to phone
+ * rather than cancel once work has been scheduled, which is not advice they can
+ * act on without a number.
+ *
+ * REQUESTED and QUOTED are excluded because nothing has been agreed yet;
+ * browsing and asking for prices must not be a way to harvest phone numbers
+ * from the directory. CANCELLED and DISPUTED are excluded because whatever
+ * engagement existed is over.
+ *
+ * This is NOT a relaxation of the public projection rule. That rule governs
+ * PUBLIC_PROJECTION in data/profiles.ts, which backs /p/:handle and the browse
+ * directory - responses to anyone, about any worker. This is a response to one
+ * authenticated customer about the worker on their own job.
+ */
+const CONTACT_VISIBLE_STATES: JobState[] = ['ACCEPTED', 'SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'SETTLED', 'REVIEWED'];
+
+customerRouter.post('/jobs/:id/cancel', requireAuth, async (req: Request, res: Response) => {
+  if (!dbGuard(res)) return;
+
+  try {
+    const db = getDb();
+    const uid = req.user!.uid;
+
+    const job = await db.collection(JOBS).findOne({ _id: req.params.id as never, customerId: uid });
+    if (!job) {
+      return res.status(404).json({ error: 'job_not_found', message: 'No such request for this customer.' });
+    }
+
+    const current = job.status as JobState;
+
+    if (current === 'CANCELLED') {
+      const { _id, ...j } = job;
+      return res.json({ job: { ...j, id: String(_id) }, alreadyCancelled: true });
+    }
+
+    if (!CUSTOMER_CANCELLABLE.includes(current) || !JOB_TRANSITIONS[current].includes('CANCELLED')) {
+      return res.status(409).json({
+        error: 'not_cancellable',
+        message: `A request can only be cancelled before the kaarigar starts. This one is ${current}. Please call them instead.`,
+        status: current,
+      });
+    }
+
+    const entry: JobStateTransition = { state: 'CANCELLED', at: new Date().toISOString(), by: uid };
+    const updated = await db.collection(JOBS).findOneAndUpdate(
+      { _id: req.params.id as never, customerId: uid, status: current },
+      { $set: { status: 'CANCELLED' }, $push: { stateHistory: entry as never } },
+      { returnDocument: 'after' }
+    );
+
+    if (!updated) {
+      return res.status(409).json({
+        error: 'concurrent_transition',
+        message: 'The request changed while you were cancelling it. Reload and try again.',
+      });
+    }
+
+    const { _id, ...j } = updated;
+    return res.json({ job: { ...j, id: String(_id) } });
+  } catch (err) {
+    console.error('[customer] POST /jobs/:id/cancel failed:', err);
+    return res.status(500).json({ error: 'cancel_failed', message: 'Could not cancel the request.' });
+  }
+});
+
 customerRouter.get('/jobs', requireAuth, async (req: Request, res: Response) => {
   if (!dbGuard(res)) return;
 
@@ -244,8 +408,33 @@ customerRouter.get('/jobs', requireAuth, async (req: Request, res: Response) => 
       .sort({ date: -1, _id: -1 })
       .toArray();
 
+    /**
+     * Each request carries the kaarigar it went to. Without this the list shows
+     * WHAT was asked and what state it is in, but not WHO was asked - two
+     * requests to two different workers are indistinguishable.
+     *
+     * One batched lookup, not one per row.
+     */
+    const byUid = await findAssignedKaarigars(docs.map((d) => String(d.kaarigarId)));
+
     return res.json({
-      jobs: docs.map(({ _id, ...j }) => ({ ...j, id: String(_id) })),
+      jobs: docs.map(({ _id, ...j }) => {
+        const k = byUid.get(String(j.kaarigarId));
+        return {
+          ...j,
+          id: String(_id),
+          kaarigar: k
+            ? {
+                passportHandle: k.passportHandle,
+                name: k.name,
+                trade: k.trade,
+                // The phone is released only once this job is actually going
+                // ahead - see CONTACT_VISIBLE_STATES.
+                ...(CONTACT_VISIBLE_STATES.includes(j.status as JobState) ? { phone: k.phone } : {}),
+              }
+            : undefined,
+        };
+      }),
     });
   } catch (err) {
     console.error('[customer] GET /jobs failed:', err);

@@ -33,12 +33,39 @@ without asking. `JobItem` already has `customerId?: string`.
   the worker: `QUOTED -> ACCEPTED` on the worker's transition route
   is refused for those. Jobs with no `customerId` are the worker's
   own record and keep the one-tap path.
+- `QUOTED -> REQUESTED` is the DECLINE edge. Anything taking it MUST
+  clear `quotedPrice` (decline route + the `REQUESTED` branch of the
+  worker's transition route): a withdrawn price left in place shows
+  the customer a number nobody stands behind, and
+  `quoted_price_required` reads as satisfied because the field is set.
+- `REQUESTED` alone does not mean declined — a new request is
+  `REQUESTED` too. `stateHistory` separates them: now `REQUESTED` and
+  ever `QUOTED` means declined. The decline route's idempotent replay
+  depends on this; without it, declining a quote nobody sent reports
+  success.
+- Customer cancel stops at `ACCEPTED`, narrower than `JOB_TRANSITIONS`
+  — past that the kaarigar has committed a slot. The worker's route
+  still cancels later states. `CUSTOMER_CANCELLABLE` in
+  `routes/customer.ts` is the authority; the copy in
+  `CustomerRequests.tsx` only decides whether to draw the button.
 - Quoting a customer's request requires a price; quoting the
   worker's own job does not. Requiring it everywhere breaks the
   worker lifecycle walk — 12 regressions, all downstream of one
   blocked edge.
 - Public profile responses must exclude `phone`, `totalEarnings`,
-  `dailyRate`, `bloodGroup`.
+  `dailyRate`, `bloodGroup`. Scope: `PUBLIC_PROJECTION` in
+  `data/profiles.ts`, which backs `/p/:handle` and `GET /api/kaarigars`.
+  A customer-scoped response about a job they own is NOT a public
+  profile response and is not covered by this rule.
+- The one such response is `GET /api/customer/jobs`, which joins the
+  assigned kaarigar onto each row via `findAssignedKaarigars` — its
+  OWN allowlist (handle, name, trade, phone), never a widening of
+  `PUBLIC_PROJECTION`. The phone is released only in
+  `CONTACT_VISIBLE_STATES` (`ACCEPTED` onward, excluding `CANCELLED`
+  and `DISPUTED`): browsing and asking for quotes must not become a
+  way to harvest numbers out of the directory. The gate is per job
+  state, so it lives in the route rather than the query — one worker
+  can hold several of a customer's jobs in different states.
 
 ## Customer screens
 Mount the customer tree as a SIBLING of `App` in `main.tsx`, never a
@@ -87,7 +114,12 @@ second form adds the worker lifecycle suite — run it for ANY change to
 ## Known gaps (post-SIH, not now)
 - `DISPUTED` is orphaned in `JOB_TRANSITIONS` (`DISPUTED: []`, and
   no state lists it as a target, so nothing can reach it).
-- No negotiation (the customer accepts or does nothing — there is no
-  counter-offer), no customer-side completion confirmation, no
-  payment verification, no nearest-worker matching.
+- No counter-offer. The customer can accept, decline or cancel, but
+  cannot name a figure of their own — declining says "not this
+  number", never "this number instead". Adding one means a THIRD
+  price field, not overloading `quotedPrice` or `agreedPrice`.
+- No customer-side completion confirmation: `COMPLETED` is still
+  the worker's unverified word, and `COMPLETED -> SETTLED` is not
+  gated on `customerId` the way `QUOTED -> ACCEPTED` is.
+- No payment verification, no nearest-worker matching.
 - Workers see new customer requests only on reload; no push.

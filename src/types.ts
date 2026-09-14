@@ -136,7 +136,23 @@ export type JobState =
  */
 export const JOB_TRANSITIONS: Record<JobState, JobState[]> = {
   REQUESTED:   ['QUOTED', 'CANCELLED'],
-  QUOTED:      ['ACCEPTED', 'CANCELLED'],
+  /**
+   * QUOTED -> REQUESTED is the DECLINE edge: the customer has seen the price
+   * and does not want it, but does still want the work. Sending the job back to
+   * REQUESTED puts it exactly where a fresh request sits, so the kaarigar can
+   * quote again down the existing REQUESTED -> QUOTED path with no second
+   * mechanism to maintain.
+   *
+   * Anything that moves a job back to REQUESTED MUST clear quotedPrice. A
+   * REQUESTED job carrying a stale price would show the customer a number the
+   * worker has already withdrawn, and `quoted_price_required` would not catch
+   * it because the field is populated. Both routes that can take this edge
+   * unset it - see customer.ts decline and the REQUESTED branch in jobs.ts.
+   *
+   * agreedPrice is untouched by any of this. It is still written in exactly one
+   * place, from the stored quotedPrice, by the customer's accept.
+   */
+  QUOTED:      ['ACCEPTED', 'REQUESTED', 'CANCELLED'],
   ACCEPTED:    ['SCHEDULED', 'CANCELLED'],
   SCHEDULED:   ['IN_PROGRESS', 'CANCELLED'],
   IN_PROGRESS: ['COMPLETED', 'CANCELLED'],

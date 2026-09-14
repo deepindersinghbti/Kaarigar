@@ -176,3 +176,52 @@ export async function findOwnerIdByHandle(handle: string): Promise<string | null
     .findOne({ passportHandle: handle }, { projection: { userId: 1 } });
   return doc && typeof doc.userId === 'string' ? doc.userId : null;
 }
+
+/**
+ * The kaarigar behind each of a customer's jobs, keyed by the worker's uid.
+ *
+ * WHY THIS IS NOT listPublicProfiles. That function answers "who could I
+ * hire?" for anyone browsing; this answers "who is doing MY job?" for one
+ * customer about workers they have already engaged. Different question,
+ * different audience, so it gets its own allowlist rather than widening
+ * PUBLIC_PROJECTION - see the note on findOwnerIdByHandle about why adding a
+ * field to that projection "just for this one caller" is how it erodes.
+ *
+ * PHONE IS FETCHED HERE AND GATED BY THE CALLER, which breaks the
+ * projection-in-the-query pattern the public reads use. It has to: visibility
+ * depends on the STATE OF EACH JOB, and one kaarigar can hold several of this
+ * customer's jobs at once in different states. A projection is per query, not
+ * per row, so it cannot express the rule. The gate therefore lives in the
+ * customer jobs route, which is the only caller - see CONTACT_VISIBLE_STATES.
+ *
+ * Nothing else from the profile is returned. totalEarnings, dailyRate and
+ * bloodGroup are as absent here as they are from the public shape.
+ */
+export interface AssignedKaarigar {
+  passportHandle: string;
+  name: string;
+  trade: string;
+  phone: string;
+}
+
+export async function findAssignedKaarigars(uids: string[]): Promise<Map<string, AssignedKaarigar>> {
+  const wanted = [...new Set(uids.filter((u) => typeof u === 'string' && u))];
+  if (wanted.length === 0) return new Map();
+
+  const docs = await getDb()
+    .collection(PROFILES)
+    .find({ userId: { $in: wanted } }, { projection: { _id: 0, userId: 1, passportHandle: 1, name: 1, trade: 1, phone: 1 } })
+    .toArray();
+
+  return new Map(
+    docs.map((d) => [
+      String(d.userId),
+      {
+        passportHandle: String(d.passportHandle ?? ''),
+        name: String(d.name ?? '').trim() || 'this kaarigar',
+        trade: String(d.trade ?? ''),
+        phone: String(d.phone ?? ''),
+      },
+    ])
+  );
+}
