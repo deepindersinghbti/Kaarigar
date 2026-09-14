@@ -153,6 +153,22 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T;
 }
 
+/**
+ * A customer's own job, as GET /api/customer/jobs returns it: the stored
+ * JobItem plus the kaarigar it was sent to.
+ *
+ * DECLARED HERE RATHER THAN ON JobItem because types.ts is the frozen
+ * cross-track contract and this field is not stored on the job - the server
+ * joins it on for this one response. Widening JobItem would tell the worker
+ * screens and the sync layer that a field exists which, for them, never does.
+ *
+ * `phone` is present only while the job is ACCEPTED or later; before that the
+ * server omits it. Treat its absence as normal, not as an error.
+ */
+export type CustomerJobItem = JobItem & {
+  kaarigar?: { passportHandle: string; name: string; trade: string; phone?: string };
+};
+
 export const api = {
   async getProfile(): Promise<WorkerProfile> {
     const body = await request<{ profile: WorkerProfile }>('/api/passport/me');
@@ -339,8 +355,8 @@ export const api = {
   },
 
   /** The caller's own requests, newest first. */
-  async listCustomerJobs(): Promise<JobItem[]> {
-    const body = await request<{ jobs: JobItem[] }>('/api/customer/jobs');
+  async listCustomerJobs(): Promise<CustomerJobItem[]> {
+    const body = await request<{ jobs: CustomerJobItem[] }>('/api/customer/jobs');
     return body.jobs;
   },
 

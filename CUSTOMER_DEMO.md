@@ -23,8 +23,9 @@ Neha's identifier is `0123456789`. This is a demo ID, not a real SMS destination
 6. Neha can instead **decline** the price. The request goes back to `REQUESTED`, the withdrawn quote is cleared, and Ramesh can send a different price down the ordinary quoting path — the second quote is the one she then accepts. Declining names no figure of its own; that would be a counter-offer, which this release does not have.
 7. Neha can **cancel** the request outright while it is `REQUESTED`, `QUOTED` or `ACCEPTED`. Once Ramesh has scheduled or started, her cancel answers `409` and tells her to call him — the state machine still lets *Ramesh* cancel at that point, which is the asymmetry we intend.
 8. **Show progress** on any request opens its `stateHistory`: every state, when it happened, and whether Neha or Ramesh caused it. The `ACCEPTED` row attributed to Neha is the point worth making — it is the one state on the job the kaarigar could not have written alone.
-9. Request creation records Neha as the actor and starts at `REQUESTED`, with payment pending. The customer's opening amount is an estimate, not proof of payment.
-10. Customer and worker routes are role-gated on both the UI and API. Worker-created notes cannot attach themselves to Neha's account by supplying her customer ID.
+9. Every request names the kaarigar it went to. Ramesh's phone number appears — with a **Call** button — only once that job is `ACCEPTED` or later. Before acceptance Neha sees his name, handle and trade but no number, so browsing and collecting quotes is not a route to harvesting phone numbers out of the directory. `GET /api/kaarigars` and the public passport page still withhold it at every stage.
+10. Request creation records Neha as the actor and starts at `REQUESTED`, with payment pending. The customer's opening amount is an estimate, not proof of payment.
+11. Customer and worker routes are role-gated on both the UI and API. Worker-created notes cannot attach themselves to Neha's account by supplying her customer ID.
 
 Existing worker lifecycle controls remain unchanged. Do not present worker-entered completion or payment as independently customer-verified evidence.
 

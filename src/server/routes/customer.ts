@@ -5,7 +5,7 @@ import { requireAuth } from '../middleware/auth';
 import { JOBS, createJob, ensureJobIndexes } from '../data/jobs';
 import { JOB_TRANSITIONS } from '../../types';
 import type { JobState, JobStateTransition } from '../../types';
-import { listPublicProfiles, findOwnerIdByHandle } from '../data/profiles';
+import { listPublicProfiles, findOwnerIdByHandle, findAssignedKaarigars } from '../data/profiles';
 import { optionalQueryString, queryString } from '../lib/query';
 import { DEMO_CUSTOMER_PHONE, DEMO_CUSTOMER_NAME } from '../auth/demoCustomer';
 
@@ -327,6 +327,27 @@ customerRouter.post('/jobs/:id/decline', requireAuth, async (req: Request, res: 
  */
 const CUSTOMER_CANCELLABLE: JobState[] = ['REQUESTED', 'QUOTED', 'ACCEPTED'];
 
+/**
+ * The job states in which a customer may see their kaarigar's phone number.
+ *
+ * The line is ACCEPTED: at that point a price has been agreed and the worker is
+ * coming to this person's home, so the two of them plainly need to be able to
+ * reach each other - and the cancel route above tells the customer to phone
+ * rather than cancel once work has been scheduled, which is not advice they can
+ * act on without a number.
+ *
+ * REQUESTED and QUOTED are excluded because nothing has been agreed yet;
+ * browsing and asking for prices must not be a way to harvest phone numbers
+ * from the directory. CANCELLED and DISPUTED are excluded because whatever
+ * engagement existed is over.
+ *
+ * This is NOT a relaxation of the public projection rule. That rule governs
+ * PUBLIC_PROJECTION in data/profiles.ts, which backs /p/:handle and the browse
+ * directory - responses to anyone, about any worker. This is a response to one
+ * authenticated customer about the worker on their own job.
+ */
+const CONTACT_VISIBLE_STATES: JobState[] = ['ACCEPTED', 'SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'SETTLED', 'REVIEWED'];
+
 customerRouter.post('/jobs/:id/cancel', requireAuth, async (req: Request, res: Response) => {
   if (!dbGuard(res)) return;
 
@@ -387,8 +408,33 @@ customerRouter.get('/jobs', requireAuth, async (req: Request, res: Response) => 
       .sort({ date: -1, _id: -1 })
       .toArray();
 
+    /**
+     * Each request carries the kaarigar it went to. Without this the list shows
+     * WHAT was asked and what state it is in, but not WHO was asked - two
+     * requests to two different workers are indistinguishable.
+     *
+     * One batched lookup, not one per row.
+     */
+    const byUid = await findAssignedKaarigars(docs.map((d) => String(d.kaarigarId)));
+
     return res.json({
-      jobs: docs.map(({ _id, ...j }) => ({ ...j, id: String(_id) })),
+      jobs: docs.map(({ _id, ...j }) => {
+        const k = byUid.get(String(j.kaarigarId));
+        return {
+          ...j,
+          id: String(_id),
+          kaarigar: k
+            ? {
+                passportHandle: k.passportHandle,
+                name: k.name,
+                trade: k.trade,
+                // The phone is released only once this job is actually going
+                // ahead - see CONTACT_VISIBLE_STATES.
+                ...(CONTACT_VISIBLE_STATES.includes(j.status as JobState) ? { phone: k.phone } : {}),
+              }
+            : undefined,
+        };
+      }),
     });
   } catch (err) {
     console.error('[customer] GET /jobs failed:', err);

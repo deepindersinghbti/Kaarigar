@@ -1,12 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { MapPin, IndianRupee, Calendar, RefreshCw, ChevronDown, ChevronUp, Check } from 'lucide-react';
-import { api, ApiError } from '../../lib/api';
+import { MapPin, IndianRupee, Calendar, RefreshCw, ChevronDown, ChevronUp, Check, Phone } from 'lucide-react';
+import { api, ApiError, type CustomerJobItem } from '../../lib/api';
 import { useAuth } from '../../auth/AuthProvider';
-import { JOB_BADGE, type JobItem, type JobState, type SupportedLanguage } from '../../types';
+import { JOB_BADGE, type JobState, type SupportedLanguage } from '../../types';
 import { JOB_BADGE_PRESENTATION } from '../JobsView';
 import { getScreenCopy } from '../../data/uiCopy';
-import { getCustomerCopy } from './customerCopy';
+import { getCustomerCopy, getCustomerTrade } from './customerCopy';
 
 /** Which control on a row is mid-flight. One row, one action at a time. */
 type PendingAction = 'accept' | 'decline' | 'cancel';
@@ -40,7 +40,7 @@ interface CustomerRequestsProps {
  * would make it impossible to tell a working end-to-end loop from a lucky one.
  */
 export const CustomerRequests: React.FC<CustomerRequestsProps> = ({ currentLanguage }) => {
-  const [jobs, setJobs] = useState<JobItem[] | null>(null);
+  const [jobs, setJobs] = useState<CustomerJobItem[] | null>(null);
   const [error, setError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [pending, setPending] = useState<{ id: string; action: PendingAction } | null>(null);
@@ -173,6 +173,30 @@ export const CustomerRequests: React.FC<CustomerRequestsProps> = ({ currentLangu
               {stateLabel[job.status]}
             </span>
           </div>
+
+          {/*
+            Who this request went to. The phone arrives only once the job is
+            ACCEPTED or later - see CONTACT_VISIBLE_STATES on the server - so
+            the call link is driven by the field being present rather than by
+            the client re-deciding the rule.
+          */}
+          {job.kaarigar && (
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span className="text-xs font-extrabold text-gray-700">{job.kaarigar.name}</span>
+              {job.kaarigar.trade && (
+                <span className="text-xs font-semibold text-gray-400">{getCustomerTrade(currentLanguage, job.kaarigar.trade)}</span>
+              )}
+              {job.kaarigar.phone && (
+                <a
+                  href={`tel:${job.kaarigar.phone}`}
+                  className="inline-flex items-center gap-1 h-8 px-2.5 rounded-lg border border-gray-200 bg-white text-xs font-bold text-gray-700 active:scale-[0.98] transition"
+                >
+                  <Phone className="w-3.5 h-3.5" />
+                  {copy.requestList.call}
+                </a>
+              )}
+            </div>
+          )}
 
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500 font-semibold">
             {job.location && (

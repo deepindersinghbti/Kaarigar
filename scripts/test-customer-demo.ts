@@ -175,6 +175,31 @@ try {
   check('worker own job still quotes', solo.status === 200 && solo.body.job.quotedPrice === 300);
   check('worker own job still self-accepts', (await call(`/api/jobs/${ownJob.body.job.id}/transition`, wt, { state: 'ACCEPTED' })).status === 200);
 
+  // The kaarigar on each request, and the phone gate. Name/handle/trade always;
+  // the number only once the job is ACCEPTED or later.
+  const listed = (await call('/api/customer/jobs', ct)).body.jobs;
+  const findJob = (id: string) => listed.find((j: any) => j.id === id);
+  check('each request names the kaarigar it went to', listed.every((j: any) => j.kaarigar && j.kaarigar.name && j.kaarigar.passportHandle));
+  check('the kaarigar shown is the one asked', findJob(input.id).kaarigar.passportHandle === handle);
+  const quotedOnly = { ...input, id: 'customer-demo-request-7', title: 'Seventh request' };
+  await call('/api/customer/jobs', ct, quotedOnly);
+  check('no phone on a REQUESTED job', findJob(notQuoted.id).kaarigar.phone === undefined);
+  await call(`/api/jobs/${quotedOnly.id}/transition`, wt, { state: 'QUOTED', quotedPrice: 400 });
+  const afterQuote = (await call('/api/customer/jobs', ct)).body.jobs.find((j: any) => j.id === quotedOnly.id);
+  check('no phone on a QUOTED job', afterQuote.kaarigar.phone === undefined);
+  await call(`/api/customer/jobs/${quotedOnly.id}/accept`, ct, undefined, 'POST');
+  const afterAccept = (await call('/api/customer/jobs', ct)).body.jobs.find((j: any) => j.id === quotedOnly.id);
+  check('phone released once ACCEPTED', typeof afterAccept.kaarigar.phone === 'string' && afterAccept.kaarigar.phone.length > 0);
+  check('no phone on a CANCELLED job', findJob(withdraw.id).kaarigar.phone === undefined);
+  // The join must not leak the fields the public projection withholds.
+  check('the join carries nothing beyond handle, name, trade, phone',
+    listed.every((j: any) => Object.keys(j.kaarigar).every((k) => ['passportHandle', 'name', 'trade', 'phone'].includes(k))));
+  check('no earnings, rate or blood group on the join',
+    listed.every((j: any) => j.kaarigar.totalEarnings === undefined && j.kaarigar.dailyRate === undefined && j.kaarigar.bloodGroup === undefined));
+  // The browse directory is unchanged by any of this.
+  check('browse directory still withholds phone',
+    (await call('/api/kaarigars', ct)).body.kaarigars.every((k: any) => k.phone === undefined && k.totalEarnings === undefined));
+
   const refresh = await call('/api/auth/refresh', '', { refreshToken: customer.refreshToken });
   check('refresh preserves customer access restrictions', refresh.status === 200 && (await call('/api/passport/me', refresh.body.accessToken)).status === 403);
 
