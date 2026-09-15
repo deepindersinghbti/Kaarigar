@@ -10,6 +10,7 @@ import { connectDb, closeDb, getDb } from '../src/server/db';
 import { registerRoutes } from '../src/server/routes';
 import { signAccessToken } from '../src/server/auth/tokens';
 import { demoCustomerEnabled } from '../src/server/auth/demoCustomer';
+import { mergeServerJobs } from '../src/lib/mergeServerJobs';
 
 const databaseName = `kg_cust_test_${Date.now()}_${randomBytes(3).toString('hex')}`;
 process.env.MONGODB_DB_NAME = databaseName;
@@ -295,6 +296,25 @@ try {
   // The browse directory is unchanged by any of this.
   check('browse directory still withholds phone',
     (await call('/api/kaarigars', ct)).body.kaarigars.every((k: any) => k.phone === undefined && k.totalEarnings === undefined));
+
+  /**
+   * Live updates re-read the worker's job list on a timer. mergeServerJobs is
+   * what stops that erasing work the worker recorded offline, so it is tested
+   * as a pure function rather than through the UI - the failure it guards
+   * against is a job disappearing off a money screen, and that deserves a
+   * direct assertion rather than a click-through.
+   */
+  const j = (id: string, title = id): any => ({ id, title, kaarigarId: 'w', customerName: 'x', location: 'y', amount: 1, paymentMethod: 'pending', status: 'REQUESTED', stateHistory: [], syncState: 'pending', date: '2026-01-01' });
+  const allSynced = () => 'synced' as const;
+  const allPending = () => 'pending' as const;
+  check('merge keeps a pending local-only job', mergeServerJobs([j('s1')], [j('local1')], allPending).map((x: any) => x.id).join() === 'local1,s1');
+  check('merge drops a synced local job the server does not have', mergeServerJobs([j('s1')], [j('ghost')], allSynced).map((x: any) => x.id).join() === 's1');
+  check('merge prefers the server copy of a shared job', mergeServerJobs([{ ...j('same'), status: 'QUOTED' }], [{ ...j('same'), status: 'REQUESTED' }], allPending)[0].status === 'QUOTED');
+  check('merge does not duplicate a job present on both sides', mergeServerJobs([j('same')], [j('same')], allPending).length === 1);
+  check('merge of an empty server list keeps pending work', mergeServerJobs([], [j('local1')], allPending).length === 1);
+  check('merge of an empty server list drops synced ghosts', mergeServerJobs([], [j('ghost')], allSynced).length === 0);
+  check('merge handles both sides empty', mergeServerJobs([], [], allPending).length === 0);
+  check('merge keeps a failed local job too', mergeServerJobs([], [j('failedOne')], () => 'failed' as const).length === 1);
 
   const refresh = await call('/api/auth/refresh', '', { refreshToken: customer.refreshToken });
   check('refresh preserves customer access restrictions', refresh.status === 200 && (await call('/api/passport/me', refresh.body.accessToken)).status === 403);

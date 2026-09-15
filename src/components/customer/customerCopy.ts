@@ -29,6 +29,7 @@ export interface CustomerCopy {
     counter: string; counterCancel: string; counterLabel: string; counterPlaceholder: string;
     counterSend: string; countering: string; counterError: string; counterInvalid: string;
     countered: (price: number) => string;
+    live: string; liveOn: string; liveOff: string;
   };
   trades: Record<Trade, string>;
 }
@@ -47,7 +48,8 @@ const CUSTOMER_COPY: Record<SupportedLanguage, CustomerCopy> = {
       dispute: 'No, it is not done', disputing: 'Sending…', disputeError: 'Could not send that.', disputed: 'You said this is not done. The kaarigar can return and finish it.', disputeConfirm: 'Tell the kaarigar this work is not done?',
       counter: 'Offer a different price', counterCancel: 'Never mind', counterLabel: 'Your price', counterPlaceholder: 'Price ₹',
       counterSend: 'Send my price', countering: 'Sending…', counterError: 'Could not send your price.', counterInvalid: 'Enter a price greater than zero.',
-      countered: (price) => `You asked for ₹${price}. Waiting for the kaarigar to reply.` },
+      countered: (price) => `You asked for ₹${price}. Waiting for the kaarigar to reply.`,
+      live: 'Live', liveOn: 'Updates arrive on their own. Tap to stop.', liveOff: 'Tap to let updates arrive on their own.' },
     trades: { Electrician: 'Electrician', Plumber: 'Plumber' },
   },
   hi: {
@@ -63,7 +65,8 @@ const CUSTOMER_COPY: Record<SupportedLanguage, CustomerCopy> = {
       dispute: 'नहीं, काम पूरा नहीं हुआ', disputing: 'भेज रहे हैं…', disputeError: 'यह भेजा नहीं जा सका।', disputed: 'आपने कहा कि काम पूरा नहीं हुआ। कारीगर लौटकर इसे पूरा कर सकता है।', disputeConfirm: 'कारीगर को बताएँ कि यह काम पूरा नहीं हुआ?',
       counter: 'अपना दाम बताएँ', counterCancel: 'रहने दें', counterLabel: 'आपका दाम', counterPlaceholder: 'दाम ₹',
       counterSend: 'मेरा दाम भेजें', countering: 'भेज रहे हैं…', counterError: 'आपका दाम नहीं भेजा जा सका।', counterInvalid: 'शून्य से बड़ा दाम डालें।',
-      countered: (price) => `आपने ₹${price} माँगा है। कारीगर के जवाब का इंतज़ार है।` },
+      countered: (price) => `आपने ₹${price} माँगा है। कारीगर के जवाब का इंतज़ार है।`,
+      live: 'लाइव', liveOn: 'अपडेट अपने आप आते हैं। रोकने के लिए दबाएँ।', liveOff: 'अपडेट अपने आप पाने के लिए दबाएँ।' },
     trades: { Electrician: 'इलेक्ट्रीशियन', Plumber: 'प्लंबर' },
   },
   pa: {
@@ -79,7 +82,8 @@ const CUSTOMER_COPY: Record<SupportedLanguage, CustomerCopy> = {
       dispute: 'ਨਹੀਂ, ਕੰਮ ਪੂਰਾ ਨਹੀਂ ਹੋਇਆ', disputing: 'ਭੇਜਿਆ ਜਾ ਰਿਹਾ ਹੈ…', disputeError: 'ਇਹ ਭੇਜਿਆ ਨਹੀਂ ਜਾ ਸਕਿਆ।', disputed: 'ਤੁਸੀਂ ਕਿਹਾ ਕਿ ਕੰਮ ਪੂਰਾ ਨਹੀਂ ਹੋਇਆ। ਕਾਰੀਗਰ ਵਾਪਸ ਆ ਕੇ ਇਸਨੂੰ ਪੂਰਾ ਕਰ ਸਕਦਾ ਹੈ।', disputeConfirm: 'ਕਾਰੀਗਰ ਨੂੰ ਦੱਸਣਾ ਹੈ ਕਿ ਇਹ ਕੰਮ ਪੂਰਾ ਨਹੀਂ ਹੋਇਆ?',
       counter: 'ਆਪਣੀ ਕੀਮਤ ਦੱਸੋ', counterCancel: 'ਰਹਿਣ ਦਿਓ', counterLabel: 'ਤੁਹਾਡੀ ਕੀਮਤ', counterPlaceholder: 'ਕੀਮਤ ₹',
       counterSend: 'ਮੇਰੀ ਕੀਮਤ ਭੇਜੋ', countering: 'ਭੇਜਿਆ ਜਾ ਰਿਹਾ ਹੈ…', counterError: 'ਤੁਹਾਡੀ ਕੀਮਤ ਨਹੀਂ ਭੇਜੀ ਜਾ ਸਕੀ।', counterInvalid: 'ਸ਼ੂਨ ਤੋਂ ਵੱਡੀ ਕੀਮਤ ਪਾਓ।',
-      countered: (price) => `ਤੁਸੀਂ ₹${price} ਮੰਗਿਆ ਹੈ। ਕਾਰੀਗਰ ਦੇ ਜਵਾਬ ਦੀ ਉਡੀਕ ਹੈ।` },
+      countered: (price) => `ਤੁਸੀਂ ₹${price} ਮੰਗਿਆ ਹੈ। ਕਾਰੀਗਰ ਦੇ ਜਵਾਬ ਦੀ ਉਡੀਕ ਹੈ।`,
+      live: 'ਲਾਈਵ', liveOn: 'ਅੱਪਡੇਟ ਆਪਣੇ ਆਪ ਆਉਂਦੇ ਹਨ। ਰੋਕਣ ਲਈ ਦਬਾਓ।', liveOff: 'ਅੱਪਡੇਟ ਆਪਣੇ ਆਪ ਪਾਉਣ ਲਈ ਦਬਾਓ।' },
     trades: { Electrician: 'ਇਲੈਕਟ੍ਰੀਸ਼ੀਅਨ', Plumber: 'ਪਲੰਬਰ' },
   },
   kn: {
@@ -95,7 +99,8 @@ const CUSTOMER_COPY: Record<SupportedLanguage, CustomerCopy> = {
       dispute: 'ಇಲ್ಲ, ಮುಗಿದಿಲ್ಲ', disputing: 'ಕಳುಹಿಸಲಾಗುತ್ತಿದೆ…', disputeError: 'ಅದನ್ನು ಕಳುಹಿಸಲು ಸಾಧ್ಯವಾಗಲಿಲ್ಲ.', disputed: 'ಕೆಲಸ ಮುಗಿದಿಲ್ಲ ಎಂದು ನೀವು ಹೇಳಿದ್ದೀರಿ. ಕಾರಿಗಾರರು ಮರಳಿ ಬಂದು ಪೂರ್ಣಗೊಳಿಸಬಹುದು.', disputeConfirm: 'ಈ ಕೆಲಸ ಮುಗಿದಿಲ್ಲ ಎಂದು ಕಾರಿಗಾರರಿಗೆ ತಿಳಿಸಬೇಕೇ?',
       counter: 'ನಿಮ್ಮ ದರ ತಿಳಿಸಿ', counterCancel: 'ಬೇಡ', counterLabel: 'ನಿಮ್ಮ ದರ', counterPlaceholder: 'ದರ ₹',
       counterSend: 'ನನ್ನ ದರ ಕಳುಹಿಸಿ', countering: 'ಕಳುಹಿಸಲಾಗುತ್ತಿದೆ…', counterError: 'ನಿಮ್ಮ ದರ ಕಳುಹಿಸಲಾಗಲಿಲ್ಲ.', counterInvalid: 'ಸೊನ್ನೆಗಿಂತ ದೊಡ್ಡ ದರ ನಮೂದಿಸಿ.',
-      countered: (price) => `ನೀವು ₹${price} ಕೇಳಿದ್ದೀರಿ. ಕಾರಿಗಾರರ ಉತ್ತರಕ್ಕಾಗಿ ಕಾಯಲಾಗುತ್ತಿದೆ.` },
+      countered: (price) => `ನೀವು ₹${price} ಕೇಳಿದ್ದೀರಿ. ಕಾರಿಗಾರರ ಉತ್ತರಕ್ಕಾಗಿ ಕಾಯಲಾಗುತ್ತಿದೆ.`,
+      live: 'ಲೈವ್', liveOn: 'ನವೀಕರಣಗಳು ತಾನಾಗಿಯೇ ಬರುತ್ತವೆ. ನಿಲ್ಲಿಸಲು ಒತ್ತಿ.', liveOff: 'ನವೀಕರಣಗಳು ತಾನಾಗಿಯೇ ಬರಲು ಒತ್ತಿ.' },
     trades: { Electrician: 'ವಿದ್ಯುತ್ ತಂತ್ರಜ್ಞ', Plumber: 'ಪ್ಲಂಬರ್' },
   },
   mr: {
@@ -111,7 +116,8 @@ const CUSTOMER_COPY: Record<SupportedLanguage, CustomerCopy> = {
       dispute: 'नाही, काम पूर्ण झाले नाही', disputing: 'पाठवत आहे…', disputeError: 'ते पाठवता आले नाही.', disputed: 'तुम्ही सांगितले की काम पूर्ण झाले नाही. कारागीर परत येऊन ते पूर्ण करू शकतो.', disputeConfirm: 'हे काम पूर्ण झाले नाही असे कारागिराला कळवायचे?',
       counter: 'तुमचा दर सांगा', counterCancel: 'नको', counterLabel: 'तुमचा दर', counterPlaceholder: 'दर ₹',
       counterSend: 'माझा दर पाठवा', countering: 'पाठवत आहे…', counterError: 'तुमचा दर पाठवता आला नाही.', counterInvalid: 'शून्यापेक्षा मोठा दर टाका.',
-      countered: (price) => `तुम्ही ₹${price} मागितले आहेत. कारागिराच्या उत्तराची वाट पाहत आहोत.` },
+      countered: (price) => `तुम्ही ₹${price} मागितले आहेत. कारागिराच्या उत्तराची वाट पाहत आहोत.`,
+      live: 'लाइव्ह', liveOn: 'अपडेट आपोआप येतात. थांबवण्यासाठी दाबा.', liveOff: 'अपडेट आपोआप मिळवण्यासाठी दाबा.' },
     trades: { Electrician: 'इलेक्ट्रिशियन', Plumber: 'प्लंबर' },
   },
 };

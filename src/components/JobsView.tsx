@@ -25,6 +25,8 @@ import { SyncBadge } from './SyncBadge';
 import { SendReviewLink } from './SendReviewLink';
 import { TRANSLATIONS } from '../data/translations';
 import { getScreenCopy, localizeDisplayValue, localizeWorkerName } from '../data/uiCopy';
+import { LiveToggle } from './LiveToggle';
+import { useLivePolling } from '../hooks/useLivePolling';
 import { todayIso } from '../utils/date';
 
 /** Exported so the customer's request list badges a status identically. */
@@ -61,6 +63,14 @@ interface JobsViewProps {
   onOpenQuote: () => void;
   onTransitionJob?: (jobId: string, state: JobState, quotedPrice?: number) => Promise<void>;
   /**
+   * Re-read jobs from the server. Absent when jobs are not API-backed, which is
+   * also what hides the live-updates toggle - there is nothing to poll.
+   *
+   * App owns this rather than the screen, because App owns the job list and the
+   * outbox reconciliation that a refresh has to respect.
+   */
+  onRefreshJobs?: () => Promise<void>;
+  /**
    * Sync state per record (section 9.1). A function rather than a field on the
    * job because the outbox is the authority on what has actually reached the
    * server, and a copy embedded in the record would go stale the moment a flush
@@ -77,6 +87,7 @@ export const JobsView: React.FC<JobsViewProps> = ({
   onAddJobVoice,
   onOpenQuote,
   onTransitionJob,
+  onRefreshJobs,
 }) => {
   const t = TRANSLATIONS[currentLanguage];
   const copy = getScreenCopy(currentLanguage).jobs;
@@ -86,6 +97,18 @@ export const JobsView: React.FC<JobsViewProps> = ({
   const [transitioningJobId, setTransitioningJobId] = useState<string | null>(null);
   const [transitionError, setTransitionError] = useState('');
   const [quoteDrafts, setQuoteDrafts] = useState<Record<string, string>>({});
+
+  /**
+   * Paused while a transition is in flight or a quote is half-typed. A poll
+   * landing mid-edit would swap the job list under a price box the worker is
+   * still filling in - and a quote box that clears itself is the kind of thing
+   * that makes someone stop trusting the screen.
+   */
+  const live = useLivePolling({
+    onTick: onRefreshJobs ?? (async () => {}),
+    paused: transitioningJobId !== null || Object.values(quoteDrafts).some((d) => d.trim() !== ''),
+    storageKey: 'kaarigar_live_worker_jobs',
+  });
 
   const todayStr = todayIso();
 
@@ -169,6 +192,19 @@ export const JobsView: React.FC<JobsViewProps> = ({
           <button type="button" onClick={onOpenQuote} className="w-full flex items-center justify-center gap-2 px-5 py-2.5 rounded-full bg-white border border-orange-300 text-orange-700 font-extrabold text-xs hover:bg-orange-50 transition-colors">
             {copy.createQuote}
           </button>
+          {/*
+            Only offered when jobs are API-backed. With no server to ask there
+            is nothing to poll, and a switch that visibly does nothing is worse
+            than no switch.
+          */}
+          {onRefreshJobs && (
+            <LiveToggle
+              enabled={live.enabled}
+              onToggle={live.toggle}
+              label={copy.live}
+              title={live.enabled ? copy.liveOn : copy.liveOff}
+            />
+          )}
         </div>
       </div>
 
