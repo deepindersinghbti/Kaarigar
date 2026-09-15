@@ -1,4 +1,5 @@
 import { getDb } from '../db';
+import { areaOf, type Area } from '../../lib/areas';
 import type { WorkerProfile } from '../../types';
 
 /**
@@ -130,7 +131,7 @@ export async function findPublicProfileByHandle(handle: string): Promise<PublicP
  * `trade` is matched case-insensitively through a collation rather than a
  * regex, so nothing from the query string is ever compiled as a pattern.
  */
-export async function listPublicProfiles(trade?: string): Promise<PublicProfile[]> {
+export async function listPublicProfiles(trade?: string, near?: Area): Promise<PublicProfile[]> {
   const filter = trade ? { trade } : {};
   const docs = await getDb()
     .collection(PROFILES)
@@ -138,7 +139,31 @@ export async function listPublicProfiles(trade?: string): Promise<PublicProfile[
     .collation({ locale: 'en', strength: 2 })
     .sort({ rating: -1, name: 1 })
     .toArray();
-  return docs as unknown as PublicProfile[];
+
+  const profiles = docs as unknown as PublicProfile[];
+  if (!near) return profiles;
+
+  /**
+   * Area ranking is applied HERE rather than in the query, because the area is
+   * derived from free text by areaOf() and Mongo cannot run that. The set is
+   * six seeded passports with no pagination (see above), so sorting them in
+   * process costs nothing; if this list ever grows past a screenful, the area
+   * belongs in a stored field and this becomes a query again.
+   *
+   * A PARTITION, NOT A FILTER. Workers elsewhere stay in the list, below the
+   * local ones. A customer in Zirakpur with no plumber in Zirakpur should see
+   * the Mohali plumber, not an empty screen - the ordering is a preference, and
+   * turning it into a hard filter would make the feature worse the emptier the
+   * directory is.
+   *
+   * Array.prototype.sort is stable in every supported engine, so the rating and
+   * name order established by the query above survives inside each group.
+   */
+  return [...profiles].sort((a, b) => {
+    const aNear = areaOf(a.location) === near ? 0 : 1;
+    const bNear = areaOf(b.location) === near ? 0 : 1;
+    return aNear - bNear;
+  });
 }
 
 /**

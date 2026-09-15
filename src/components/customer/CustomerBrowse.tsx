@@ -3,6 +3,7 @@ import { MapPin, Star, Briefcase, ChevronRight, ShieldCheck } from 'lucide-react
 import { api, ApiError, type PublicKaarigar } from '../../lib/api';
 import type { SupportedLanguage } from '../../types';
 import { getCustomerCopy, getCustomerTrade } from './customerCopy';
+import { AREAS, areaOf, isArea, type Area } from '../../lib/areas';
 
 interface CustomerBrowseProps {
   onSelect: (passportHandle: string) => void;
@@ -73,11 +74,40 @@ export const CustomerBrowse: React.FC<CustomerBrowseProps> = ({ onSelect, curren
   const [error, setError] = useState('');
   const copy = getCustomerCopy(currentLanguage);
 
+  /**
+   * The area the customer says they are in. Remembered, because it is a fact
+   * about them rather than about this visit, and re-picking it on every load
+   * would make the feature more work than scrolling past three cards.
+   *
+   * null means "not said", which is a different thing from any particular area
+   * - the list is then returned in its plain rating order, unranked.
+   */
+  const [near, setNear] = useState<Area | null>(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const saved = localStorage.getItem('kaarigar_customer_area');
+      return isArea(saved) ? saved : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const chooseArea = (area: Area | null) => {
+    setNear(area);
+    setKaarigars(null);
+    try {
+      if (area) localStorage.setItem('kaarigar_customer_area', area);
+      else localStorage.removeItem('kaarigar_customer_area');
+    } catch {
+      // Works for this visit, just not remembered. Not worth a message.
+    }
+  };
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const list = await api.listKaarigars();
+        const list = await api.listKaarigars(undefined, near ?? undefined);
         if (!cancelled) setKaarigars(list);
       } catch (e) {
         if (cancelled) return;
@@ -89,12 +119,42 @@ export const CustomerBrowse: React.FC<CustomerBrowseProps> = ({ onSelect, curren
       }
     })();
     return () => { cancelled = true; };
-  }, [copy.directory.loadError]);
+  }, [copy.directory.loadError, near]);
+
+  /**
+   * The area chips, rendered above the list in every state - loading, empty and
+   * error included. A picker that disappears while the list is loading cannot
+   * be corrected by someone who has just realised they chose wrong.
+   */
+  const areaPicker = (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="text-xs font-extrabold text-gray-500 mr-1">{copy.directory.areaLabel}</span>
+      {AREAS.map((area) => (
+        <button
+          key={area}
+          type="button"
+          onClick={() => chooseArea(near === area ? null : area)}
+          aria-pressed={near === area}
+          className={[
+            'h-9 px-3 rounded-full border text-xs font-extrabold active:scale-[0.98] transition',
+            near === area
+              ? 'border-orange-300 bg-orange-500 text-white'
+              : 'border-gray-200 bg-white text-gray-600',
+          ].join(' ')}
+        >
+          {copy.directory.areas[area]}
+        </button>
+      ))}
+    </div>
+  );
 
   if (error) {
     return (
-      <div className="bg-white rounded-3xl border border-gray-200 p-6 text-center">
-        <p className="text-sm font-bold text-red-700">{error}</p>
+      <div className="space-y-3">
+        {areaPicker}
+        <div className="bg-white rounded-3xl border border-gray-200 p-6 text-center">
+          <p className="text-sm font-bold text-red-700">{error}</p>
+        </div>
       </div>
     );
   }
@@ -105,9 +165,12 @@ export const CustomerBrowse: React.FC<CustomerBrowseProps> = ({ onSelect, curren
    */
   if (kaarigars === null) {
     return (
-      <div className="flex flex-col items-center justify-center gap-3 py-16">
-        <div className="w-10 h-10 rounded-2xl bg-orange-500 animate-pulse" />
-        <p className="text-sm font-bold text-gray-500">{copy.directory.loading}</p>
+      <div className="space-y-3">
+        {areaPicker}
+        <div className="flex flex-col items-center justify-center gap-3 py-16">
+          <div className="w-10 h-10 rounded-2xl bg-orange-500 animate-pulse" />
+          <p className="text-sm font-bold text-gray-500">{copy.directory.loading}</p>
+        </div>
       </div>
     );
   }
@@ -120,14 +183,18 @@ export const CustomerBrowse: React.FC<CustomerBrowseProps> = ({ onSelect, curren
 
   if (directory.length === 0) {
     return (
-      <div className="bg-white rounded-3xl border border-gray-200 p-6 text-center">
-        <p className="text-sm font-bold text-gray-500">{copy.directory.unavailable}</p>
+      <div className="space-y-3">
+        {areaPicker}
+        <div className="bg-white rounded-3xl border border-gray-200 p-6 text-center">
+          <p className="text-sm font-bold text-gray-500">{copy.directory.unavailable}</p>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="space-y-3">
+      {areaPicker}
       {directory.map((k) => (
         <button
           key={k.passportHandle}
@@ -161,6 +228,15 @@ export const CustomerBrowse: React.FC<CustomerBrowseProps> = ({ onSelect, curren
                 <MapPin className="w-3.5 h-3.5 shrink-0" />
                 <span className="truncate">{k.location}</span>
               </span>
+              {/*
+                Says "same area", never a distance. areaOf resolves the worker's
+                own location text; nothing here knows how far away anybody is.
+              */}
+              {near !== null && areaOf(k.location) === near && (
+                <span className="text-xs font-extrabold text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5">
+                  {copy.directory.sameArea}
+                </span>
+              )}
             </div>
           </div>
 

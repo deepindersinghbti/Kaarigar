@@ -1,4 +1,5 @@
 import { authHeader } from './authToken';
+import type { Area } from './areas';
 import type { JobItem, JobState, KamaiEntry, RateBand, WorkerProfile } from '../types';
 
 /**
@@ -377,9 +378,14 @@ export const api = {
    * Server-side this is the same projection that backs the public passport
    * page, so nothing arrives that /p/:handle would not already show a stranger.
    */
-  async listKaarigars(trade?: string): Promise<PublicKaarigar[]> {
-    const qs = trade ? `?trade=${encodeURIComponent(trade)}` : '';
-    const body = await request<{ kaarigars: PublicKaarigar[] }>(`/api/kaarigars${qs}`);
+  async listKaarigars(trade?: string, near?: Area): Promise<PublicKaarigar[]> {
+    const params = new URLSearchParams();
+    if (trade) params.set('trade', trade);
+    // Ranks the caller's area first; never filters anybody out, and an area the
+    // server does not recognise is ignored rather than refused.
+    if (near) params.set('near', near);
+    const qs = params.toString();
+    const body = await request<{ kaarigars: PublicKaarigar[] }>(`/api/kaarigars${qs ? `?${qs}` : ''}`);
     return body.kaarigars;
   },
 
