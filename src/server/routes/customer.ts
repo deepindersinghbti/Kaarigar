@@ -206,8 +206,7 @@ customerRouter.post('/jobs/:id/accept', requireAuth, async (req: Request, res: R
     // outcome they wanted is the outcome that holds.
     if (job.status !== 'QUOTED') {
       if (job.status === 'ACCEPTED') {
-        const { _id, ...j } = job;
-        return res.json({ job: { ...j, id: String(_id) }, alreadyAccepted: true });
+        return res.json({ job: await asCustomerJob(job), alreadyAccepted: true });
       }
       return res.status(409).json({
         error: 'not_quoted',
@@ -241,8 +240,7 @@ customerRouter.post('/jobs/:id/accept', requireAuth, async (req: Request, res: R
       });
     }
 
-    const { _id, ...j } = updated;
-    return res.json({ job: { ...j, id: String(_id) } });
+    return res.json({ job: await asCustomerJob(updated) });
   } catch (err) {
     console.error('[customer] POST /jobs/:id/accept failed:', err);
     return res.status(500).json({ error: 'accept_failed', message: 'Could not accept the quote.' });
@@ -369,8 +367,7 @@ async function sendBackToWorker(req: Request, res: Response, mode: 'decline' | '
     if (job.status !== 'QUOTED') {
       const everQuoted = (job.stateHistory as JobStateTransition[] | undefined)?.some((t) => t.state === 'QUOTED');
       if (mode === 'decline' && job.status === 'REQUESTED' && everQuoted) {
-        const { _id, ...j } = job;
-        return res.json({ job: { ...j, id: String(_id) }, alreadyDeclined: true });
+        return res.json({ job: await asCustomerJob(job), alreadyDeclined: true });
       }
       return res.status(409).json({
         error: 'not_quoted',
@@ -417,8 +414,7 @@ async function sendBackToWorker(req: Request, res: Response, mode: 'decline' | '
       });
     }
 
-    const { _id, ...j } = updated;
-    return res.json({ job: { ...j, id: String(_id) } });
+    return res.json({ job: await asCustomerJob(updated) });
   } catch (err) {
     console.error(`[customer] POST /jobs/:id/${mode} failed:`, err);
     return res.status(500).json({ error: `${mode}_failed`, message: 'Could not answer the quote.' });
@@ -471,6 +467,48 @@ const CUSTOMER_CANCELLABLE: JobState[] = ['REQUESTED', 'QUOTED', 'ACCEPTED'];
  */
 const CONTACT_VISIBLE_STATES: JobState[] = ['ACCEPTED', 'SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'SETTLED', 'REVIEWED', 'DISPUTED'];
 
+/**
+ * A customer-facing job, with the kaarigar joined on and the phone gated.
+ *
+ * EVERY CUSTOMER RESPONSE ABOUT A JOB GOES THROUGH HERE, not just the list.
+ * It used not to: only GET /jobs joined the worker, while accept, decline,
+ * counter, cancel, confirm and dispute returned the bare document. The client
+ * replaces the row in place with whatever a mutation returns, so answering a
+ * quote made the worker's name, trade and Call link vanish from that row until
+ * the next full reload - most visibly right after accepting, which is the
+ * moment the phone is first released.
+ *
+ * One shape for one resource. A caller should not have to know which verb they
+ * used to know what they got back.
+ */
+function shapeCustomerJob(
+  doc: Record<string, unknown>,
+  byUid: Map<string, { passportHandle: string; name: string; trade: string; phone: string }>,
+) {
+  const { _id, ...j } = doc as { _id: unknown } & Record<string, unknown>;
+  const k = byUid.get(String(j.kaarigarId));
+  return {
+    ...j,
+    id: String(_id),
+    kaarigar: k
+      ? {
+          passportHandle: k.passportHandle,
+          name: k.name,
+          trade: k.trade,
+          // The phone is released only once this job is actually going ahead -
+          // see CONTACT_VISIBLE_STATES.
+          ...(CONTACT_VISIBLE_STATES.includes(j.status as JobState) ? { phone: k.phone } : {}),
+        }
+      : undefined,
+  };
+}
+
+/** The single-job form: one lookup, then the shared shaper. */
+async function asCustomerJob(doc: Record<string, unknown>) {
+  const byUid = await findAssignedKaarigars([String(doc.kaarigarId)]);
+  return shapeCustomerJob(doc, byUid);
+}
+
 customerRouter.post('/jobs/:id/cancel', requireAuth, async (req: Request, res: Response) => {
   if (!dbGuard(res)) return;
 
@@ -486,8 +524,7 @@ customerRouter.post('/jobs/:id/cancel', requireAuth, async (req: Request, res: R
     const current = job.status as JobState;
 
     if (current === 'CANCELLED') {
-      const { _id, ...j } = job;
-      return res.json({ job: { ...j, id: String(_id) }, alreadyCancelled: true });
+      return res.json({ job: await asCustomerJob(job), alreadyCancelled: true });
     }
 
     if (!CUSTOMER_CANCELLABLE.includes(current) || !JOB_TRANSITIONS[current].includes('CANCELLED')) {
@@ -512,8 +549,7 @@ customerRouter.post('/jobs/:id/cancel', requireAuth, async (req: Request, res: R
       });
     }
 
-    const { _id, ...j } = updated;
-    return res.json({ job: { ...j, id: String(_id) } });
+    return res.json({ job: await asCustomerJob(updated) });
   } catch (err) {
     console.error('[customer] POST /jobs/:id/cancel failed:', err);
     return res.status(500).json({ error: 'cancel_failed', message: 'Could not cancel the request.' });
@@ -565,8 +601,7 @@ async function answerCompletion(
     // the state that holds, so a double tap is success rather than a conflict.
     if (job.status !== 'COMPLETED') {
       if (job.status === next) {
-        const { _id, ...j } = job;
-        return res.json({ job: { ...j, id: String(_id) }, alreadyAnswered: true });
+        return res.json({ job: await asCustomerJob(job), alreadyAnswered: true });
       }
       return res.status(409).json({
         error: 'not_completed',
@@ -589,8 +624,7 @@ async function answerCompletion(
       });
     }
 
-    const { _id, ...j } = updated;
-    return res.json({ job: { ...j, id: String(_id) } });
+    return res.json({ job: await asCustomerJob(updated) });
   } catch (err) {
     console.error(`[customer] POST /jobs/:id/${next === 'SETTLED' ? 'confirm' : 'dispute'} failed:`, err);
     return res.status(500).json({ error: 'completion_answer_failed', message: 'Could not record your answer.' });
@@ -618,26 +652,15 @@ customerRouter.get('/jobs', requireAuth, async (req: Request, res: Response) => 
      *
      * One batched lookup, not one per row.
      */
+    /**
+     * One batched lookup for the whole page, then the SAME shaper the mutation
+     * responses use - passed the map so it does not re-query per row. The join
+     * and the phone gate live in exactly one place; a list that shaped jobs its
+     * own way is how the two drifted apart in the first place.
+     */
     const byUid = await findAssignedKaarigars(docs.map((d) => String(d.kaarigarId)));
-
     return res.json({
-      jobs: docs.map(({ _id, ...j }) => {
-        const k = byUid.get(String(j.kaarigarId));
-        return {
-          ...j,
-          id: String(_id),
-          kaarigar: k
-            ? {
-                passportHandle: k.passportHandle,
-                name: k.name,
-                trade: k.trade,
-                // The phone is released only once this job is actually going
-                // ahead - see CONTACT_VISIBLE_STATES.
-                ...(CONTACT_VISIBLE_STATES.includes(j.status as JobState) ? { phone: k.phone } : {}),
-              }
-            : undefined,
-        };
-      }),
+      jobs: docs.map((doc) => shapeCustomerJob(doc as Record<string, unknown>, byUid)),
     });
   } catch (err) {
     console.error('[customer] GET /jobs failed:', err);
