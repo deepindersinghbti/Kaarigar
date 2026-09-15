@@ -9,7 +9,7 @@ import { getScreenCopy } from '../../data/uiCopy';
 import { getCustomerCopy, getCustomerTrade } from './customerCopy';
 
 /** Which control on a row is mid-flight. One row, one action at a time. */
-type PendingAction = 'accept' | 'decline' | 'cancel' | 'confirm' | 'dispute';
+type PendingAction = 'accept' | 'decline' | 'cancel' | 'confirm' | 'dispute' | 'counter';
 
 /**
  * Mirrors CUSTOMER_CANCELLABLE in server/routes/customer.ts, which is the
@@ -45,6 +45,11 @@ export const CustomerRequests: React.FC<CustomerRequestsProps> = ({ currentLangu
   const [refreshing, setRefreshing] = useState(false);
   const [pending, setPending] = useState<{ id: string; action: PendingAction } | null>(null);
   const [openTimelineId, setOpenTimelineId] = useState<string | null>(null);
+  // Which row has its counter-offer form open, and what is typed in it. One at
+  // a time: the form is a disclosure on a single quote, not a per-row draft
+  // worth preserving while the customer looks at another request.
+  const [counteringId, setCounteringId] = useState<string | null>(null);
+  const [counterDraft, setCounterDraft] = useState('');
 
   const { user } = useAuth();
   const stateLabel = getScreenCopy(currentLanguage).jobs.state;
@@ -66,13 +71,20 @@ export const CustomerRequests: React.FC<CustomerRequestsProps> = ({ currentLangu
   useEffect(() => { void load(); }, [load]);
 
   /**
-   * The three answers a customer can give, all through one path.
+   * Every answer a customer can give, all through one path: accept, decline or
+   * counter a quote; confirm or dispute a completion claim; cancel outright.
    *
-   * NONE OF THEM SEND A PRICE. Accept copies the stored quotedPrice server-side,
-   * decline clears it, cancel ends the job - so there is no number on this
-   * screen a client could put on the wire. Keeping them in one helper is what
-   * makes that property visible at a glance instead of spread over three
-   * near-identical functions that could quietly drift apart.
+   * ONLY ONE OF THEM SENDS A PRICE, and it is the one that agrees to nothing.
+   * Accept copies the stored quotedPrice server-side, decline clears it, cancel
+   * ends the job, confirm and dispute answer a completion claim - none of those
+   * carry a number. Counter does, and may: counterPrice is a PROPOSAL. It binds
+   * nobody until the kaarigar re-quotes at some figure of their own and the
+   * customer accepts THAT, which is the only path to agreedPrice.
+   *
+   * Keeping them in one helper is what makes that asymmetry visible at a glance
+   * instead of spread over six near-identical functions that could quietly
+   * drift apart - and it is why `price` is a parameter here rather than
+   * something each branch reaches for on its own.
    *
    * The returned job replaces the row in place rather than triggering a reload:
    * the response IS the authoritative job, and re-listing would show the same
@@ -83,23 +95,35 @@ export const CustomerRequests: React.FC<CustomerRequestsProps> = ({ currentLangu
    * is known to be stale and the error is about a job the customer can no
    * longer see correctly.
    */
-  const act = async (jobId: string, action: PendingAction) => {
+  const act = async (jobId: string, action: PendingAction, price?: number) => {
     setPending({ id: jobId, action });
     setError('');
     try {
-      const call = {
-        accept: api.acceptQuote,
-        decline: api.declineQuote,
-        cancel: api.cancelRequest,
-        confirm: api.confirmCompletion,
-        dispute: api.disputeCompletion,
-      }[action];
-      const updated = await call(jobId);
+      const updated = action === 'counter'
+        ? await api.counterQuote(jobId, price!)
+        : await {
+            accept: api.acceptQuote,
+            decline: api.declineQuote,
+            cancel: api.cancelRequest,
+            confirm: api.confirmCompletion,
+            dispute: api.disputeCompletion,
+          }[action](jobId);
       setJobs((prev) => (prev ?? []).map((j) => (j.id === updated.id ? updated : j)));
+      setCounteringId(null);
+      setCounterDraft('');
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) return;
+      /**
+       * 409 covers both a job that moved on and counter_limit_reached. In both
+       * cases the server's own message is the useful one and the row on screen
+       * is stale, so it is shown verbatim and the list reloaded. The counter
+       * form closes too: whatever the customer was about to send, the state it
+       * was aimed at no longer holds.
+       */
       if (e instanceof ApiError && e.status === 409) {
         setError(e.message);
+        setCounteringId(null);
+        setCounterDraft('');
         void load();
         return;
       }
@@ -109,10 +133,26 @@ export const CustomerRequests: React.FC<CustomerRequestsProps> = ({ currentLangu
         cancel: copy.requestList.cancelError,
         confirm: copy.requestList.confirmError,
         dispute: copy.requestList.disputeError,
+        counter: copy.requestList.counterError,
       }[action]);
     } finally {
       setPending(null);
     }
+  };
+
+  /**
+   * Validated here as well as on the server, because the two checks answer
+   * different questions. This one stops a customer sending an empty or
+   * nonsensical box and waiting for a round trip to be told; the server's is
+   * the one that actually governs what gets written.
+   */
+  const submitCounter = async (jobId: string) => {
+    const price = Number(counterDraft);
+    if (!counterDraft.trim() || !Number.isFinite(price) || price <= 0) {
+      setError(copy.requestList.counterInvalid);
+      return;
+    }
+    await act(jobId, 'counter', price);
   };
 
   /**
@@ -267,7 +307,70 @@ export const CustomerRequests: React.FC<CustomerRequestsProps> = ({ currentLangu
               >
                 {pending?.id === job.id && pending.action === 'decline' ? copy.requestList.declining : copy.requestList.decline}
               </button>
+
+              {/*
+                Countering is a third answer, folded behind a disclosure rather
+                than shown as a third button. Accept and decline are one tap
+                each; naming a figure needs an input, and three equal-weight
+                controls would bury the two that end the exchange.
+              */}
+              {counteringId === job.id ? (
+                <form
+                  onSubmit={(e) => { e.preventDefault(); void submitCounter(job.id); }}
+                  className="flex items-center gap-2 pt-1"
+                >
+                  <label className="sr-only" htmlFor={`counter-${job.id}`}>{copy.requestList.counterLabel}</label>
+                  <input
+                    id={`counter-${job.id}`}
+                    type="number"
+                    inputMode="numeric"
+                    min="1"
+                    autoFocus
+                    value={counterDraft}
+                    onChange={(e) => setCounterDraft(e.target.value)}
+                    placeholder={copy.requestList.counterPlaceholder}
+                    disabled={pending?.id === job.id}
+                    className="h-12 w-28 rounded-2xl border border-amber-300 px-3 text-sm font-bold text-gray-900 disabled:opacity-50"
+                  />
+                  <button
+                    type="submit"
+                    disabled={pending?.id === job.id}
+                    className="flex-1 min-h-12 rounded-2xl bg-amber-600 text-white font-extrabold disabled:opacity-50 active:scale-[0.98] transition"
+                  >
+                    {pending?.id === job.id && pending.action === 'counter' ? copy.requestList.countering : copy.requestList.counterSend}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setCounteringId(null); setCounterDraft(''); }}
+                    className="min-h-12 px-3 rounded-2xl text-amber-900 font-bold text-xs"
+                  >
+                    {copy.requestList.counterCancel}
+                  </button>
+                </form>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => { setCounteringId(job.id); setCounterDraft(''); setError(''); }}
+                  disabled={pending?.id === job.id}
+                  className="w-full min-h-12 rounded-2xl text-amber-900 font-bold text-sm disabled:opacity-50 active:scale-[0.98] transition"
+                >
+                  {copy.requestList.counter}
+                </button>
+              )}
             </div>
+          )}
+
+          {/*
+            A REQUESTED job carrying counterPrice is one the customer sent back
+            with a figure. The kaarigar has not answered yet - taking QUOTED is
+            what clears it - so this is the customer's own ask still standing.
+            Checked before the plain declined-notice below, which would
+            otherwise claim the weaker thing about the same row.
+          */}
+          {job.status === 'REQUESTED' && typeof job.counterPrice === 'number' && (
+            <p className="mt-3 text-sm font-bold text-amber-900 bg-amber-50 border border-amber-200 rounded-2xl px-3 py-2">
+              {copy.requestList.countered(job.counterPrice)}
+            </p>
           )}
 
           {/*
@@ -310,7 +413,7 @@ export const CustomerRequests: React.FC<CustomerRequestsProps> = ({ currentLangu
             REQUESTED was declined. stateHistory is the only way to tell that
             apart from a brand-new request, since decline clears quotedPrice.
           */}
-          {job.status === 'REQUESTED' && job.stateHistory?.some((t) => t.state === 'QUOTED') && (
+          {job.status === 'REQUESTED' && typeof job.counterPrice !== 'number' && job.stateHistory?.some((t) => t.state === 'QUOTED') && (
             <p className="mt-3 text-sm font-bold text-amber-900 bg-amber-50 border border-amber-200 rounded-2xl px-3 py-2">
               {copy.requestList.declined}
             </p>

@@ -92,6 +92,8 @@ export interface JobsCopy {
   quoteSend: string;
   quoteInvalid: string;
   quotedAwaiting: string;
+  /** The customer has named a figure of their own on a re-quote. */
+  counterAsk: (price: number) => string;
   updateError: string;
   state: Record<JobState, string>;
   action: Partial<Record<JobState, string>>;
@@ -618,6 +620,7 @@ const jobsHi: JobsCopy = {
   quoteSend: 'दाम भेजें',
   quoteInvalid: 'दाम शून्य से बड़ा होना चाहिए।',
   quotedAwaiting: 'ग्राहक की मंज़ूरी का इंतज़ार है।',
+  counterAsk: (price) => `ग्राहक ने ₹${price} माँगा है`,
   updateError: 'काम अपडेट नहीं हो सका।',
   state: {
     REQUESTED: 'अनुरोध किया गया', QUOTED: 'कोट भेजा गया', ACCEPTED: 'स्वीकार किया गया',
@@ -656,6 +659,7 @@ const jobsEn: JobsCopy = {
   quoteSend: 'Send price',
   quoteInvalid: 'The price must be greater than zero.',
   quotedAwaiting: 'Waiting for the customer to accept.',
+  counterAsk: (price) => `The customer asked for ₹${price}`,
   updateError: 'Could not update the job.',
   state: {
     REQUESTED: 'Requested', QUOTED: 'Quoted', ACCEPTED: 'Accepted', SCHEDULED: 'Scheduled',
@@ -694,6 +698,7 @@ const jobsPa: JobsCopy = {
   quoteSend: 'ਮੁੱਲ ਭੇਜੋ',
   quoteInvalid: 'ਮੁੱਲ ਸਿਫ਼ਰ ਤੋਂ ਵੱਧ ਹੋਣਾ ਚਾਹੀਦਾ ਹੈ।',
   quotedAwaiting: 'ਗਾਹਕ ਦੀ ਮਨਜ਼ੂਰੀ ਦੀ ਉਡੀਕ ਹੈ।',
+  counterAsk: (price) => `ਗਾਹਕ ਨੇ ₹${price} ਮੰਗਿਆ ਹੈ`,
   updateError: 'ਕੰਮ ਅਪਡੇਟ ਨਹੀਂ ਹੋ ਸਕਿਆ।',
   state: {
     REQUESTED: 'ਬੇਨਤੀ ਕੀਤੀ',

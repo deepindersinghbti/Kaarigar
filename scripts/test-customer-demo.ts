@@ -175,6 +175,56 @@ try {
   check('worker own job still quotes', solo.status === 200 && solo.body.job.quotedPrice === 300);
   check('worker own job still self-accepts', (await call(`/api/jobs/${ownJob.body.job.id}/transition`, wt, { state: 'ACCEPTED' })).status === 200);
 
+  // Counter-offers. A counter is a decline with a number attached: same edge,
+  // same cleared quote, plus counterPrice. It agrees to nothing on its own.
+  const haggle = { ...input, id: 'customer-demo-request-9', title: 'Ninth request' };
+  await call('/api/customer/jobs', ct, haggle);
+  check('a request with no quote cannot be countered', (await call(`/api/customer/jobs/${haggle.id}/counter`, ct, { counterPrice: 500 }, 'POST')).status === 409);
+  await call(`/api/jobs/${haggle.id}/transition`, wt, { state: 'QUOTED', quotedPrice: 2000 });
+  check('worker blocked from the counter route', (await call(`/api/customer/jobs/${haggle.id}/counter`, wt, { counterPrice: 500 }, 'POST')).status === 403);
+  check('another customer cannot counter this quote', (await call(`/api/customer/jobs/${haggle.id}/counter`, otherCustomer, { counterPrice: 500 }, 'POST')).status === 404);
+  check('countering an unknown job is a 404', (await call('/api/customer/jobs/no-such-job/counter', ct, { counterPrice: 500 }, 'POST')).status === 404);
+  for (const bad of [undefined, 0, -5, 'free', null]) {
+    check(`counterPrice ${String(bad)} is refused`, (await call(`/api/customer/jobs/${haggle.id}/counter`, ct, { counterPrice: bad }, 'POST')).status === 400);
+  }
+  const countered = await call(`/api/customer/jobs/${haggle.id}/counter`, ct, { counterPrice: 900, agreedPrice: 900, quotedPrice: 900 }, 'POST');
+  check('countering sends the request back to REQUESTED', countered.status === 200 && countered.body.job.status === 'REQUESTED');
+  check('the counter is recorded as the customer asking', countered.body.job.counterPrice === 900);
+  check('countering clears the withdrawn quote', countered.body.job.quotedPrice == null);
+  // THE INVARIANT. A counter must not become an agreement by itself, and the
+  // body's agreedPrice/quotedPrice fields must be ignored entirely.
+  check('countering agrees to nothing', countered.body.job.agreedPrice == null);
+  check('a countered job cannot be accepted', (await call(`/api/customer/jobs/${haggle.id}/accept`, ct, undefined, 'POST')).status === 409);
+  check('the worker sees the counter on their own copy', (await call('/api/jobs', wt)).body.jobs.find((j: any) => j.id === haggle.id).counterPrice === 900);
+  // The worker answers with a figure of THEIRS - not obliged to match.
+  const requote = await call(`/api/jobs/${haggle.id}/transition`, wt, { state: 'QUOTED', quotedPrice: 1500 });
+  check('worker re-quotes at their own number', requote.status === 200 && requote.body.job.quotedPrice === 1500);
+  check('quoting clears the answered counter', requote.body.job.counterPrice == null);
+  // Second counter: still inside the cap of two.
+  const second = await call(`/api/customer/jobs/${haggle.id}/counter`, ct, { counterPrice: 1100 }, 'POST');
+  check('a second counter is allowed', second.status === 200 && second.body.job.counterPrice === 1100);
+  await call(`/api/jobs/${haggle.id}/transition`, wt, { state: 'QUOTED', quotedPrice: 1200 });
+  const third = await call(`/api/customer/jobs/${haggle.id}/counter`, ct, { counterPrice: 1150 }, 'POST');
+  check('the third counter is refused by the cap', third.status === 409 && third.body.error === 'counter_limit_reached');
+  check('the cap reports its own limit', third.body.limit === 2 && third.body.used === 2);
+  check('the refused counter changed nothing', (await call('/api/customer/jobs', ct)).body.jobs.find((j: any) => j.id === haggle.id).quotedPrice === 1200);
+  // Capped out, the customer can still take one of the ending answers.
+  const settledHaggle = await call(`/api/customer/jobs/${haggle.id}/accept`, ct, undefined, 'POST');
+  check('accepting still works after the cap', settledHaggle.status === 200 && settledHaggle.body.job.agreedPrice === 1200);
+  check('the agreed price is the WORKER last quote, never a counter', settledHaggle.body.job.agreedPrice === 1200 && settledHaggle.body.job.counterPrice == null);
+  // Declining after countering must not leave the old ask standing.
+  const stale = { ...input, id: 'customer-demo-request-10', title: 'Tenth request' };
+  await call('/api/customer/jobs', ct, stale);
+  await call(`/api/jobs/${stale.id}/transition`, wt, { state: 'QUOTED', quotedPrice: 800 });
+  await call(`/api/customer/jobs/${stale.id}/counter`, ct, { counterPrice: 600 }, 'POST');
+  await call(`/api/jobs/${stale.id}/transition`, wt, { state: 'QUOTED', quotedPrice: 700 });
+  const plainDecline = await call(`/api/customer/jobs/${stale.id}/decline`, ct, undefined, 'POST');
+  check('a plain decline clears any earlier counter', plainDecline.status === 200 && plainDecline.body.job.counterPrice == null);
+  // A worker's own job has no counterparty, so nothing here touches it.
+  const soloCounter = await call('/api/jobs', wt, { title: 'Self recorded, uncountered', amount: 60 });
+  await call(`/api/jobs/${soloCounter.body.job.id}/transition`, wt, { state: 'QUOTED', quotedPrice: 60 });
+  check('a worker own job cannot be countered by anyone', (await call(`/api/customer/jobs/${soloCounter.body.job.id}/counter`, ct, { counterPrice: 10 }, 'POST')).status === 404);
+
   // Completion: COMPLETED is the worker's claim, SETTLED and DISPUTED are the
   // customer's answers to it. Walk a job all the way down to COMPLETED first.
   const walk = { ...input, id: 'customer-demo-request-8', title: 'Eighth request' };

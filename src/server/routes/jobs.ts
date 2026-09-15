@@ -234,12 +234,19 @@ jobsRouter.post('/:id/transition', requireAuth, async (req: Request, res: Respon
      * See the QUOTED note in JOB_TRANSITIONS: a REQUESTED job holding a price
      * nobody stands behind is worse than one holding none, because the checks
      * that protect a blank quote all read as satisfied.
+     *
+     * Quoting clears counterPrice for the mirror-image reason. The customer's
+     * counter-offer is a question, and taking QUOTED is the answer to it -
+     * whether the worker met the figure, split the difference or ignored it
+     * entirely. Leaving it set would show the customer their own old ask
+     * alongside the new quote as though it were still outstanding.
      */
     const updated = await db.collection(JOBS).findOneAndUpdate(
       { _id: req.params.id as never, kaarigarId: uid, status: current },  // guards against a concurrent transition
       {
         $set: { status: next, ...(quotedPrice !== undefined ? { quotedPrice } : {}) },
         ...(next === 'REQUESTED' ? { $unset: { quotedPrice: '' } } : {}),
+        ...(next === 'QUOTED' ? { $unset: { counterPrice: '' } } : {}),
         $push: { stateHistory: entry as never },
       },
       { returnDocument: 'after' }

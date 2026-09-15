@@ -33,11 +33,30 @@ without asking. `JobItem` already has `customerId?: string`.
   the worker: `QUOTED -> ACCEPTED` on the worker's transition route
   is refused for those. Jobs with no `customerId` are the worker's
   own record and keep the one-tap path.
-- `QUOTED -> REQUESTED` is the DECLINE edge. Anything taking it MUST
-  clear `quotedPrice` (decline route + the `REQUESTED` branch of the
+- `QUOTED -> REQUESTED` is the DECLINE edge, and a COUNTER-OFFER is
+  the same edge with a number attached — one shared handler
+  (`sendBackToWorker`), two routes. Anything taking it MUST clear
+  `quotedPrice` (that handler + the `REQUESTED` branch of the
   worker's transition route): a withdrawn price left in place shows
   the customer a number nobody stands behind, and
   `quoted_price_required` reads as satisfied because the field is set.
+  A plain decline also clears `counterPrice`; quoting clears it too,
+  since taking `QUOTED` IS the answer to the counter.
+- THREE PRICES, THREE SPEAKERS. `quotedPrice` the worker proposes,
+  `counterPrice` the customer proposes, `agreedPrice` the customer
+  accepts (only ever a copy of the stored `quotedPrice`).
+  `counterPrice` is the ONLY price a request body may set, and that
+  is safe only because it binds nobody: to become money owed, the
+  worker must take `QUOTED` again — writing their own number — and
+  the customer must accept THAT. Never let `counterPrice` reach
+  `agreedPrice`, and never let accept read it.
+- `MAX_COUNTERS` is 2, counted from `stateHistory` rather than
+  stored: `countCustomerReturns` counts `REQUESTED` entries authored
+  by that customer, which is exactly their own trips back (the only
+  other way into `REQUESTED` is the worker withdrawing, authored by
+  the worker). Declines count toward it too — the cap bounds the
+  haggle, and decline-then-requote is the same loop with the numbers
+  left implicit. Past the cap: accept, decline or cancel.
 - `REQUESTED` alone does not mean declined — a new request is
   `REQUESTED` too. `stateHistory` separates them: now `REQUESTED` and
   ever `QUOTED` means declined. The decline route's idempotent replay
@@ -127,10 +146,9 @@ second form adds the worker lifecycle suite — run it for ANY change to
 `/api/jobs/:id/transition`, which both roles depend on.
 
 ## Known gaps (post-SIH, not now)
-- No counter-offer. The customer can accept, decline or cancel, but
-  cannot name a figure of their own — declining says "not this
-  number", never "this number instead". Adding one means a THIRD
-  price field, not overloading `quotedPrice` or `agreedPrice`.
+- A counter-offer names a figure but carries no reason and no
+  expiry, and the kaarigar has no one-tap "accept their number" —
+  they re-quote by typing it. Counters are capped at 2 per job.
 - A dispute records only that the customer rejected the completion
   claim. No reason, no photo, no moderation, no timeout — a job can sit
   in DISPUTED indefinitely if the kaarigar never returns.

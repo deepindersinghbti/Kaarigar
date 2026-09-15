@@ -247,12 +247,81 @@ customerRouter.post('/jobs/:id/accept', requireAuth, async (req: Request, res: R
  * The withdrawn quotedPrice is unset rather than left in place. That is the
  * invariant the state edge depends on, not a tidy-up.
  */
-customerRouter.post('/jobs/:id/decline', requireAuth, async (req: Request, res: Response) => {
+/**
+ * The most a customer may counter on one job before they must simply answer.
+ *
+ * Counted from stateHistory rather than stored: every trip back writes a
+ * REQUESTED entry, so the rounds are already recorded and a separate tally
+ * could only drift from them. See countCustomerReturns.
+ */
+const MAX_COUNTERS = 2;
+
+/**
+ * How many times this customer has already sent the job BACK to the worker.
+ *
+ * A counter and a plain decline take the SAME edge, so their shape cannot tell
+ * them apart. Two things together can:
+ *
+ *   - who wrote the entry. The other way into REQUESTED is the worker
+ *     withdrawing their own quote, and that entry is authored by the worker.
+ *   - whether a QUOTED came first. THE JOB'S OPENING REQUESTED IS ALSO WRITTEN
+ *     BY THE CUSTOMER - createJob records them as the actor - so counting by
+ *     author alone counts the request itself as a round and trips the cap one
+ *     counter early. Only a REQUESTED that follows a QUOTED is a trip back.
+ *
+ * Declines counting toward the cap is deliberate. The cap exists to bound the
+ * haggle, and "decline, get a new quote, decline again" is the same loop with
+ * the numbers left implicit.
+ */
+function countCustomerReturns(history: JobStateTransition[] | undefined, uid: string): number {
+  let quoted = false;
+  let returns = 0;
+  for (const t of history ?? []) {
+    if (t.state === 'QUOTED') quoted = true;
+    else if (quoted && t.state === 'REQUESTED' && t.by === uid) returns += 1;
+  }
+  return returns;
+}
+
+/**
+ * POST /api/customer/jobs/:id/decline  - "not this number"
+ * POST /api/customer/jobs/:id/counter  - "not this number, try mine"
+ *
+ * ONE EDGE, TWO DOORS. Both send the job QUOTED -> REQUESTED and clear the
+ * withdrawn quotedPrice; they differ only in whether a counterPrice goes with
+ * it. Sharing the body keeps the ownership filter, the atomic status guard and
+ * the stale-quote clearing identical between them - three things that would
+ * eventually diverge if written twice.
+ *
+ * THE COUNTER PRICE IS READ FROM THE BODY, and it is the only price field on
+ * this router that ever is. That is safe for exactly one reason, which must
+ * stay true: counterPrice binds nobody. It asks the kaarigar to quote at that
+ * figure. For it to become money owed, the worker has to take QUOTED again -
+ * writing THEIR OWN quotedPrice - and the customer has to accept that quote,
+ * which copies the worker's number into agreedPrice. A customer who counters
+ * at 1 and is never re-quoted has achieved nothing.
+ *
+ * Never let this field reach agreedPrice, and never let accept read it.
+ */
+async function sendBackToWorker(req: Request, res: Response, mode: 'decline' | 'counter') {
   if (!dbGuard(res)) return;
 
   if (!JOB_TRANSITIONS.QUOTED.includes('REQUESTED')) {
     console.error('[customer] JOB_TRANSITIONS no longer allows QUOTED -> REQUESTED');
-    return res.status(500).json({ error: 'transition_unavailable', message: 'Declining a quote is not currently possible.' });
+    return res.status(500).json({ error: 'transition_unavailable', message: 'Answering a quote is not currently possible.' });
+  }
+
+  let counterPrice: number | undefined;
+  if (mode === 'counter') {
+    const raw = (req.body ?? {}).counterPrice;
+    counterPrice = Number(raw);
+    if (raw === undefined || !Number.isFinite(counterPrice) || counterPrice <= 0) {
+      return res.status(400).json({
+        error: 'invalid_counter_price',
+        field: 'counterPrice',
+        message: 'counterPrice must be a positive number.',
+      });
+    }
   }
 
   try {
@@ -274,41 +343,74 @@ customerRouter.post('/jobs/:id/decline', requireAuth, async (req: Request, res: 
      * now in REQUESTED that has ever been QUOTED got there by being declined.
      * Without this a customer could "decline" a quote nobody has sent and be
      * told it worked.
+     *
+     * A COUNTER IS NOT REPLAYED THIS WAY. Two counters carrying two different
+     * figures are two different intentions, not one retried, and answering the
+     * second with "you already did that" would silently discard the new number.
+     * A repeated counter fails the state check below like any other action on a
+     * job that has moved on.
      */
     if (job.status !== 'QUOTED') {
       const everQuoted = (job.stateHistory as JobStateTransition[] | undefined)?.some((t) => t.state === 'QUOTED');
-      if (job.status === 'REQUESTED' && everQuoted) {
+      if (mode === 'decline' && job.status === 'REQUESTED' && everQuoted) {
         const { _id, ...j } = job;
         return res.json({ job: { ...j, id: String(_id) }, alreadyDeclined: true });
       }
       return res.status(409).json({
         error: 'not_quoted',
-        message: `Only a quoted request can be declined. This one is ${String(job.status)}.`,
+        message: `Only a quoted request can be ${mode === 'counter' ? 'countered' : 'declined'}. This one is ${String(job.status)}.`,
         status: job.status,
       });
+    }
+
+    /**
+     * The cap, checked only for a counter. A customer who is out of rounds can
+     * still accept the quote in front of them, decline it outright, or cancel -
+     * what they lose is the ability to keep naming new figures.
+     */
+    if (mode === 'counter') {
+      const used = countCustomerReturns(job.stateHistory as JobStateTransition[] | undefined, uid);
+      if (used >= MAX_COUNTERS) {
+        return res.status(409).json({
+          error: 'counter_limit_reached',
+          message: 'You have already sent this request back twice. You can accept this price, decline it, or cancel the request.',
+          used,
+          limit: MAX_COUNTERS,
+        });
+      }
     }
 
     const entry: JobStateTransition = { state: 'REQUESTED', at: new Date().toISOString(), by: uid };
     const updated = await db.collection(JOBS).findOneAndUpdate(
       { _id: req.params.id as never, customerId: uid, status: 'QUOTED' },
-      { $set: { status: 'REQUESTED' }, $unset: { quotedPrice: '' }, $push: { stateHistory: entry as never } },
+      {
+        // The withdrawn quote always goes. counterPrice is SET on a counter and
+        // UNSET on a plain decline - declining after countering must not leave
+        // the old figure standing as though it were still being asked for.
+        $set: { status: 'REQUESTED', ...(mode === 'counter' ? { counterPrice } : {}) },
+        $unset: { quotedPrice: '', ...(mode === 'counter' ? {} : { counterPrice: '' }) },
+        $push: { stateHistory: entry as never },
+      },
       { returnDocument: 'after' }
     );
 
     if (!updated) {
       return res.status(409).json({
         error: 'concurrent_transition',
-        message: 'The request changed while you were declining it. Reload and try again.',
+        message: 'The request changed while you were answering it. Reload and try again.',
       });
     }
 
     const { _id, ...j } = updated;
     return res.json({ job: { ...j, id: String(_id) } });
   } catch (err) {
-    console.error('[customer] POST /jobs/:id/decline failed:', err);
-    return res.status(500).json({ error: 'decline_failed', message: 'Could not decline the quote.' });
+    console.error(`[customer] POST /jobs/:id/${mode} failed:`, err);
+    return res.status(500).json({ error: `${mode}_failed`, message: 'Could not answer the quote.' });
   }
-});
+}
+
+customerRouter.post('/jobs/:id/decline', requireAuth, (req, res) => sendBackToWorker(req, res, 'decline'));
+customerRouter.post('/jobs/:id/counter', requireAuth, (req, res) => sendBackToWorker(req, res, 'counter'));
 
 /**
  * POST /api/customer/jobs/:id/cancel

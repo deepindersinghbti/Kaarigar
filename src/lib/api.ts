@@ -274,6 +274,27 @@ export const api = {
   },
 
   /**
+   * Decline, but name a figure: "not this number, try mine".
+   *
+   * THE ONLY CALL ON THIS CLIENT THAT SENDS A PRICE TO A CUSTOMER ROUTE, and
+   * it is safe because counterPrice agrees to nothing. The job goes back to
+   * REQUESTED carrying the ask; the kaarigar must quote again - writing their
+   * own quotedPrice - and the customer must accept THAT before any number
+   * becomes agreed. Countering at 1 buys nothing on its own.
+   *
+   * The server caps how many times one customer may send a job back. Past the
+   * cap this answers 409 `counter_limit_reached` and the customer is left with
+   * accept, decline or cancel.
+   */
+  async counterQuote(jobId: string, counterPrice: number): Promise<JobItem> {
+    const body = await request<{ job: JobItem }>(
+      `/api/customer/jobs/${encodeURIComponent(jobId)}/counter`,
+      { method: 'POST', body: JSON.stringify({ counterPrice }) }
+    );
+    return body.job;
+  },
+
+  /**
    * Call the request off entirely.
    *
    * The server accepts this only while the job is REQUESTED, QUOTED or
