@@ -149,6 +149,13 @@ export const JOB_TRANSITIONS: Record<JobState, JobState[]> = {
    * it because the field is populated. Both routes that can take this edge
    * unset it - see customer.ts decline and the REQUESTED branch in jobs.ts.
    *
+   * A COUNTER-OFFER IS THIS SAME EDGE with a number attached. Declining says
+   * "not this number"; countering says "not this number, try mine" and sets
+   * counterPrice on the way back. There is no separate state for it, because a
+   * countered job is in exactly the position a declined one is: waiting for the
+   * kaarigar to quote. The only difference is whether they were given a figure
+   * to aim at, which is a field, not a state.
+   *
    * agreedPrice is untouched by any of this. It is still written in exactly one
    * place, from the stored quotedPrice, by the customer's accept.
    */
@@ -218,15 +225,31 @@ export interface JobItem {
   location: string;
   amount: number;
   /**
-   * The two prices are deliberately separate and mean different things.
+   * THREE PRICES, THREE DIFFERENT SPEAKERS. Who said a number is the whole
+   * reason these are separate fields rather than one that gets overwritten.
    *
-   * quotedPrice is what the KAARIGAR proposed, written when the job moves to
-   * QUOTED. agreedPrice is what the CUSTOMER accepted, and is written only by
-   * the accept endpoint, only from the stored quotedPrice. So agreedPrice being
-   * present is itself the evidence that someone other than the worker agreed to
-   * the number - which is the whole point of it being a separate field. Never
-   * copy quotedPrice into agreedPrice anywhere else, and never let either come
-   * from a customer-supplied body.
+   *   quotedPrice   - the KAARIGAR proposes. Written when the job moves to
+   *                   QUOTED, by the worker's transition route.
+   *   counterPrice  - the CUSTOMER proposes. Written by the counter route
+   *                   only, and it is a PROPOSAL, never an agreement.
+   *   agreedPrice   - the CUSTOMER accepts. Written only by the accept
+   *                   endpoint, only as a copy of the stored quotedPrice.
+   *
+   * So agreedPrice being present is itself the evidence that someone other
+   * than the worker agreed to the number - which is the whole point of it
+   * being a separate field. Never copy quotedPrice into agreedPrice anywhere
+   * else, and never let either come from a request body.
+   *
+   * COUNTERING DOES NOT AGREE ANYTHING. A customer countering at 900 does not
+   * make 900 agreed; it asks the kaarigar to re-quote there. The worker must
+   * take QUOTED again - which writes THEIR quotedPrice - and the customer must
+   * then accept that. Agreement stays two-sided, and counterPrice is the one
+   * price field a customer-supplied body may set precisely because it binds
+   * nobody on its own.
+   *
+   * counterPrice is cleared whenever the job is quoted again: it has been
+   * answered by then, and a stale one would show the worker a figure the
+   * customer is no longer asking for.
    *
    * `amount` remains the customer's opening estimate on a REQUESTED job.
    *
@@ -236,6 +259,7 @@ export interface JobItem {
    * `!== undefined` is true for null and renders "₹null".
    */
   quotedPrice?: number;
+  counterPrice?: number;
   agreedPrice?: number;
   bandSnapshot?: { p25: number; p50: number; p75: number };
   paymentMethod: 'cash' | 'upi' | 'pending';

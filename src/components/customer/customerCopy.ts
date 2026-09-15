@@ -26,6 +26,9 @@ export interface CustomerCopy {
     timelineShow: string; timelineHide: string; timelineBy: (isYou: boolean) => string; call: string;
     done: string; confirm: string; confirming: string; confirmError: string;
     dispute: string; disputing: string; disputeError: string; disputed: string; disputeConfirm: string;
+    counter: string; counterCancel: string; counterLabel: string; counterPlaceholder: string;
+    counterSend: string; countering: string; counterError: string; counterInvalid: string;
+    countered: (price: number) => string;
   };
   trades: Record<Trade, string>;
 }
@@ -41,7 +44,10 @@ const CUSTOMER_COPY: Record<SupportedLanguage, CustomerCopy> = {
       cancel: 'Cancel request', cancelling: 'Cancelling…', cancelError: 'Could not cancel the request.', cancelConfirm: 'Cancel this request? The kaarigar will be told it is no longer needed.',
       timelineShow: 'Show progress', timelineHide: 'Hide progress', timelineBy: (isYou) => (isYou ? 'by you' : 'by the kaarigar'), call: 'Call',
       done: 'The kaarigar says this work is done.', confirm: 'Yes, it is done', confirming: 'Confirming…', confirmError: 'Could not confirm.',
-      dispute: 'No, it is not done', disputing: 'Sending…', disputeError: 'Could not send that.', disputed: 'You said this is not done. The kaarigar can return and finish it.', disputeConfirm: 'Tell the kaarigar this work is not done?' },
+      dispute: 'No, it is not done', disputing: 'Sending…', disputeError: 'Could not send that.', disputed: 'You said this is not done. The kaarigar can return and finish it.', disputeConfirm: 'Tell the kaarigar this work is not done?',
+      counter: 'Offer a different price', counterCancel: 'Never mind', counterLabel: 'Your price', counterPlaceholder: 'Price ₹',
+      counterSend: 'Send my price', countering: 'Sending…', counterError: 'Could not send your price.', counterInvalid: 'Enter a price greater than zero.',
+      countered: (price) => `You asked for ₹${price}. Waiting for the kaarigar to reply.` },
     trades: { Electrician: 'Electrician', Plumber: 'Plumber' },
   },
   hi: {
@@ -54,7 +60,10 @@ const CUSTOMER_COPY: Record<SupportedLanguage, CustomerCopy> = {
       cancel: 'अनुरोध रद्द करें', cancelling: 'रद्द कर रहे हैं…', cancelError: 'अनुरोध रद्द नहीं हो सका।', cancelConfirm: 'यह अनुरोध रद्द करें? कारीगर को बता दिया जाएगा कि अब ज़रूरत नहीं है।',
       timelineShow: 'प्रगति देखें', timelineHide: 'प्रगति छिपाएँ', timelineBy: (isYou) => (isYou ? 'आपके द्वारा' : 'कारीगर द्वारा'), call: 'कॉल करें',
       done: 'कारीगर का कहना है कि यह काम पूरा हो गया है।', confirm: 'हाँ, काम पूरा हुआ', confirming: 'पुष्टि हो रही है…', confirmError: 'पुष्टि नहीं हो सकी।',
-      dispute: 'नहीं, काम पूरा नहीं हुआ', disputing: 'भेज रहे हैं…', disputeError: 'यह भेजा नहीं जा सका।', disputed: 'आपने कहा कि काम पूरा नहीं हुआ। कारीगर लौटकर इसे पूरा कर सकता है।', disputeConfirm: 'कारीगर को बताएँ कि यह काम पूरा नहीं हुआ?' },
+      dispute: 'नहीं, काम पूरा नहीं हुआ', disputing: 'भेज रहे हैं…', disputeError: 'यह भेजा नहीं जा सका।', disputed: 'आपने कहा कि काम पूरा नहीं हुआ। कारीगर लौटकर इसे पूरा कर सकता है।', disputeConfirm: 'कारीगर को बताएँ कि यह काम पूरा नहीं हुआ?',
+      counter: 'अपना दाम बताएँ', counterCancel: 'रहने दें', counterLabel: 'आपका दाम', counterPlaceholder: 'दाम ₹',
+      counterSend: 'मेरा दाम भेजें', countering: 'भेज रहे हैं…', counterError: 'आपका दाम नहीं भेजा जा सका।', counterInvalid: 'शून्य से बड़ा दाम डालें।',
+      countered: (price) => `आपने ₹${price} माँगा है। कारीगर के जवाब का इंतज़ार है।` },
     trades: { Electrician: 'इलेक्ट्रीशियन', Plumber: 'प्लंबर' },
   },
   pa: {
@@ -67,7 +76,10 @@ const CUSTOMER_COPY: Record<SupportedLanguage, CustomerCopy> = {
       cancel: 'ਬੇਨਤੀ ਰੱਦ ਕਰੋ', cancelling: 'ਰੱਦ ਕੀਤੀ ਜਾ ਰਹੀ ਹੈ…', cancelError: 'ਬੇਨਤੀ ਰੱਦ ਨਹੀਂ ਹੋ ਸਕੀ।', cancelConfirm: 'ਇਹ ਬੇਨਤੀ ਰੱਦ ਕਰਨੀ ਹੈ? ਕਾਰੀਗਰ ਨੂੰ ਦੱਸ ਦਿੱਤਾ ਜਾਵੇਗਾ ਕਿ ਹੁਣ ਲੋੜ ਨਹੀਂ ਹੈ।',
       timelineShow: 'ਤਰੱਕੀ ਵੇਖੋ', timelineHide: 'ਤਰੱਕੀ ਲੁਕਾਓ', timelineBy: (isYou) => (isYou ? 'ਤੁਹਾਡੇ ਵੱਲੋਂ' : 'ਕਾਰੀਗਰ ਵੱਲੋਂ'), call: 'ਕਾਲ ਕਰੋ',
       done: 'ਕਾਰੀਗਰ ਦਾ ਕਹਿਣਾ ਹੈ ਕਿ ਇਹ ਕੰਮ ਮੁਕੰਮਲ ਹੋ ਗਿਆ ਹੈ।', confirm: 'ਹਾਂ, ਕੰਮ ਪੂਰਾ ਹੋ ਗਿਆ', confirming: 'ਪੁਸ਼ਟੀ ਹੋ ਰਹੀ ਹੈ…', confirmError: 'ਪੁਸ਼ਟੀ ਨਹੀਂ ਹੋ ਸਕੀ।',
-      dispute: 'ਨਹੀਂ, ਕੰਮ ਪੂਰਾ ਨਹੀਂ ਹੋਇਆ', disputing: 'ਭੇਜਿਆ ਜਾ ਰਿਹਾ ਹੈ…', disputeError: 'ਇਹ ਭੇਜਿਆ ਨਹੀਂ ਜਾ ਸਕਿਆ।', disputed: 'ਤੁਸੀਂ ਕਿਹਾ ਕਿ ਕੰਮ ਪੂਰਾ ਨਹੀਂ ਹੋਇਆ। ਕਾਰੀਗਰ ਵਾਪਸ ਆ ਕੇ ਇਸਨੂੰ ਪੂਰਾ ਕਰ ਸਕਦਾ ਹੈ।', disputeConfirm: 'ਕਾਰੀਗਰ ਨੂੰ ਦੱਸਣਾ ਹੈ ਕਿ ਇਹ ਕੰਮ ਪੂਰਾ ਨਹੀਂ ਹੋਇਆ?' },
+      dispute: 'ਨਹੀਂ, ਕੰਮ ਪੂਰਾ ਨਹੀਂ ਹੋਇਆ', disputing: 'ਭੇਜਿਆ ਜਾ ਰਿਹਾ ਹੈ…', disputeError: 'ਇਹ ਭੇਜਿਆ ਨਹੀਂ ਜਾ ਸਕਿਆ।', disputed: 'ਤੁਸੀਂ ਕਿਹਾ ਕਿ ਕੰਮ ਪੂਰਾ ਨਹੀਂ ਹੋਇਆ। ਕਾਰੀਗਰ ਵਾਪਸ ਆ ਕੇ ਇਸਨੂੰ ਪੂਰਾ ਕਰ ਸਕਦਾ ਹੈ।', disputeConfirm: 'ਕਾਰੀਗਰ ਨੂੰ ਦੱਸਣਾ ਹੈ ਕਿ ਇਹ ਕੰਮ ਪੂਰਾ ਨਹੀਂ ਹੋਇਆ?',
+      counter: 'ਆਪਣੀ ਕੀਮਤ ਦੱਸੋ', counterCancel: 'ਰਹਿਣ ਦਿਓ', counterLabel: 'ਤੁਹਾਡੀ ਕੀਮਤ', counterPlaceholder: 'ਕੀਮਤ ₹',
+      counterSend: 'ਮੇਰੀ ਕੀਮਤ ਭੇਜੋ', countering: 'ਭੇਜਿਆ ਜਾ ਰਿਹਾ ਹੈ…', counterError: 'ਤੁਹਾਡੀ ਕੀਮਤ ਨਹੀਂ ਭੇਜੀ ਜਾ ਸਕੀ।', counterInvalid: 'ਸ਼ੂਨ ਤੋਂ ਵੱਡੀ ਕੀਮਤ ਪਾਓ।',
+      countered: (price) => `ਤੁਸੀਂ ₹${price} ਮੰਗਿਆ ਹੈ। ਕਾਰੀਗਰ ਦੇ ਜਵਾਬ ਦੀ ਉਡੀਕ ਹੈ।` },
     trades: { Electrician: 'ਇਲੈਕਟ੍ਰੀਸ਼ੀਅਨ', Plumber: 'ਪਲੰਬਰ' },
   },
   kn: {
@@ -80,7 +92,10 @@ const CUSTOMER_COPY: Record<SupportedLanguage, CustomerCopy> = {
       cancel: 'ವಿನಂತಿ ರದ್ದುಗೊಳಿಸಿ', cancelling: 'ರದ್ದುಗೊಳಿಸಲಾಗುತ್ತಿದೆ…', cancelError: 'ವಿನಂತಿಯನ್ನು ರದ್ದುಗೊಳಿಸಲು ಸಾಧ್ಯವಾಗಲಿಲ್ಲ.', cancelConfirm: 'ಈ ವಿನಂತಿಯನ್ನು ರದ್ದುಗೊಳಿಸಬೇಕೇ? ಇನ್ನು ಅಗತ್ಯವಿಲ್ಲ ಎಂದು ಕಾರಿಗಾರರಿಗೆ ತಿಳಿಸಲಾಗುವುದು.',
       timelineShow: 'ಪ್ರಗತಿ ನೋಡಿ', timelineHide: 'ಪ್ರಗತಿ ಮರೆಮಾಡಿ', timelineBy: (isYou) => (isYou ? 'ನಿಮ್ಮಿಂದ' : 'ಕಾರಿಗಾರರಿಂದ'), call: 'ಕರೆ ಮಾಡಿ',
       done: 'ಈ ಕೆಲಸ ಮುಗಿದಿದೆ ಎಂದು ಕಾರಿಗಾರರು ಹೇಳಿದ್ದಾರೆ.', confirm: 'ಹೌದು, ಮುಗಿದಿದೆ', confirming: 'ದೃಢೀಕರಿಸಲಾಗುತ್ತಿದೆ…', confirmError: 'ದೃಢೀಕರಿಸಲು ಸಾಧ್ಯವಾಗಲಿಲ್ಲ.',
-      dispute: 'ಇಲ್ಲ, ಮುಗಿದಿಲ್ಲ', disputing: 'ಕಳುಹಿಸಲಾಗುತ್ತಿದೆ…', disputeError: 'ಅದನ್ನು ಕಳುಹಿಸಲು ಸಾಧ್ಯವಾಗಲಿಲ್ಲ.', disputed: 'ಕೆಲಸ ಮುಗಿದಿಲ್ಲ ಎಂದು ನೀವು ಹೇಳಿದ್ದೀರಿ. ಕಾರಿಗಾರರು ಮರಳಿ ಬಂದು ಪೂರ್ಣಗೊಳಿಸಬಹುದು.', disputeConfirm: 'ಈ ಕೆಲಸ ಮುಗಿದಿಲ್ಲ ಎಂದು ಕಾರಿಗಾರರಿಗೆ ತಿಳಿಸಬೇಕೇ?' },
+      dispute: 'ಇಲ್ಲ, ಮುಗಿದಿಲ್ಲ', disputing: 'ಕಳುಹಿಸಲಾಗುತ್ತಿದೆ…', disputeError: 'ಅದನ್ನು ಕಳುಹಿಸಲು ಸಾಧ್ಯವಾಗಲಿಲ್ಲ.', disputed: 'ಕೆಲಸ ಮುಗಿದಿಲ್ಲ ಎಂದು ನೀವು ಹೇಳಿದ್ದೀರಿ. ಕಾರಿಗಾರರು ಮರಳಿ ಬಂದು ಪೂರ್ಣಗೊಳಿಸಬಹುದು.', disputeConfirm: 'ಈ ಕೆಲಸ ಮುಗಿದಿಲ್ಲ ಎಂದು ಕಾರಿಗಾರರಿಗೆ ತಿಳಿಸಬೇಕೇ?',
+      counter: 'ನಿಮ್ಮ ದರ ತಿಳಿಸಿ', counterCancel: 'ಬೇಡ', counterLabel: 'ನಿಮ್ಮ ದರ', counterPlaceholder: 'ದರ ₹',
+      counterSend: 'ನನ್ನ ದರ ಕಳುಹಿಸಿ', countering: 'ಕಳುಹಿಸಲಾಗುತ್ತಿದೆ…', counterError: 'ನಿಮ್ಮ ದರ ಕಳುಹಿಸಲಾಗಲಿಲ್ಲ.', counterInvalid: 'ಸೊನ್ನೆಗಿಂತ ದೊಡ್ಡ ದರ ನಮೂದಿಸಿ.',
+      countered: (price) => `ನೀವು ₹${price} ಕೇಳಿದ್ದೀರಿ. ಕಾರಿಗಾರರ ಉತ್ತರಕ್ಕಾಗಿ ಕಾಯಲಾಗುತ್ತಿದೆ.` },
     trades: { Electrician: 'ವಿದ್ಯುತ್ ತಂತ್ರಜ್ಞ', Plumber: 'ಪ್ಲಂಬರ್' },
   },
   mr: {
@@ -93,7 +108,10 @@ const CUSTOMER_COPY: Record<SupportedLanguage, CustomerCopy> = {
       cancel: 'विनंती रद्द करा', cancelling: 'रद्द करत आहे…', cancelError: 'विनंती रद्द करता आली नाही.', cancelConfirm: 'ही विनंती रद्द करायची? आता गरज नाही असे कारागिराला कळवले जाईल.',
       timelineShow: 'प्रगती पहा', timelineHide: 'प्रगती लपवा', timelineBy: (isYou) => (isYou ? 'तुमच्याकडून' : 'कारागिराकडून'), call: 'कॉल करा',
       done: 'हे काम पूर्ण झाले आहे असे कारागीर सांगतात.', confirm: 'होय, काम पूर्ण झाले', confirming: 'पुष्टी करत आहे…', confirmError: 'पुष्टी करता आली नाही.',
-      dispute: 'नाही, काम पूर्ण झाले नाही', disputing: 'पाठवत आहे…', disputeError: 'ते पाठवता आले नाही.', disputed: 'तुम्ही सांगितले की काम पूर्ण झाले नाही. कारागीर परत येऊन ते पूर्ण करू शकतो.', disputeConfirm: 'हे काम पूर्ण झाले नाही असे कारागिराला कळवायचे?' },
+      dispute: 'नाही, काम पूर्ण झाले नाही', disputing: 'पाठवत आहे…', disputeError: 'ते पाठवता आले नाही.', disputed: 'तुम्ही सांगितले की काम पूर्ण झाले नाही. कारागीर परत येऊन ते पूर्ण करू शकतो.', disputeConfirm: 'हे काम पूर्ण झाले नाही असे कारागिराला कळवायचे?',
+      counter: 'तुमचा दर सांगा', counterCancel: 'नको', counterLabel: 'तुमचा दर', counterPlaceholder: 'दर ₹',
+      counterSend: 'माझा दर पाठवा', countering: 'पाठवत आहे…', counterError: 'तुमचा दर पाठवता आला नाही.', counterInvalid: 'शून्यापेक्षा मोठा दर टाका.',
+      countered: (price) => `तुम्ही ₹${price} मागितले आहेत. कारागिराच्या उत्तराची वाट पाहत आहोत.` },
     trades: { Electrician: 'इलेक्ट्रिशियन', Plumber: 'प्लंबर' },
   },
 };

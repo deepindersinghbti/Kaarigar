@@ -381,6 +381,18 @@ export const JobsView: React.FC<JobsViewProps> = ({
                 */}
                 {job.customerId && job.status === 'REQUESTED' ? (
                   <div className="flex items-center gap-2">
+                    {/*
+                      A counter-offer the worker cannot see is no offer at all.
+                      It shows as the customer's ASK, next to a price box that
+                      stays empty - the figure the worker sends is theirs, and
+                      prefilling the input with the customer's number would
+                      blur exactly the line the two fields exist to draw.
+                    */}
+                    {typeof job.counterPrice === 'number' && (
+                      <span className="text-xs font-extrabold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-3 py-1.5 whitespace-nowrap">
+                        {copy.counterAsk(job.counterPrice)}
+                      </span>
+                    )}
                     <label className="sr-only" htmlFor={`quote-${job.id}`}>{copy.quoteLabel}</label>
                     <input
                       id={`quote-${job.id}`}
