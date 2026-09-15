@@ -94,6 +94,10 @@ export interface JobsCopy {
   quotedAwaiting: string;
   /** The customer has named a figure of their own on a re-quote. */
   counterAsk: (price: number) => string;
+  /** The opt-in live-updates switch on the jobs list. */
+  live: string;
+  liveOn: string;
+  liveOff: string;
   updateError: string;
   state: Record<JobState, string>;
   action: Partial<Record<JobState, string>>;
@@ -621,6 +625,9 @@ const jobsHi: JobsCopy = {
   quoteInvalid: 'दाम शून्य से बड़ा होना चाहिए।',
   quotedAwaiting: 'ग्राहक की मंज़ूरी का इंतज़ार है।',
   counterAsk: (price) => `ग्राहक ने ₹${price} माँगा है`,
+  live: 'लाइव',
+  liveOn: 'नए अनुरोध अपने आप दिखते हैं। रोकने के लिए दबाएँ।',
+  liveOff: 'नए अनुरोध अपने आप पाने के लिए दबाएँ।',
   updateError: 'काम अपडेट नहीं हो सका।',
   state: {
     REQUESTED: 'अनुरोध किया गया', QUOTED: 'कोट भेजा गया', ACCEPTED: 'स्वीकार किया गया',
@@ -660,6 +667,9 @@ const jobsEn: JobsCopy = {
   quoteInvalid: 'The price must be greater than zero.',
   quotedAwaiting: 'Waiting for the customer to accept.',
   counterAsk: (price) => `The customer asked for ₹${price}`,
+  live: 'Live',
+  liveOn: 'New requests appear on their own. Tap to stop.',
+  liveOff: 'Tap to let new requests appear on their own.',
   updateError: 'Could not update the job.',
   state: {
     REQUESTED: 'Requested', QUOTED: 'Quoted', ACCEPTED: 'Accepted', SCHEDULED: 'Scheduled',
@@ -699,6 +709,9 @@ const jobsPa: JobsCopy = {
   quoteInvalid: 'ਮੁੱਲ ਸਿਫ਼ਰ ਤੋਂ ਵੱਧ ਹੋਣਾ ਚਾਹੀਦਾ ਹੈ।',
   quotedAwaiting: 'ਗਾਹਕ ਦੀ ਮਨਜ਼ੂਰੀ ਦੀ ਉਡੀਕ ਹੈ।',
   counterAsk: (price) => `ਗਾਹਕ ਨੇ ₹${price} ਮੰਗਿਆ ਹੈ`,
+  live: 'ਲਾਈਵ',
+  liveOn: 'ਨਵੀਆਂ ਬੇਨਤੀਆਂ ਆਪਣੇ ਆਪ ਦਿਖਦੀਆਂ ਹਨ। ਰੋਕਣ ਲਈ ਦਬਾਓ।',
+  liveOff: 'ਨਵੀਆਂ ਬੇਨਤੀਆਂ ਆਪਣੇ ਆਪ ਪਾਉਣ ਲਈ ਦਬਾਓ।',
   updateError: 'ਕੰਮ ਅਪਡੇਟ ਨਹੀਂ ਹੋ ਸਕਿਆ।',
   state: {
     REQUESTED: 'ਬੇਨਤੀ ਕੀਤੀ',

@@ -1,6 +1,6 @@
 # Customer demo: Neha and Ramesh
 
-This release exposes customer browse, request submission, request tracking, a per-request progress timeline, the customer's answers to a quote — accept, decline, or counter with a figure of their own — and their two answers to a completion claim — confirm or dispute — at `/customer`. It is not a completed customer marketplace. Payment verification, notifications, and nearest-worker matching are not implemented by this release; a counter-offer carries no reason or expiry, and a dispute no reason, evidence or moderation.
+This release exposes customer browse, request submission, request tracking, a per-request progress timeline, the customer's answers to a quote — accept, decline, or counter with a figure of their own — and their two answers to a completion claim — confirm or dispute — at `/customer`. It is not a completed customer marketplace. Payment verification and nearest-worker matching are not implemented by this release, and live updates are opt-in polling rather than push; a counter-offer carries no reason or expiry, and a dispute no reason, evidence or moderation.
 
 ## Configure login
 
@@ -29,7 +29,8 @@ Neha's identifier is `0123456789`. This is a demo ID, not a real SMS destination
 12. **Yes, it is done** settles the job. That `SETTLED` row in the history is attributed to Neha, so it is the second state on the job Ramesh could not have written alone — the first being `ACCEPTED`.
 13. **No, it is not done** puts the job in `DISPUTED` instead. This is not a dead end: Ramesh can move it back to `IN_PROGRESS`, finish the work, mark it complete again, and Neha answers again. Her phone link to him stays available throughout a dispute — that is when she is most likely to need it. Neither answer sends a reason; there is no moderation behind it and a dispute that carried one would imply there was.
 14. Request creation records Neha as the actor and starts at `REQUESTED`, with payment pending. The customer's opening amount is an estimate, not proof of payment.
-15. Customer and worker routes are role-gated on both the UI and API. Worker-created notes cannot attach themselves to Neha's account by supplying her customer ID.
+15. **Live** next to Refresh turns on polling, and is OFF by default on both screens. Rehearse with it off: press **Refresh** and the update is unambiguously caused by that tap, which is the thing worth proving. Then flip it on to show the same loop running unattended. It polls every 10 seconds, skips while the tab is hidden or a form is open, and the Refresh button never goes away.
+16. Customer and worker routes are role-gated on both the UI and API. Worker-created notes cannot attach themselves to Neha's account by supplying her customer ID.
 
 Worker lifecycle controls are unchanged on the worker's own jobs — those with no customer ID still walk the whole line one tap at a time, including settling. On a job a customer raised, the worker keeps every state up to and including `COMPLETED` and loses only the two that answer it.
 

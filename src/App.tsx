@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { Navbar } from './components/Navbar';
 import { HomeDashboard } from './components/HomeDashboard';
@@ -20,6 +20,7 @@ import { api, ApiError } from './lib/api';
 import { useApiForDomain, anyDomainOnApi } from './lib/dataSource';
 import { installAudioUnlock } from './utils/audioUnlock';
 import { enqueue } from './lib/outbox';
+import { mergeServerJobs } from './lib/mergeServerJobs';
 import { uuidv7 } from './lib/ids';
 import { useOutbox } from './hooks/useOutbox';
 import { SyncSummary } from './components/SyncBadge';
@@ -194,7 +195,10 @@ export default function App() {
         ]);
         if (cancelled) return;
         if (p) setProfile(p);
-        if (j) setJobs(j);
+        // Merged for the same reason refreshJobs merges: a job queued in the
+        // outbox is not on the server yet, and a restored session that replaced
+        // the list would blank it until the next flush.
+        if (j) setJobs((prev) => mergeServerJobs(j, prev, outbox.stateOf));
         if (k) setKamaiList(k);
         setDataStatus('ready');
       } catch (e) {
@@ -289,6 +293,24 @@ export default function App() {
       }
     })();
   };
+
+  /**
+   * Re-read the worker's jobs from the server.
+   *
+   * MERGED, NOT REPLACED - see mergeServerJobs. A job recorded offline lives in
+   * this state and in the outbox, not in the database, so overwriting the list
+   * with the server's answer would take it off the screen while it was still
+   * queued. The mount-time load above has the same shape and the same reason;
+   * this is the version that runs repeatedly once live updates are on.
+   *
+   * Returns nothing and throws nothing: the poller treats a failed tick as a
+   * tick that did not happen, and the next one tries again.
+   */
+  const refreshJobs = useCallback(async () => {
+    if (!jobsOnApi) return;
+    const server = await api.listJobs();
+    setJobs((prev) => mergeServerJobs(server, prev, outbox.stateOf));
+  }, [jobsOnApi, outbox.stateOf]);
 
   const handleSaveJob = (newJob: JobItem) => {
     setJobs((prev) => [newJob, ...prev]);
@@ -533,6 +555,7 @@ export default function App() {
                 onAddJobVoice={() => handleOpenVoiceAssistant('add_job')}
                 onOpenQuote={() => goToTab('quote')}
                 onTransitionJob={jobsOnApi ? handleTransitionJob : undefined}
+                onRefreshJobs={jobsOnApi ? refreshJobs : undefined}
               />
             }
           />

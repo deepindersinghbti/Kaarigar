@@ -101,6 +101,27 @@ without asking. `JobItem` already has `customerId?: string`.
   than the query — one worker can hold several of a customer's jobs
   in different states.
 
+## Live updates
+Polling, not SSE: `render.yaml` pins the FREE plan, which spins down
+on inactivity, and a long-lived stream through that proxy is the
+least predictable thing to demo. A missed poll needs no reconnect,
+backoff or replay — the next tick does the work.
+
+OFF until switched on, on both list screens, and the manual Refresh
+button never goes away. During the demo an update that appears after
+a tap is provably caused by that tap; an interval firing at the right
+moment is not. `useLivePolling` skips ticks when the tab is hidden,
+when one is already in flight, and when `paused` — which each screen
+sets while the user is mid-action, so a refresh cannot pull a row out
+from under a form being typed into.
+
+`refreshJobs` in `App.tsx` MERGES via `mergeServerJobs`, never
+replaces. A job recorded offline lives in React state and the outbox,
+not the database — `setJobs(serverJobs)` would take it off a money
+screen while it was still queued. Server wins for any job it knows
+about; only local-only jobs the outbox still calls unsynced survive.
+The mount-time load merges for the same reason.
+
 ## Customer screens
 Mount the customer tree as a SIBLING of `App` in `main.tsx`, never a
 route inside it. `App` calls `GET /api/passport/me` on load, which
@@ -153,4 +174,6 @@ second form adds the worker lifecycle suite — run it for ANY change to
   claim. No reason, no photo, no moderation, no timeout — a job can sit
   in DISPUTED indefinitely if the kaarigar never returns.
 - No payment verification, no nearest-worker matching.
-- Workers see new customer requests only on reload; no push.
+- No push. Live updates are opt-in polling on a 10s tick, so a change
+  can take that long to appear and costs a request each time; with the
+  toggle off, both sides still see changes only on reload.

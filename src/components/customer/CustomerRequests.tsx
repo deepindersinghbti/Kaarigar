@@ -7,6 +7,8 @@ import { JOB_BADGE, type JobState, type SupportedLanguage } from '../../types';
 import { JOB_BADGE_PRESENTATION } from '../JobsView';
 import { getScreenCopy } from '../../data/uiCopy';
 import { getCustomerCopy, getCustomerTrade } from './customerCopy';
+import { LiveToggle } from '../LiveToggle';
+import { useLivePolling } from '../../hooks/useLivePolling';
 
 /** Which control on a row is mid-flight. One row, one action at a time. */
 type PendingAction = 'accept' | 'decline' | 'cancel' | 'confirm' | 'dispute' | 'counter';
@@ -35,9 +37,13 @@ interface CustomerRequestsProps {
  * job list does, and the label comes from the same uiCopy table. A customer and
  * a kaarigar looking at one job therefore read the same word for it.
  *
- * Refresh is a button, not a poll. The demo has the kaarigar accepting on a
- * second device, and an interval that happened to fire at the right moment
- * would make it impossible to tell a working end-to-end loop from a lucky one.
+ * Refresh is a button FIRST and a poll only on request. The demo has the
+ * kaarigar accepting on a second device, and an interval that happened to fire
+ * at the right moment would make it impossible to tell a working end-to-end
+ * loop from a lucky one - so live updates stay off until somebody switches them
+ * on, and the button never goes away. Pressing it proves the loop; the toggle
+ * then shows the same loop running unattended, which is a second demonstration
+ * rather than a replacement for the first.
  */
 export const CustomerRequests: React.FC<CustomerRequestsProps> = ({ currentLanguage }) => {
   const [jobs, setJobs] = useState<CustomerJobItem[] | null>(null);
@@ -69,6 +75,18 @@ export const CustomerRequests: React.FC<CustomerRequestsProps> = ({ currentLangu
   }, [copy.requestList.loadError]);
 
   useEffect(() => { void load(); }, [load]);
+
+  /**
+   * Paused while the customer is mid-action: a poll landing during a counter
+   * they are typing, or between pressing Accept and the server answering, would
+   * replace the row underneath them. The toggle stays on throughout - this only
+   * skips ticks, so polling resumes by itself the moment they are done.
+   */
+  const live = useLivePolling({
+    onTick: load,
+    paused: pending !== null || counteringId !== null,
+    storageKey: 'kaarigar_live_customer_requests',
+  });
 
   /**
    * Every answer a customer can give, all through one path: accept, decline or
@@ -200,6 +218,12 @@ export const CustomerRequests: React.FC<CustomerRequestsProps> = ({ currentLangu
           <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
           {copy.requestList.refresh}
         </button>
+        <LiveToggle
+          enabled={live.enabled}
+          onToggle={live.toggle}
+          label={copy.requestList.live}
+          title={live.enabled ? copy.requestList.liveOn : copy.requestList.liveOff}
+        />
       </div>
 
       {error && (
