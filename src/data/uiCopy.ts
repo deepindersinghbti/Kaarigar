@@ -92,6 +92,8 @@ export interface JobsCopy {
   quoteSend: string;
   quoteInvalid: string;
   quotedAwaiting: string;
+  /** A customer job the worker has marked done, awaiting their answer. */
+  completedAwaiting: string;
   /** The customer has named a figure of their own on a re-quote. */
   counterAsk: (price: number) => string;
   /** The opt-in live-updates switch on the jobs list. */
@@ -624,6 +626,7 @@ const jobsHi: JobsCopy = {
   quoteSend: 'दाम भेजें',
   quoteInvalid: 'दाम शून्य से बड़ा होना चाहिए।',
   quotedAwaiting: 'ग्राहक की मंज़ूरी का इंतज़ार है।',
+  completedAwaiting: 'ग्राहक की पुष्टि का इंतज़ार है।',
   counterAsk: (price) => `ग्राहक ने ₹${price} माँगा है`,
   live: 'लाइव',
   liveOn: 'नए अनुरोध अपने आप दिखते हैं। रोकने के लिए दबाएँ।',
@@ -666,6 +669,7 @@ const jobsEn: JobsCopy = {
   quoteSend: 'Send price',
   quoteInvalid: 'The price must be greater than zero.',
   quotedAwaiting: 'Waiting for the customer to accept.',
+  completedAwaiting: 'Waiting for the customer to confirm the work is done.',
   counterAsk: (price) => `The customer asked for ₹${price}`,
   live: 'Live',
   liveOn: 'New requests appear on their own. Tap to stop.',
@@ -708,6 +712,7 @@ const jobsPa: JobsCopy = {
   quoteSend: 'ਮੁੱਲ ਭੇਜੋ',
   quoteInvalid: 'ਮੁੱਲ ਸਿਫ਼ਰ ਤੋਂ ਵੱਧ ਹੋਣਾ ਚਾਹੀਦਾ ਹੈ।',
   quotedAwaiting: 'ਗਾਹਕ ਦੀ ਮਨਜ਼ੂਰੀ ਦੀ ਉਡੀਕ ਹੈ।',
+  completedAwaiting: 'ਗਾਹਕ ਦੀ ਪੁਸ਼ਟੀ ਦੀ ਉਡੀਕ ਹੈ।',
   counterAsk: (price) => `ਗਾਹਕ ਨੇ ₹${price} ਮੰਗਿਆ ਹੈ`,
   live: 'ਲਾਈਵ',
   liveOn: 'ਨਵੀਆਂ ਬੇਨਤੀਆਂ ਆਪਣੇ ਆਪ ਦਿਖਦੀਆਂ ਹਨ। ਰੋਕਣ ਲਈ ਦਬਾਓ।',

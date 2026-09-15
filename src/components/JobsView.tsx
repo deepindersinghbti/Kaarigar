@@ -462,6 +462,20 @@ export const JobsView: React.FC<JobsViewProps> = ({
                     {copy.quotedAwaiting}
                     {typeof job.quotedPrice === 'number' && <> · ₹{job.quotedPrice}</>}
                   </p>
+                ) : job.customerId && job.status === 'COMPLETED' ? (
+                  /*
+                    The same shape one step later, and it was missing until the
+                    worker rehearsal went looking. COMPLETED is the worker's
+                    CLAIM; SETTLED and DISPUTED are the customer's answer, and
+                    the transition route refuses both for a customer-linked job.
+                    Without this branch the screen fell through to the one-tap
+                    control below and offered "Mark payment received" - a button
+                    whose only possible outcome was a 403, on the one screen a
+                    worker is most likely to be looking at money on.
+                  */
+                  <p className="text-xs font-extrabold text-sky-700 bg-sky-50 border border-sky-200 rounded-full px-3 py-1.5">
+                    {copy.completedAwaiting}
+                  </p>
                 ) : nextState && (
                   <button
                     type="button"

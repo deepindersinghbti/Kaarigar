@@ -69,6 +69,13 @@ without asking. `JobItem` already has `customerId?: string`.
   Same shape as `QUOTED -> ACCEPTED` one step earlier. Jobs with no
   `customerId` keep the one-tap settle. Never present a `COMPLETED`
   customer job as verified; `SETTLED` is the verified one.
+- EVERY SERVER-SIDE REFUSAL NEEDS ITS UI BRANCH IN `JobsView`. A gate
+  added on the route and not here leaves a button whose only possible
+  outcome is a 403. There are two: `QUOTED` shows `quotedAwaiting`,
+  `COMPLETED` shows `completedAwaiting` — both only when `customerId`
+  is set, otherwise the one-tap path stands. The `COMPLETED` branch was
+  missing for a release after the route started refusing it, and the
+  worker screen offered "Mark payment received" the whole time.
 - `DISPUTED` is reachable now and is NOT terminal:
   `DISPUTED -> IN_PROGRESS` lets the kaarigar return, redo the work and
   re-complete it. A dispute with no way out would freeze the job and
@@ -211,7 +218,12 @@ ran, and three defects shipped that live only in client code the API
 tests cannot reach. A missing Edge is a loud SKIP, not a failure —
 `SKIP_BROWSER_CHECKS=true` opts out deliberately.
 
-Two rules for anything added there, both learned the hard way:
+It covers BOTH journeys: Neha's screens, then Ramesh's — the worker
+half carries the other side of every trust boundary, and a gate that
+exists on the route but not on the screen is invisible until somebody
+taps it.
+
+Three rules for anything added there, all learned the hard way:
 - **Scope assertions to `#job-<id>`.** The customer's list holds a
   dozen requests by then. A first cut waited for a price on the whole
   page and passed instantly against a different job's quote — a green
@@ -219,6 +231,11 @@ Two rules for anything added there, both learned the hard way:
 - **Assert order and absence, not just presence.** The ranking bug put
   the right badge on the right worker while they stayed buried; every
   presence check passed.
+- **Foreground the page before waiting on a poll.** `useLivePolling`
+  skips a tick while `document.hidden`, which is right for a real user
+  and wrong for a backgrounded Playwright page that then waits forever.
+  Call `bringToFront()` first and give the wait several intervals. This
+  check passed one run and timed out the next before that was added.
 
 Directory fixtures are inserted straight into `kaarigar_profiles` by
 the test, because this run's database is empty — the seed script's six
