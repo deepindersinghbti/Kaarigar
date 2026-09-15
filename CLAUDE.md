@@ -101,6 +101,43 @@ without asking. `JobItem` already has `customerId?: string`.
   than the query — one worker can hold several of a customer's jobs
   in different states.
 
+## Area matching
+NO COORDINATES EXIST ANYWHERE. `WorkerProfile.location` is free text
+a worker typed, and `RateBand.locality` is never populated by the
+seed. `lib/areas.ts` resolves that text to one of four tricity areas
+by token match, so the product can say **"same area"** — the one true
+thing it knows — rather than a distance computed from numbers
+somebody invented. Do not add a fake lat/lng to make it look sharper.
+
+`areaOf` returns `null` when nothing matches, and that is a real
+answer: a worker in Delhi must never be filed under Chandigarh, or a
+customer is shown "same area" about someone who is not.
+
+`CUSTOMER_DEMO_TRADES` in `CustomerBrowse.tsx` must stay in step with
+the seed AND with `Trade` in `customerCopy.ts`. It once listed only
+Electrician and Plumber, which hid four of the six seeded passports —
+and with them every worker outside Chandigarh, so area ranking had
+nothing to rank and a working feature looked broken. A trade in the
+set but missing from the copy table renders in English on a Hindi
+screen; `getCustomerTrade` falls back rather than throwing, so that
+failure is silent.
+
+THE SERVER DECIDES DIRECTORY ORDER. `uniqueDirectoryProfiles` must
+preserve the order it receives — it used to end with a client-side
+`.sort()` by rating that discarded the area ranking, leaving the
+"same area" badge on the right worker while they stayed buried. It
+still decides which duplicate survives; that is a different question
+from where it sits.
+
+`?near=` RANKS, it does not filter — out-of-area workers stay in the
+list below the local ones, because an empty directory is worse than
+an unsorted one. An unrecognised area is ignored rather than
+rejected: the worst case is the unranked list they would have had.
+The sort runs in process, not in the query, because Mongo cannot run
+`areaOf`; that is only affordable while the directory is six
+unpaginated passports. Past a screenful, store the area and make it a
+query again.
+
 ## Live updates
 Polling, not SSE: `render.yaml` pins the FREE plan, which spins down
 on inactivity, and a long-lived stream through that proxy is the
@@ -173,7 +210,11 @@ second form adds the worker lifecycle suite — run it for ANY change to
 - A dispute records only that the customer rejected the completion
   claim. No reason, no photo, no moderation, no timeout — a job can sit
   in DISPUTED indefinitely if the kaarigar never returns.
-- No payment verification, no nearest-worker matching.
+- No payment verification.
+- Matching is same-area-or-not, with four hardcoded tricity areas in
+  `lib/areas.ts`. No distance, no travel time, no availability, and a
+  worker outside those four resolves to `null` and never ranks. A real
+  deployment needs a stored, structured location, not more tokens.
 - No push. Live updates are opt-in polling on a 10s tick, so a change
   can take that long to appear and costs a request each time; with the
   toggle off, both sides still see changes only on reload.

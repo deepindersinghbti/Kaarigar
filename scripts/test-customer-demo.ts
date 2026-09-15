@@ -11,6 +11,7 @@ import { registerRoutes } from '../src/server/routes';
 import { signAccessToken } from '../src/server/auth/tokens';
 import { demoCustomerEnabled } from '../src/server/auth/demoCustomer';
 import { mergeServerJobs } from '../src/lib/mergeServerJobs';
+import { areaOf, isArea } from '../src/lib/areas';
 
 const databaseName = `kg_cust_test_${Date.now()}_${randomBytes(3).toString('hex')}`;
 process.env.MONGODB_DB_NAME = databaseName;
@@ -315,6 +316,43 @@ try {
   check('merge of an empty server list drops synced ghosts', mergeServerJobs([], [j('ghost')], allSynced).length === 0);
   check('merge handles both sides empty', mergeServerJobs([], [], allPending).length === 0);
   check('merge keeps a failed local job too', mergeServerJobs([], [j('failedOne')], () => 'failed' as const).length === 1);
+
+  /**
+   * Area resolution. A wrong bucket files a worker under a city they are not
+   * in, and the customer is then shown "same area" about somebody who is not -
+   * a false claim rather than a missing feature, so it gets direct assertions.
+   */
+  check('areaOf resolves each seeded passport location', [
+    ['Sector 22-B, Chandigarh', 'Chandigarh'],
+    ['Phase 5, Mohali', 'Mohali'],
+    ['Sector 15-C, Chandigarh', 'Chandigarh'],
+    ['Dhakoli, Zirakpur', 'Zirakpur'],
+    ['Sector 20, Panchkula', 'Panchkula'],
+  ].every(([loc, want]) => areaOf(loc) === want));
+  check('areaOf is case-insensitive', areaOf('phase 5, MOHALI') === 'Mohali');
+  check('areaOf resolves a locality without its town', areaOf('Dhakoli') === 'Zirakpur');
+  check('areaOf knows Mohali by its official name', areaOf('SAS Nagar') === 'Mohali');
+  // null is a real answer, not a default. A worker elsewhere must never be
+  // filed under an area they are not in.
+  check('areaOf returns null for somewhere else', areaOf('Karol Bagh, Delhi') === null);
+  check('areaOf returns null for empty and missing input', areaOf('') === null && areaOf(undefined) === null && areaOf(null) === null);
+  check('isArea accepts only the known areas', isArea('Mohali') && !isArea('mohali') && !isArea('Delhi') && !isArea(undefined));
+
+  // near ranks, it does not filter: everybody still comes back.
+  const plain = (await call('/api/kaarigars', ct)).body.kaarigars;
+  const ranked = (await call('/api/kaarigars?near=Zirakpur', ct)).body.kaarigars;
+  check('near returns the same people, reordered', plain.length === ranked.length
+    && new Set(plain.map((k: any) => k.passportHandle)).size === new Set(ranked.map((k: any) => k.passportHandle)).size);
+  check('near puts the matching area first', ranked.length === 0 || areaOf(ranked[0].location) === 'Zirakpur'
+    || !ranked.some((k: any) => areaOf(k.location) === 'Zirakpur'));
+  check('every in-area worker precedes every out-of-area one', (() => {
+    const flags = ranked.map((k: any) => areaOf(k.location) === 'Zirakpur');
+    return flags.indexOf(false) === -1 || !flags.slice(flags.indexOf(false)).includes(true);
+  })());
+  const bogus = (await call('/api/kaarigars?near=Atlantis', ct)).body.kaarigars;
+  check('an unknown area is ignored, not rejected', bogus.length === plain.length);
+  check('near still respects the trade filter', (await call('/api/kaarigars?trade=Plumber&near=Mohali', ct)).body.kaarigars.every((k: any) => k.trade === 'Plumber'));
+  check('the directory still withholds phone when ranked', ranked.every((k: any) => k.phone === undefined && k.totalEarnings === undefined));
 
   const refresh = await call('/api/auth/refresh', '', { refreshToken: customer.refreshToken });
   check('refresh preserves customer access restrictions', refresh.status === 200 && (await call('/api/passport/me', refresh.body.accessToken)).status === 403);

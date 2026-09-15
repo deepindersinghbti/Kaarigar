@@ -7,6 +7,7 @@ import { JOB_TRANSITIONS } from '../../types';
 import type { JobState, JobStateTransition } from '../../types';
 import { listPublicProfiles, findOwnerIdByHandle, findAssignedKaarigars } from '../data/profiles';
 import { optionalQueryString, queryString } from '../lib/query';
+import { isArea } from '../../lib/areas';
 import { DEMO_CUSTOMER_PHONE, DEMO_CUSTOMER_NAME } from '../auth/demoCustomer';
 
 /**
@@ -40,7 +41,7 @@ function dbGuard(res: Response): boolean {
 }
 
 /**
- * GET /api/kaarigars[?trade=Plumber]
+ * GET /api/kaarigars[?trade=Plumber][&near=Mohali]
  *
  * The directory a customer browses. Authenticated, because browsing the worker
  * directory is a product surface rather than a public one - /p/:handle already
@@ -49,13 +50,28 @@ function dbGuard(res: Response): boolean {
  * The response shape is PublicProfile, produced by the SAME PUBLIC_PROJECTION
  * that backs GET /p/:handle. There is no field list in this file, deliberately:
  * see the comment on listPublicProfiles in data/profiles.ts.
+ *
+ * `near` is an AREA NAME, not a coordinate - nothing in this system stores a
+ * latitude. It ranks workers whose location text resolves to that area above
+ * the rest, and never removes anybody. See lib/areas.ts for why the product
+ * says "same area" rather than a distance.
  */
 kaarigarsRouter.get('/', requireAuth, async (_req: Request, res: Response) => {
   if (!dbGuard(res)) return;
 
   try {
     const trade = optionalQueryString(_req.query.trade);
-    const kaarigars = await listPublicProfiles(trade);
+    /**
+     * `near` ranks the caller's own area first; it does not filter. An
+     * unrecognised value is IGNORED rather than rejected, because the worst
+     * outcome of a bad area is the unranked list the customer would have got
+     * anyway - a 400 here would turn a cosmetic preference into a broken
+     * screen. isArea also keeps anything from the query string out of the
+     * comparison, so this cannot become a way to probe the directory.
+     */
+    const rawNear = optionalQueryString(_req.query.near);
+    const near = isArea(rawNear) ? rawNear : undefined;
+    const kaarigars = await listPublicProfiles(trade, near);
     return res.json({ kaarigars });
   } catch (err) {
     console.error('[customer] GET /api/kaarigars failed:', err);
