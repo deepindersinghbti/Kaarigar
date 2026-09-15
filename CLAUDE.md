@@ -203,6 +203,28 @@ Uses a uniquely named throwaway database, never the saved one. The
 second form adds the worker lifecycle suite — run it for ANY change to
 `/api/jobs/:id/transition`, which both roles depend on.
 
+### Browser checks run by default
+The suite drives system Edge through `playwright-core` (no browser
+download) and walks `CUSTOMER_DEMO.md` as written. It used to be gated
+behind setting `PLAYWRIGHT_MODULE` by hand; nobody did, so it never
+ran, and three defects shipped that live only in client code the API
+tests cannot reach. A missing Edge is a loud SKIP, not a failure —
+`SKIP_BROWSER_CHECKS=true` opts out deliberately.
+
+Two rules for anything added there, both learned the hard way:
+- **Scope assertions to `#job-<id>`.** The customer's list holds a
+  dozen requests by then. A first cut waited for a price on the whole
+  page and passed instantly against a different job's quote — a green
+  check proving nothing.
+- **Assert order and absence, not just presence.** The ranking bug put
+  the right badge on the right worker while they stayed buried; every
+  presence check passed.
+
+Directory fixtures are inserted straight into `kaarigar_profiles` by
+the test, because this run's database is empty — the seed script's six
+kaarigars are not there. Their ratings are chosen so area ranking must
+BEAT rating to pass.
+
 ## Known gaps (post-SIH, not now)
 - A counter-offer names a figure but carries no reason and no
   expiry, and the kaarigar has no one-tap "accept their number" —

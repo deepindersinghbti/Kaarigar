@@ -245,7 +245,7 @@ export const CustomerRequests: React.FC<CustomerRequestsProps> = ({ currentLangu
       )}
 
       {jobs?.map((job) => (
-        <div key={job.id} className="bg-white rounded-3xl border border-gray-200 p-4">
+        <div key={job.id} id={`job-${job.id}`} className="bg-white rounded-3xl border border-gray-200 p-4">
           <div className="flex items-start justify-between gap-3">
             <p className="font-extrabold text-gray-900 flex-1 min-w-0">{job.title}</p>
             <span

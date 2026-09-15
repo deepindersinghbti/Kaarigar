@@ -39,6 +39,8 @@ A `SETTLED` customer job IS customer-verified completion, and the `stateHistory`
 
 ## Verification
 
-`npx tsx scripts/test-customer-demo.ts` creates and removes a uniquely named test database using the configured MongoDB connection; it does not use the application's saved database name. It checks real authentication, roles, ownership, retries, and refresh. Set `PLAYWRIGHT_MODULE` to an installed Playwright `index.mjs` to include headless Edge UI checks, and `RUN_WORKER_REGRESSIONS=true` to run the existing worker regression suite in the same temporary database.
+`npx tsx scripts/test-customer-demo.ts` creates and removes a uniquely named test database using the configured MongoDB connection; it does not use the application's saved database name. It checks real authentication, roles, ownership, retries, and refresh. `PLAYWRIGHT_MODULE` can point at a different Playwright install if you need one; `RUN_WORKER_REGRESSIONS=true` adds the worker regression suite in the same temporary database.
+
+Browser checks now run by default: the suite drives system Edge through `playwright-core` and walks this rehearsal script end to end, so the steps below are covered automatically rather than only by hand. A missing Edge is a loud skip; `SKIP_BROWSER_CHECKS=true` opts out.
 
 Run `npm run lint` and `npm run build` as well. Local tests do not prove a Render deployment or its environment is configured; verify the live page and health endpoint separately.
