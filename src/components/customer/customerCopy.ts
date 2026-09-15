@@ -1,6 +1,19 @@
 import type { SupportedLanguage } from '../../types';
 
-type Trade = 'Electrician' | 'Plumber';
+/**
+ * Every trade the seeded directory contains.
+ *
+ * This list and the seed must stay in step. A trade missing here renders as
+ * the raw English string in a Hindi demo - getCustomerTrade falls back rather
+ * than throwing, so the failure is quiet and only visible on screen.
+ */
+type Trade =
+  | 'Electrician'
+  | 'Plumber'
+  | 'Carpenter'
+  | 'Painter'
+  | 'Mason'
+  | 'AC & Appliance Technician';
 
 export interface CustomerCopy {
   appName: string;
@@ -42,7 +55,7 @@ export interface CustomerCopy {
 const CUSTOMER_COPY: Record<SupportedLanguage, CustomerCopy> = {
   en: {
     appName: 'Kaarigar', customer: 'Customer demo · Neha Sharma', back: 'Back to role selection', language: 'Change language', signOut: 'Sign out', browse: 'Find a Kaarigar', requests: 'My requests',
-    notice: 'Demo login: 0123456789. Use the separate customer demo code supplied by the presenter. No SMS is sent. Browse, request tracking, and quote acceptance are ready; completion confirmation and payment verification are not available yet.',
+    notice: 'Demo login: 0123456789. Use the separate customer demo code supplied by the presenter. No SMS is sent. Payment is not verified anywhere in this demo — a settled job records that the work was agreed and confirmed, never that money changed hands.',
     directory: { loading: 'Loading…', unavailable: 'No kaarigar is available yet.', loadError: 'Could not load kaarigars.', jobs: 'jobs',
       areaLabel: 'Your area', sameArea: 'Same area',
       areas: { Chandigarh: 'Chandigarh', Mohali: 'Mohali', Panchkula: 'Panchkula', Zirakpur: 'Zirakpur' } },
@@ -57,11 +70,11 @@ const CUSTOMER_COPY: Record<SupportedLanguage, CustomerCopy> = {
       counterSend: 'Send my price', countering: 'Sending…', counterError: 'Could not send your price.', counterInvalid: 'Enter a price greater than zero.',
       countered: (price) => `You asked for ₹${price}. Waiting for the kaarigar to reply.`,
       live: 'Live', liveOn: 'Updates arrive on their own. Tap to stop.', liveOff: 'Tap to let updates arrive on their own.' },
-    trades: { Electrician: 'Electrician', Plumber: 'Plumber' },
+    trades: { Electrician: 'Electrician', Plumber: 'Plumber', Carpenter: 'Carpenter', Painter: 'Painter', Mason: 'Mason', 'AC & Appliance Technician': 'AC & Appliance Technician' },
   },
   hi: {
     appName: 'कारीगर', customer: 'ग्राहक डेमो · नेहा शर्मा', back: 'भूमिका चयन पर वापस जाएँ', language: 'भाषा बदलें', signOut: 'साइन आउट', browse: 'कारीगर खोजें', requests: 'मेरे अनुरोध',
-    notice: 'डेमो लॉगिन: 0123456789। प्रस्तुतकर्ता से मिला अलग ग्राहक डेमो कोड डालें। SMS नहीं भेजा जाता। खोज, अनुरोध देखना और कोट स्वीकार करना उपलब्ध है; काम पूरा होने की पुष्टि और भुगतान सत्यापन अभी उपलब्ध नहीं हैं।',
+    notice: 'डेमो लॉगिन: 0123456789। प्रस्तुतकर्ता से मिला अलग ग्राहक डेमो कोड डालें। SMS नहीं भेजा जाता। इस डेमो में भुगतान कहीं भी सत्यापित नहीं होता — तय और पूरा हुआ काम दर्ज होता है, पैसा मिलना नहीं।',
     directory: { loading: 'लोड हो रहा है…', unavailable: 'अभी कोई कारीगर उपलब्ध नहीं है।', loadError: 'कारीगर लोड नहीं हो सके।', jobs: 'काम',
       areaLabel: 'आपका इलाका', sameArea: 'इसी इलाके में',
       areas: { Chandigarh: 'चंडीगढ़', Mohali: 'मोहाली', Panchkula: 'पंचकूला', Zirakpur: 'ज़ीरकपुर' } },
@@ -76,11 +89,11 @@ const CUSTOMER_COPY: Record<SupportedLanguage, CustomerCopy> = {
       counterSend: 'मेरा दाम भेजें', countering: 'भेज रहे हैं…', counterError: 'आपका दाम नहीं भेजा जा सका।', counterInvalid: 'शून्य से बड़ा दाम डालें।',
       countered: (price) => `आपने ₹${price} माँगा है। कारीगर के जवाब का इंतज़ार है।`,
       live: 'लाइव', liveOn: 'अपडेट अपने आप आते हैं। रोकने के लिए दबाएँ।', liveOff: 'अपडेट अपने आप पाने के लिए दबाएँ।' },
-    trades: { Electrician: 'इलेक्ट्रीशियन', Plumber: 'प्लंबर' },
+    trades: { Electrician: 'इलेक्ट्रीशियन', Plumber: 'प्लंबर', Carpenter: 'बढ़ई', Painter: 'पेंटर', Mason: 'राजमिस्त्री', 'AC & Appliance Technician': 'एसी और उपकरण तकनीशियन' },
   },
   pa: {
     appName: 'ਕਾਰੀਗਰ', customer: 'ਗਾਹਕ ਡੈਮੋ · ਨੇਹਾ ਸ਼ਰਮਾ', back: 'ਭੂਮਿਕਾ ਚੋਣ ਉੱਤੇ ਵਾਪਸ ਜਾਓ', language: 'ਭਾਸ਼ਾ ਬਦਲੋ', signOut: 'ਸਾਈਨ ਆਊਟ', browse: 'ਕਾਰੀਗਰ ਲੱਭੋ', requests: 'ਮੇਰੀਆਂ ਬੇਨਤੀਆਂ',
-    notice: 'ਡੈਮੋ ਲੌਗਇਨ: 0123456789। ਪੇਸ਼ਕਰਤਾ ਤੋਂ ਮਿਲਿਆ ਵੱਖਰਾ ਗਾਹਕ ਡੈਮੋ ਕੋਡ ਵਰਤੋ। SMS ਨਹੀਂ ਭੇਜਿਆ ਜਾਂਦਾ। ਖੋਜ, ਬੇਨਤੀ ਦੇਖਣਾ ਅਤੇ ਕੋਟ ਮਨਜ਼ੂਰ ਕਰਨਾ ਉਪਲਬਧ ਹੈ; ਕੰਮ ਮੁਕੰਮਲ ਹੋਣ ਦੀ ਪੁਸ਼ਟੀ ਅਤੇ ਭੁਗਤਾਨ ਤਸਦੀਕ ਹਾਲੇ ਉਪਲਬਧ ਨਹੀਂ ਹਨ।',
+    notice: 'ਡੈਮੋ ਲੌਗਇਨ: 0123456789। ਪੇਸ਼ਕਰਤਾ ਤੋਂ ਮਿਲਿਆ ਵੱਖਰਾ ਗਾਹਕ ਡੈਮੋ ਕੋਡ ਵਰਤੋ। SMS ਨਹੀਂ ਭੇਜਿਆ ਜਾਂਦਾ। ਇਸ ਡੈਮੋ ਵਿੱਚ ਭੁਗਤਾਨ ਕਿਤੇ ਵੀ ਤਸਦੀਕ ਨਹੀਂ ਹੁੰਦਾ — ਤੈਅ ਅਤੇ ਮੁਕੰਮਲ ਹੋਇਆ ਕੰਮ ਦਰਜ ਹੁੰਦਾ ਹੈ, ਪੈਸੇ ਦਾ ਮਿਲਣਾ ਨਹੀਂ।',
     directory: { loading: 'ਲੋਡ ਹੋ ਰਿਹਾ ਹੈ…', unavailable: 'ਹਾਲੇ ਕੋਈ ਕਾਰੀਗਰ ਉਪਲਬਧ ਨਹੀਂ ਹੈ।', loadError: 'ਕਾਰੀਗਰ ਲੋਡ ਨਹੀਂ ਹੋ ਸਕੇ।', jobs: 'ਕੰਮ',
       areaLabel: 'ਤੁਹਾਡਾ ਇਲਾਕਾ', sameArea: 'ਇਸੇ ਇਲਾਕੇ ਵਿੱਚ',
       areas: { Chandigarh: 'ਚੰਡੀਗੜ੍ਹ', Mohali: 'ਮੋਹਾਲੀ', Panchkula: 'ਪੰਚਕੂਲਾ', Zirakpur: 'ਜ਼ੀਰਕਪੁਰ' } },
@@ -95,11 +108,11 @@ const CUSTOMER_COPY: Record<SupportedLanguage, CustomerCopy> = {
       counterSend: 'ਮੇਰੀ ਕੀਮਤ ਭੇਜੋ', countering: 'ਭੇਜਿਆ ਜਾ ਰਿਹਾ ਹੈ…', counterError: 'ਤੁਹਾਡੀ ਕੀਮਤ ਨਹੀਂ ਭੇਜੀ ਜਾ ਸਕੀ।', counterInvalid: 'ਸ਼ੂਨ ਤੋਂ ਵੱਡੀ ਕੀਮਤ ਪਾਓ।',
       countered: (price) => `ਤੁਸੀਂ ₹${price} ਮੰਗਿਆ ਹੈ। ਕਾਰੀਗਰ ਦੇ ਜਵਾਬ ਦੀ ਉਡੀਕ ਹੈ।`,
       live: 'ਲਾਈਵ', liveOn: 'ਅੱਪਡੇਟ ਆਪਣੇ ਆਪ ਆਉਂਦੇ ਹਨ। ਰੋਕਣ ਲਈ ਦਬਾਓ।', liveOff: 'ਅੱਪਡੇਟ ਆਪਣੇ ਆਪ ਪਾਉਣ ਲਈ ਦਬਾਓ।' },
-    trades: { Electrician: 'ਇਲੈਕਟ੍ਰੀਸ਼ੀਅਨ', Plumber: 'ਪਲੰਬਰ' },
+    trades: { Electrician: 'ਇਲੈਕਟ੍ਰੀਸ਼ੀਅਨ', Plumber: 'ਪਲੰਬਰ', Carpenter: 'ਤਰਖਾਣ', Painter: 'ਪੇਂਟਰ', Mason: 'ਰਾਜ ਮਿਸਤਰੀ', 'AC & Appliance Technician': 'ਏਸੀ ਤੇ ਉਪਕਰਣ ਤਕਨੀਸ਼ੀਅਨ' },
   },
   kn: {
     appName: 'ಕಾರಿಗಾರ', customer: 'ಗ್ರಾಹಕ ಡೆಮೊ · ನೇಹಾ ಶರ್ಮಾ', back: 'ಪಾತ್ರ ಆಯ್ಕೆಗೆ ಹಿಂದಿರುಗಿ', language: 'ಭಾಷೆ ಬದಲಿಸಿ', signOut: 'ಸೈನ್ ಔಟ್', browse: 'ಕಾರಿಗಾರರನ್ನು ಹುಡುಕಿ', requests: 'ನನ್ನ ವಿನಂತಿಗಳು',
-    notice: 'ಡೆಮೊ ಲಾಗಿನ್: 0123456789. ನಿರೂಪಕರಿಂದ ಪಡೆದ ಪ್ರತ್ಯೇಕ ಗ್ರಾಹಕ ಡೆಮೊ ಕೋಡ್ ಬಳಸಿ. SMS ಕಳುಹಿಸಲಾಗುವುದಿಲ್ಲ. ಹುಡುಕಾಟ, ವಿನಂತಿ ವೀಕ್ಷಣೆ ಮತ್ತು ಉಲ್ಲೇಖಿತ ದರ ಒಪ್ಪಿಗೆ ಸಿದ್ಧವಾಗಿದೆ; ಕೆಲಸ ಮುಕ್ತಾಯ ದೃಢೀಕರಣ ಮತ್ತು ಪಾವತಿ ಪರಿಶೀಲನೆ ಇನ್ನೂ ಲಭ್ಯವಿಲ್ಲ.',
+    notice: 'ಡೆಮೊ ಲಾಗಿನ್: 0123456789. ನಿರೂಪಕರಿಂದ ಪಡೆದ ಪ್ರತ್ಯೇಕ ಗ್ರಾಹಕ ಡೆಮೊ ಕೋಡ್ ಬಳಸಿ. SMS ಕಳುಹಿಸಲಾಗುವುದಿಲ್ಲ. ಈ ಡೆಮೋನಲ್ಲಿ ಪಾವತಿಯನ್ನು ಎಲ್ಲಿಯೂ ಪರಿಶೀಲಿಸುವುದಿಲ್ಲ — ಮುಗಿದ ಕೆಲಸ ದಾಖಲಾಗುತ್ತದೆ, ಹಣ ಸಂದಾಯವಾದದ್ದಲ್ಲ.',
     directory: { loading: 'ಲೋಡ್ ಆಗುತ್ತಿದೆ…', unavailable: 'ಈಗ ಯಾವುದೇ ಕಾರಿಗಾರ ಲಭ್ಯವಿಲ್ಲ.', loadError: 'ಕಾರಿಗಾರರನ್ನು ಲೋಡ್ ಮಾಡಲು ಸಾಧ್ಯವಾಗಲಿಲ್ಲ.', jobs: 'ಕೆಲಸಗಳು' ,
       areaLabel: 'ನಿಮ್ಮ ಪ್ರದೇಶ', sameArea: 'ಇದೇ ಪ್ರದೇಶದಲ್ಲಿ',
       areas: { Chandigarh: 'ಚಂಡೀಗಢ', Mohali: 'ಮೊಹಾಲಿ', Panchkula: 'ಪಂಚಕುಲಾ', Zirakpur: 'ಜಿರಕ್‌ಪುರ' } },
@@ -114,11 +127,11 @@ const CUSTOMER_COPY: Record<SupportedLanguage, CustomerCopy> = {
       counterSend: 'ನನ್ನ ದರ ಕಳುಹಿಸಿ', countering: 'ಕಳುಹಿಸಲಾಗುತ್ತಿದೆ…', counterError: 'ನಿಮ್ಮ ದರ ಕಳುಹಿಸಲಾಗಲಿಲ್ಲ.', counterInvalid: 'ಸೊನ್ನೆಗಿಂತ ದೊಡ್ಡ ದರ ನಮೂದಿಸಿ.',
       countered: (price) => `ನೀವು ₹${price} ಕೇಳಿದ್ದೀರಿ. ಕಾರಿಗಾರರ ಉತ್ತರಕ್ಕಾಗಿ ಕಾಯಲಾಗುತ್ತಿದೆ.`,
       live: 'ಲೈವ್', liveOn: 'ನವೀಕರಣಗಳು ತಾನಾಗಿಯೇ ಬರುತ್ತವೆ. ನಿಲ್ಲಿಸಲು ಒತ್ತಿ.', liveOff: 'ನವೀಕರಣಗಳು ತಾನಾಗಿಯೇ ಬರಲು ಒತ್ತಿ.' },
-    trades: { Electrician: 'ವಿದ್ಯುತ್ ತಂತ್ರಜ್ಞ', Plumber: 'ಪ್ಲಂಬರ್' },
+    trades: { Electrician: 'ವಿದ್ಯುತ್ ತಂತ್ರಜ್ಞ', Plumber: 'ಪ್ಲಂಬರ್', Carpenter: 'ಬಡಗಿ', Painter: 'ಪೇಂಟರ್', Mason: 'ಗಾರೆ ಕೆಲಸಗಾರ', 'AC & Appliance Technician': 'ಎಸಿ ಮತ್ತು ಉಪಕರಣ ತಂತ್ರಜ್ಞ' },
   },
   mr: {
     appName: 'कारागीर', customer: 'ग्राहक डेमो · नेहा शर्मा', back: 'भूमिका निवडीकडे परत जा', language: 'भाषा बदला', signOut: 'साइन आउट', browse: 'कारागीर शोधा', requests: 'माझ्या विनंत्या',
-    notice: 'डेमो लॉगिन: 0123456789. सादरकर्त्याकडून मिळालेला वेगळा ग्राहक डेमो कोड वापरा. SMS पाठवला जात नाही. शोध, विनंती पाहणे आणि कोट स्वीकारणे तयार आहे; काम पूर्ण झाल्याची पुष्टी व पेमेंट पडताळणी अजून उपलब्ध नाही.',
+    notice: 'डेमो लॉगिन: 0123456789. सादरकर्त्याकडून मिळालेला वेगळा ग्राहक डेमो कोड वापरा. SMS पाठवला जात नाही. या डेमोमध्ये पेमेंट कुठेही पडताळली जात नाही — ठरलेले आणि पूर्ण झालेले काम नोंदवले जाते, पैसे मिळाल्याचे नाही.',
     directory: { loading: 'लोड होत आहे…', unavailable: 'सध्या कोणताही कारागीर उपलब्ध नाही.', loadError: 'कारागीर लोड करता आले नाहीत.', jobs: 'कामे' ,
       areaLabel: 'तुमचा परिसर', sameArea: 'याच परिसरात',
       areas: { Chandigarh: 'चंदीगड', Mohali: 'मोहाली', Panchkula: 'पंचकुला', Zirakpur: 'झिरकपूर' } },
@@ -133,7 +146,7 @@ const CUSTOMER_COPY: Record<SupportedLanguage, CustomerCopy> = {
       counterSend: 'माझा दर पाठवा', countering: 'पाठवत आहे…', counterError: 'तुमचा दर पाठवता आला नाही.', counterInvalid: 'शून्यापेक्षा मोठा दर टाका.',
       countered: (price) => `तुम्ही ₹${price} मागितले आहेत. कारागिराच्या उत्तराची वाट पाहत आहोत.`,
       live: 'लाइव्ह', liveOn: 'अपडेट आपोआप येतात. थांबवण्यासाठी दाबा.', liveOff: 'अपडेट आपोआप मिळवण्यासाठी दाबा.' },
-    trades: { Electrician: 'इलेक्ट्रिशियन', Plumber: 'प्लंबर' },
+    trades: { Electrician: 'इलेक्ट्रिशियन', Plumber: 'प्लंबर', Carpenter: 'सुतार', Painter: 'रंगारी', Mason: 'गवंडी', 'AC & Appliance Technician': 'एसी व उपकरण तंत्रज्ञ' },
   },
 };
 
@@ -143,5 +156,11 @@ export function getCustomerCopy(language: SupportedLanguage): CustomerCopy {
 
 export function getCustomerTrade(language: SupportedLanguage, trade: string): string {
   const copy = getCustomerCopy(language);
-  return trade === 'Electrician' || trade === 'Plumber' ? copy.trades[trade] : trade;
+  /**
+   * Falls back to the raw trade string for anything not in the table, so a
+   * worker who typed their own trade still renders - as English, but present.
+   * Prefer adding it to Trade above: a trade shown in English inside a Hindi
+   * screen looks like a bug to the person reading it, and nothing here warns.
+   */
+  return (copy.trades as Record<string, string | undefined>)[trade] ?? trade;
 }

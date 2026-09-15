@@ -113,6 +113,22 @@ somebody invented. Do not add a fake lat/lng to make it look sharper.
 answer: a worker in Delhi must never be filed under Chandigarh, or a
 customer is shown "same area" about someone who is not.
 
+`CUSTOMER_DEMO_TRADES` in `CustomerBrowse.tsx` must stay in step with
+the seed AND with `Trade` in `customerCopy.ts`. It once listed only
+Electrician and Plumber, which hid four of the six seeded passports —
+and with them every worker outside Chandigarh, so area ranking had
+nothing to rank and a working feature looked broken. A trade in the
+set but missing from the copy table renders in English on a Hindi
+screen; `getCustomerTrade` falls back rather than throwing, so that
+failure is silent.
+
+THE SERVER DECIDES DIRECTORY ORDER. `uniqueDirectoryProfiles` must
+preserve the order it receives — it used to end with a client-side
+`.sort()` by rating that discarded the area ranking, leaving the
+"same area" badge on the right worker while they stayed buried. It
+still decides which duplicate survives; that is a different question
+from where it sits.
+
 `?near=` RANKS, it does not filter — out-of-area workers stay in the
 list below the local ones, because an empty directory is worse than
 an unsorted one. An unrecognised area is ignored rather than

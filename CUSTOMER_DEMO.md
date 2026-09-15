@@ -17,7 +17,7 @@ Neha's identifier is `0123456789`. This is a demo ID, not a real SMS destination
 
 1. Use separate browser profiles, a private window, or separate devices for Neha and Ramesh. Ordinary tabs share the existing session storage and are not separate identities.
 2. On the home page, choose **I need a Kaarigar**. Enter `0123456789`, then the private customer demo code.
-3. Above the directory, Neha picks **her area** — Chandigarh, Mohali, Panchkula or Zirakpur. Kaarigars whose own location text resolves to that area move to the top and are badged **same area**; everyone else stays listed below. Say "same area", not a distance: nothing in this system stores a coordinate, and the badge claims exactly what the data supports. The choice is remembered, and tapping it again clears it.
+3. The directory lists all six seeded kaarigars across four areas — electrician, plumber, carpenter, painter, mason and AC technician. Above it, Neha picks **her area** — Chandigarh, Mohali, Panchkula or Zirakpur. Kaarigars whose own location text resolves to that area move to the top and are badged **same area**; everyone else stays listed below. Say "same area", not a distance: nothing in this system stores a coordinate, and the badge claims exactly what the data supports. The choice is remembered, and tapping it again clears it.
 4. Select Ramesh from the existing directory. Enter a fan installation request, location, and estimated budget. Submit once.
 5. Neha sees the request under **My requests**. Ramesh sees the same database job in **Jobs** after loading/reloading that screen and sends a quoted price.
 6. Neha can accept that stored quote. The server records her acceptance, copies the quoted price to `agreedPrice`, and does not accept a price supplied by the customer.

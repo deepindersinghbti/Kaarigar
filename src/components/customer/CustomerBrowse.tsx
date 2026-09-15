@@ -10,8 +10,25 @@ interface CustomerBrowseProps {
   currentLanguage: SupportedLanguage;
 }
 
-/** The customer MVP currently exposes only the two supported demo trades. */
-const CUSTOMER_DEMO_TRADES = new Set(['Electrician', 'Plumber']);
+/**
+ * The trades a customer may browse.
+ *
+ * WIDENED FROM ['Electrician', 'Plumber'] because that pair hid four of the six
+ * seeded passports - and, with them, every worker outside Chandigarh. Area
+ * ranking had nothing to rank: picking Mohali, Panchkula or Zirakpur reordered
+ * an all-Chandigarh list and badged nobody, so a working feature looked broken.
+ *
+ * Keep this in step with the seed and with Trade in customerCopy.ts. A trade
+ * listed here but missing from that table renders in English on a Hindi screen.
+ */
+const CUSTOMER_DEMO_TRADES = new Set([
+  'Electrician',
+  'Plumber',
+  'Carpenter',
+  'Painter',
+  'Mason',
+  'AC & Appliance Technician',
+]);
 
 function canonical(value: string): string {
   return value.trim().toLocaleLowerCase();
@@ -40,17 +57,31 @@ function compareDirectoryProfiles(a: PublicKaarigar, b: PublicKaarigar): number 
  * customer. The same named worker in the same trade keeps the stronger record:
  * rating first, then completed jobs, then a stable name tie-break. We do not
  * delete the lower record; it can still be corrected in worker data later.
+ *
+ * THE SERVER'S ORDER IS PRESERVED, NOT RECOMPUTED. This used to end with
+ * `.sort(compareDirectoryProfiles)`, which re-sorted the whole list by rating
+ * and silently discarded the area ranking GET /api/kaarigars had just applied -
+ * the "same area" badge appeared on the right worker while they stayed buried
+ * in rating order, so the feature looked half-built rather than broken. Only
+ * the endpoint decides sequence now.
+ *
+ * compareDirectoryProfiles still decides WHICH duplicate survives, which is a
+ * different question from where it sits.
  */
 function uniqueDirectoryProfiles(profiles: PublicKaarigar[]): PublicKaarigar[] {
   const bestByWorker = new Map<string, PublicKaarigar>();
+  const firstSeen: string[] = [];
   for (const profile of profiles) {
     const key = `${canonical(profile.name)}|${canonical(profile.trade)}`;
     const existing = bestByWorker.get(key);
-    if (!existing || compareDirectoryProfiles(profile, existing) < 0) {
+    if (!existing) {
+      firstSeen.push(key);
+      bestByWorker.set(key, profile);
+    } else if (compareDirectoryProfiles(profile, existing) < 0) {
       bestByWorker.set(key, profile);
     }
   }
-  return [...bestByWorker.values()].sort(compareDirectoryProfiles);
+  return firstSeen.map((key) => bestByWorker.get(key)!);
 }
 
 /**
