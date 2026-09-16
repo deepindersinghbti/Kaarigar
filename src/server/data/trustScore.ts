@@ -3,6 +3,9 @@ import { summariseFor } from './reviews';
 import type { ReviewSummary } from './reviews';
 import { countJobOutcomes } from './jobs';
 import type { JobOutcomeCounts } from './jobs';
+import { bookingsEnabled, nowMs } from '../bookingConfig';
+import { computeReliability, reliabilityRecord as reliabilityRecordFor } from '../lib/reliabilityScore';
+import { eventsFor } from './reliability';
 
 export interface TrustEvidence {
   jobs: JobOutcomeCounts;
@@ -21,7 +24,15 @@ export interface TrustEvidence {
  */
 export function calculateTrustScoreFromEvidence(
   jobs: JobOutcomeCounts,
-  reviews: ReviewSummary
+  reviews: ReviewSummary,
+  /**
+   * Reliability in 0..1 from the event ledger, when the booking feature is on.
+   *
+   * Optional, and undefined means "fall back to the cancellation rate below" -
+   * which is what keeps this function byte-for-byte compatible with the two
+   * callers that predate the ledger. See the reliabilityRecord note below.
+   */
+  reliability?: number
 ): TrustScore {
   const identityVerification = 10;
   const skillCredentials = 0;
@@ -38,11 +49,33 @@ export function calculateTrustScoreFromEvidence(
     customerRatings = Math.round(Math.max(0, Math.min(25, ((adjusted - 1) / 4) * 25)));
   }
 
-  const cancelledDenominator = jobs.completed + jobs.cancelled;
-  const cancellationRate = cancelledDenominator === 0
-    ? 0
-    : jobs.cancelled / cancelledDenominator;
-  const reliabilityRecord = -Math.round(Math.min(10, cancellationRate * 10));
+  /**
+   * TWO SOURCES, ONE COMPONENT. See KAARIGAR_RELIABILITY_FEATURE.md §9.5.
+   *
+   * With the booking feature ON this is the decayed event ledger: on-time
+   * arrivals, lateness, no-shows and late cancels, anchored so that a worker
+   * with no history scores 0 rather than being penalised for being new.
+   *
+   * With it OFF - the default - this is the original cancellation rate,
+   * unchanged, so the rubric a passport already displays does not move under
+   * anyone's feet.
+   *
+   * The ledger REPLACES rather than supplements the rate, because once bookings
+   * are live the rate is actively wrong: it counts CUSTOMER cancellations
+   * against the worker, and an expiry or a no-show now cancels the job, so
+   * every ledger penalty would be counted a second time as a cancellation. It
+   * also has no time decay, which makes a bad week permanent.
+   */
+  let reliabilityRecord: number;
+  if (typeof reliability === 'number') {
+    reliabilityRecord = reliabilityRecordFor(reliability);
+  } else {
+    const cancelledDenominator = jobs.completed + jobs.cancelled;
+    const cancellationRate = cancelledDenominator === 0
+      ? 0
+      : jobs.cancelled / cancelledDenominator;
+    reliabilityRecord = -Math.round(Math.min(10, cancellationRate * 10));
+  }
   const skillingEngagement = 0;
 
   const components = {
@@ -68,7 +101,20 @@ export function calculateTrustScoreFromEvidence(
  */
 export async function calculateTrustEvidence(userId: string): Promise<TrustEvidence> {
   const [jobs, reviews] = await Promise.all([countJobOutcomes(userId), summariseFor(userId)]);
-  return { jobs, reviews, score: calculateTrustScoreFromEvidence(jobs, reviews) };
+
+  /**
+   * The ledger is read ONLY when the feature is on. With the flag off nothing
+   * queries reliability_events at all, so a deployment that never turned this
+   * on does not pay for a collection it does not use - and, more to the point,
+   * cannot have its published trust score changed by rows it is not reading.
+   */
+  let reliability: number | undefined;
+  if (bookingsEnabled()) {
+    const now = nowMs();
+    reliability = computeReliability(await eventsFor(userId), now);
+  }
+
+  return { jobs, reviews, score: calculateTrustScoreFromEvidence(jobs, reviews, reliability) };
 }
 
 export async function calculateTrustScore(userId: string): Promise<TrustScore> {

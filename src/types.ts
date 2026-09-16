@@ -437,3 +437,255 @@ interface AssistantProcessBase {
 export type AssistantProcessResponse =
   | (AssistantProcessBase & { source: 'gemini'; fallbackReason?: never })
   | (AssistantProcessBase & { source: 'fallback'; fallbackReason: AssistantFallbackReason });
+
+// ===========================================================================
+// BEGIN: Booking commitments & reliability (added — KAARIGAR_RELIABILITY_FEATURE.md §3)
+// ===========================================================================
+//
+// APPEND-ONLY ADDITION. Nothing above this marker was renamed, reordered or
+// modified. Every type below is new, so no existing import changes meaning.
+//
+// CONVENTIONS THIS BLOCK FOLLOWS, taken from the code rather than the brief:
+//
+//   ids         plain `string`, a UUIDv7 from lib/ids.ts, used as the Mongo
+//               `_id` and mapped back to `id` on read. There is no ObjectId
+//               anywhere in this codebase and this block does not introduce one.
+//   timestamps  ISO 8601 strings on the wire and in the contract, exactly as
+//               JobStateTransition.at, Review.createdAt and KamaiEntry.createdAt
+//               already are. How the server stores them (Date vs string) is a
+//               Phase 2 decision and does not change these field types.
+//   ids of      customerId / kaarigarId are USER ids (the `uid` on AuthUser),
+//   the parties the same anchor JobItem.customerId and JobItem.kaarigarId use —
+//               NOT profile ids and not passport handles.
+//
+// RELATIONSHIP TO JobItem — READ THIS BEFORE WIRING THE TWO TOGETHER.
+//
+// A Booking is NOT a JobItem and BookingStatus is NOT JobState. They share three
+// spellings (REQUESTED, ACCEPTED, COMPLETED) and mean different things by them:
+// JobState tracks the PRICE conversation (quote, counter, agree, settle),
+// BookingStatus tracks the APPOINTMENT (commit to a slot, turn up, be late).
+// A job can be ACCEPTED-the-price and NO_SHOW-the-visit at the same time, which
+// is the whole reason the reliability feature exists and the reason these are
+// two unions rather than ten more entries in one.
+//
+// Nothing here is linked to JobItem yet, deliberately. Whether a Booking gains a
+// `jobId`, or JobItem gains a `bookingId`, or they stay disjoint for the demo,
+// is an open contract question for Phase 2 — and answering it by widening
+// JobItem would be an edit to a frozen type, not an addition.
+
+/**
+ * The appointment lifecycle. See §9.4 of KAARIGAR_RELIABILITY_FEATURE.md for
+ * the authoritative job-edge × booking-edge × event table.
+ *
+ * RESPONDED AND COMMITTED ARE DELIBERATELY NOT CALLED "ACCEPTED". The brief's
+ * §1 had one ACCEPTED covering both "the kaarigar took the job on" and "the
+ * kaarigar named a time", which are separated here by the whole price
+ * negotiation. Worse, either reading collides with JobState.ACCEPTED, which
+ * means something third again - the CUSTOMER agreed the price. Three distinct
+ * facts sharing one word on a screen about money is a bug waiting to be filed,
+ * so they get three names:
+ *
+ *   RESPONDED  the kaarigar replied inside acceptBy - they quoted. The price
+ *              conversation may still be running (quote, counter, agree) and
+ *              there is NO slot yet, so no arrival deadline can exist.
+ *   COMMITTED  a slot is chosen. arriveBy and the check-in OTP are set, and
+ *              the lateness clocks start here and nowhere else.
+ *
+ * Only REQUESTED and COMPLETED are now spelled the same as a JobState, and both
+ * still mean something different. Do not assign one union to the other.
+ */
+export type BookingStatus =
+  | 'REQUESTED'
+  | 'RESPONDED'
+  | 'COMMITTED'
+  | 'ARRIVED'
+  | 'COMPLETED'
+  | 'LATE'
+  | 'NO_SHOW'
+  | 'EXPIRED'
+  | 'DECLINED'
+  | 'CANCELLED_BY_CUSTOMER'
+  | 'CANCELLED_BY_KAARIGAR';
+
+/**
+ * One entry in a booking's immutable transition log, appended on every move.
+ *
+ * `by` NAMES A ROLE, NOT A USER — unlike JobStateTransition.by, which is a user
+ * id. Two reasons, and the divergence is intentional rather than an oversight:
+ * a booking already carries customerId and kaarigarId, so the role identifies
+ * the actor unambiguously; and the sweeper has no user id to write, which is
+ * what 'system' is for. `from` is null only for the entry that creates the
+ * booking, which has no previous state.
+ */
+export interface BookingHistoryEntry {
+  from: BookingStatus | null;
+  to: BookingStatus;
+  by: 'customer' | 'kaarigar' | 'system';
+  at: string;                       // ISO 8601
+  note?: string;
+}
+
+/**
+ * A kaarigar's proposal of a new slot, pending the customer's answer.
+ *
+ * A PROPOSAL, NEVER AN AGREEMENT — the same distinction JobItem draws between
+ * counterPrice and agreedPrice. It does not become the booking's slot until the
+ * customer approves it, at which point slotStart/slotEnd are rewritten and this
+ * field is cleared.
+ */
+export interface RescheduleRequest {
+  slotStart: string;                // ISO 8601
+  slotEnd: string;                  // ISO 8601
+  reason?: string;
+  requestedAt: string;              // ISO 8601
+}
+
+/**
+ * A commitment to attend, and the record of whether it was kept.
+ *
+ * THIS IS THE CLIENT-FACING SHAPE. The stored document additionally carries
+ * otpHash, otpAttempts and otpLockedUntil, which are deliberately absent from
+ * this interface: the arrival code proves the kaarigar reached the customer, so
+ * a kaarigar who can read it — or read its hash — proves nothing at all. The
+ * omission is the contract. A server-side document type that extends this with
+ * those three fields belongs in the data layer, never here, so that no client
+ * module can name them.
+ *
+ * DEADLINES ARE SERVER-COMPUTED, never sent by a client: acceptBy from the
+ * accept window at creation, arriveBy from slotEnd plus the arrival grace.
+ */
+export interface Booking {
+  id: string;                       // server-generated UUIDv7 (lib/ids.ts)
+  /**
+   * The JobItem this booking is the appointment for.
+   *
+   * ONE REQUEST FLOW, TWO RECORDS. There is no second "request a kaarigar"
+   * button: a customer's request creates a JobItem exactly as it does today,
+   * and a Booking alongside it holding the time commitment the job has no
+   * fields for. The job owns the PRICE conversation, the booking owns the
+   * APPOINTMENT, and this is the only link between them.
+   *
+   * The link is declared on THIS side because Booking is new. Putting a
+   * `bookingId` on JobItem would edit a frozen type; this does not.
+   *
+   * Optional because a worker's own job - no customerId, nobody to commit a
+   * slot to - has no booking at all, and because a booking is still a coherent
+   * record if the job link is ever dropped. In the flow shipped here it is
+   * always set.
+   */
+  jobId?: string;
+  customerId: string;               // AuthUser.uid of the customer
+  kaarigarId: string;               // AuthUser.uid of the kaarigar
+  jobTitle: string;
+  description?: string;
+  address?: string;
+  urgent: boolean;                  // selects the accept window, nothing else
+  status: BookingStatus;
+  createdAt: string;                // ISO 8601
+  /**
+   * First-response deadline. REQUESTED past this becomes EXPIRED.
+   *
+   * NEVER MUTATED. It stops applying because the booking leaves REQUESTED, not
+   * because the field changes - so it survives as the record of what the
+   * kaarigar was actually given.
+   */
+  acceptBy: string;                 // ISO 8601
+  /**
+   * Slot-commitment deadline. RESPONDED past this becomes EXPIRED.
+   *
+   * ARMED ONLY WHEN THE PRICE IS AGREED - when the linked job reaches
+   * JobState.ACCEPTED - and absent until then. That absence is the whole
+   * mechanism by which no deadline runs while the ball is in the customer's
+   * court: a quoted or countered job has no scheduleBy, so the sweeper's
+   * { status: 'RESPONDED', scheduleBy: { $lte: now } } cannot match it, with
+   * no special case anywhere.
+   *
+   * Expiring here writes LATE_CANCEL, not EXPIRED: the kaarigar took the work
+   * on and then let an agreed job rot, which is a broken commitment rather than
+   * an unanswered request. That also keeps the ledger's unique
+   * { bookingId, type } key usable even though both routes end in EXPIRED.
+   */
+  scheduleBy?: string;              // ISO 8601
+  slotStart?: string;               // ISO 8601 — set at COMMITTED
+  slotEnd?: string;                 // ISO 8601 — set at COMMITTED
+  /**
+   * slotEnd + ARRIVAL_GRACE_MIN. Set at COMMITTED and nowhere else.
+   *
+   * MUST BE ABSENT, NEVER null, when there is no slot. BSON orders null below
+   * Date, so `{ arriveBy: { $lte: now } }` matches a null - a booking with a
+   * nulled arriveBy would be swept LATE the instant it was written. The sweeper
+   * filters on status COMMITTED as well, so correctness does not rest on this,
+   * but do not weaken it: it is the second lock on the same door.
+   */
+  arriveBy?: string;                // ISO 8601
+  arrivedAt?: string;               // ISO 8601 — set by a successful check-in
+  completedAt?: string;             // ISO 8601
+  /**
+   * Reschedule ATTEMPTS used, incremented when the kaarigar asks - not when the
+   * customer agrees. A proposal the customer turned down still moved their day
+   * around, and counting only approvals would let a worker re-ask until one
+   * stuck, which is the behaviour the cap exists to stop.
+   */
+  rescheduleCount: number;
+  pendingReschedule?: RescheduleRequest;
+  history: BookingHistoryEntry[];
+}
+
+/**
+ * The append-only reliability ledger's event kinds.
+ *
+ * EXPIRED carries zero scoring weight and is recorded anyway, because it is the
+ * evidence behind responseRate. An event that changes no score is still a fact
+ * about what happened.
+ */
+export type ReliabilityEventType =
+  | 'ON_TIME'
+  | 'LATE'
+  | 'NO_SHOW'
+  | 'LATE_CANCEL'
+  | 'EXPIRED';
+
+/**
+ * The cached, derived reputation figures for one kaarigar.
+ *
+ * DERIVED, NOT AUTHORED. Every field is recomputed from the reviews collection
+ * and the reliability ledger; none of it is writable by the worker it describes,
+ * which is the same rule TrustScore already follows.
+ *
+ * `reliability` and `responseRate` are FRACTIONS IN 0..1. `avgStars` is 1..5.
+ *
+ * THERE IS ONE PUBLIC SCORE AND IT IS TrustScore, the 0..100 rubric above.
+ * This interface supplies the evidence behind it: `reliability` is what the
+ * ledger feeds into TrustScoreComponents.reliabilityRecord, and the on-time /
+ * late / no-show counts and response rate are shown beside the rubric as their
+ * own line. None of them is a competing headline number.
+ */
+export interface WorkerStats {
+  avgStars: number;                 // 1..5
+  reviewCount: number;
+  reliability: number;              // 0..1
+  /**
+   * @deprecated Not computed and not displayed. Kept only because §3 of the
+   * brief names it, so its absence would read as an omission rather than a
+   * decision.
+   *
+   * This was the 0.6·stars + 0.4·reliability blend, on a 0..1 scale. It is not
+   * used: the passport and /p/:handle already publish TrustScore.value on a
+   * 0..100 scale with six named components, and a second number also called a
+   * trust score - differently scaled, differently derived - is a question a
+   * judge would be right to ask and nobody could answer well. Reliability
+   * reaches the published score through reliabilityRecord instead.
+   *
+   * Do not populate this. Read TrustScore.value.
+   */
+  trustScore: number;               // 0..1 — unused; see above
+  responseRate: number;             // 0..1, over the last 90 days
+  onTime: number;
+  late: number;
+  noShow: number;
+  updatedAt: string;                // ISO 8601
+}
+
+// ===========================================================================
+// END: Booking commitments & reliability
+// ===========================================================================

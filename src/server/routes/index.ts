@@ -12,6 +12,8 @@ import { pricingRouter } from './pricing';
 import { reputationRouter } from './reputation';
 import { publicRouter } from './public';
 import { kaarigarsRouter, customerRouter } from './customer';
+import { bookingsRouter } from './bookings';
+import { workersRouter } from './workers';
 import { requireAuth, requireRole } from '../middleware/auth';
 
 /**
@@ -40,6 +42,24 @@ export function registerRoutes(app: Express): void {
   app.use('/api/reviews/link', requireAuth, requireRole('kaarigar'));
   app.use('/api/customer', requireAuth, requireRole('customer'));
 
+  /**
+   * DELIBERATE DEVIATION FROM THE RULE ABOVE: requireAuth, but NO requireRole.
+   *
+   * Every other prefix here belongs to exactly one actor, so one role gate at
+   * the mount states the rule once and no handler can forget it. /api/bookings
+   * is the first prefix that genuinely serves BOTH - a booking is an
+   * appointment between two people, and each of them needs a different subset
+   * of it. A mount-level gate could only be the union of both roles, which
+   * would gate nothing while looking like it gated something.
+   *
+   * So the role checks live on each handler in routes/bookings.ts, alongside a
+   * PARTICIPATION check that a role gate could never express: being a customer
+   * does not entitle you to somebody else's arrival code. If you add a route
+   * under this prefix, it inherits authentication and NOTHING ELSE - state its
+   * own role and participation rules, or it has none.
+   */
+  app.use('/api/bookings', requireAuth);
+
   // Tier 3 service boundaries (Architecture section 5)
   app.use('/api/assistant', assistantRouter);   // A - voice processing
   app.use('/api/tts', ttsRouter);               // A - voice output
@@ -56,6 +76,18 @@ export function registerRoutes(app: Express): void {
   // browsed, /api/customer is the browser's own stuff.
   app.use('/api/kaarigars', kaarigarsRouter);   // A - customer browse
   app.use('/api/customer', customerRouter);     // A - customer requests
+
+  // Booking commitments and reliability. Both mounted ABOVE the /api JSON 404
+  // below, or they would never be reached.
+  app.use('/api/bookings', bookingsRouter);     // A - appointments, both roles
+
+  /**
+   * UNAUTHENTICATED, like publicRouter and for the same reason: this backs the
+   * QR code on a worker's card and the public passport page, and a customer
+   * deciding whether to trust someone has no account yet. It publishes counts
+   * and ratios only - never a field from PUBLIC_PROJECTION's exclusion list.
+   */
+  app.use('/api/workers', workersRouter);       // A - public reliability stats
 
   // Any /api/* path that reached here matched no router above. Answer it
   // honestly with JSON.

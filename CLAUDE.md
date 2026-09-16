@@ -242,6 +242,100 @@ the test, because this run's database is empty — the seed script's six
 kaarigars are not there. Their ratings are chosen so area ranking must
 BEAT rating to pass.
 
+## Booking commitments & reliability
+`BOOKINGS_ENABLED` is the master switch and DEFAULTS TO FALSE. Off must stay
+byte-for-byte the pre-feature behaviour: no booking created, no slot or arrival
+code required, no event written, `/api/bookings` and `/api/workers/:handle/stats`
+answer 404, and `trustScore` reads its original cancellation-rate source. Check
+it with `bookingsEnabled()`, never `process.env` directly.
+
+THE LEGACY RULE HOLDS IN BOTH FLAG STATES. A job with no linked booking keeps
+today's one-tap path forever — the worker's own jobs, and everything seeded or
+created before the flag went on. `bookingForJob()` returning null is the normal
+legacy case, never an error and never a reason to refuse. Only customer-linked
+jobs created while the flag is on get a booking.
+
+RESPONDED IS NOT ACCEPTED. `BookingStatus` deliberately has no `ACCEPTED`,
+because three different facts were competing for the word:
+- `JobState.ACCEPTED` — the CUSTOMER agreed the price.
+- `BookingStatus.RESPONDED` — the kaarigar replied inside `acceptBy` (they
+  quoted). The haggle may still be running; there is no slot yet.
+- `BookingStatus.COMMITTED` — a slot exists. `arriveBy` and the arrival code are
+  set, and the lateness clocks start HERE and nowhere else.
+Only `REQUESTED` and `COMPLETED` are spelled the same in both unions, and both
+still mean different things. `KAARIGAR_RELIABILITY_FEATURE.md` §9.4 is the
+authoritative mapping table.
+
+THREE DEADLINES, AND WHICH ONE IS ARMED IS THE WHOLE DESIGN. `acceptBy` runs
+only while `REQUESTED`. `scheduleBy` is armed ONLY when the customer accepts the
+price, so no clock runs while the ball is in the customer's court — a quoted or
+countered booking simply has no `scheduleBy` for the filter to match. `arriveBy`
+exists only from `COMMITTED`. There is no special case anywhere that says
+"skip this one"; absence of the field IS the rule.
+
+`arriveBy` and `scheduleBy` are `$unset`, NEVER set to `null`. BSON orders null
+below Date, so `{ arriveBy: { $lte: now } }` matches a null and the booking is
+swept LATE the instant it is written. The sweep filters on status too, so
+correctness does not rest on this — it is the second lock on the same door.
+
+THE ARRIVAL CODE NEVER APPEARS IN A KAARIGAR-FACING RESPONSE. A kaarigar who can
+read the code or its hash can check in from the other side of the city, and
+`ON_TIME` is then worth nothing. `otpHash` / `otpAttempts` / `otpLockedUntil`
+exist only on `BookingDoc` in `data/bookings.ts`; the contract `Booking` cannot
+express them. `shapeBooking()` is the only way to turn a stored booking into a
+client-facing one and it names each field rather than spreading-and-deleting, so
+a new stored field is invisible until someone adds a line. The plain code is
+returned by exactly two places: `commitSlot()` once (the worker's route drops it
+on the floor) and `GET /api/bookings/:id/otp`, customer-only and
+participant-checked.
+
+ROUTES NEVER SET A BOOKING `status`. They call `bookings/transitions.ts`. Every
+edge there is one conditional `findOneAndUpdate` naming the expected status, and
+penalties go through `appendEvent`, which is idempotent on the unique
+`{ bookingId, type }` index. A route that writes a status directly can skip a
+deadline, a penalty or the job side-effect, and none of those omissions looks
+wrong in review.
+
+`/api/bookings` IS THE ONE PREFIX WITH NO MOUNT-LEVEL ROLE GATE, because it
+serves both roles — a union gate would gate nothing. `requireAuth` is at the
+mount; role AND participation checks live on each handler. A route added under
+that prefix inherits authentication and nothing else.
+
+The booking moves BEFORE the job on a worker transition, because the booking
+carries the gates. Two collections mean no transaction; the failure mode is a
+booking one step ahead of its job, which both screens render as "waiting". The
+reverse — a job ahead of its booking — would be a job claiming a commitment
+nobody made, so when only one write can win it must not be the job.
+
+Deadlines are DATA, never timers. Render free spins the container down, so a
+`setTimeout` holding a deadline dies with the process. They are applied on read
+(`applyOverdue` on both list routes, `applyOverdueToOne` before any decision)
+and by the external cron. `bookingConfig()` and `bookingsEnabled()` read
+`process.env` on every call so the LATE demo and the tests can change windows
+without a restart.
+
+A WRONG ARRIVAL CODE IS 400, NEVER 401. `request()` in `lib/api.ts` treats
+every 401 as an expired session and signs the user out, so a 401 there threw a
+kaarigar back to the login screen over one mistyped digit. Any new refusal on
+an authenticated route must not use 401 for anything but a dead session.
+
+JobsView branches on `bookingsByJob[job.id]`. `undefined` is the legacy card,
+untouched. With a booking, `ACCEPTED` shows the slot picker instead of the
+one-tap "Schedule job", and `SCHEDULED` shows the arrival-code box instead of
+"Start work" — a bare advance on either edge is a guaranteed 400. Refusals are
+rendered from the error CODE into the copy tables, never the server's English
+message. Panels close AFTER the transition and the trust-score refresh, so a
+browser check must wait for `state: 'hidden'`, not assert instantly.
+
+### Verifying booking changes
+    npm test                                   # transitions + scoring, injected clock
+    npx tsx scripts/test-booking-routes.ts     # HTTP wiring, flag ON
+    npx tsx scripts/test-booking-ui.ts         # JobsView in Edge, flag ON
+Both use uniquely named throwaway databases. Run the existing
+`scripts/test-customer-demo.ts` and `npm run test:regressions` too — with the
+flag off they must pass completely unchanged, and that is the check that the
+feature is really additive.
+
 ## Known gaps (post-SIH, not now)
 - A counter-offer names a figure but carries no reason and no
   expiry, and the kaarigar has no one-tap "accept their number" —
