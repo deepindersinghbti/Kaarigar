@@ -80,6 +80,20 @@ services:
         sync: false
       - key: DEMO_CUSTOMER_OTP_CODE
         sync: false
+      # Booking commitments and reliability. See docs/SWEEPER.md.
+      #
+      # BOOKINGS_ENABLED is the master switch and defaults to off: leave it unset
+      # (or "false") until the rehearsal passes with it on. CHECKIN_OTP_SECRET
+      # keys the customer's 4-digit arrival code and is deliberately NOT
+      # JWT_SECRET. SWEEP_SECRET is what cron-job.org sends to
+      # POST /api/internal/sweep. None is VITE_-prefixed, so changing any of them
+      # needs a restart, not a rebuild.
+      - key: BOOKINGS_ENABLED
+        sync: false
+      - key: CHECKIN_OTP_SECRET
+        sync: false
+      - key: SWEEP_SECRET
+        sync: false
 
       # Firebase web config. Not secret - these ship in the browser bundle by
       # design - but Vite inlines them at BUILD time, so they must be present
