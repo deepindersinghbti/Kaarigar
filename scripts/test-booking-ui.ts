@@ -326,6 +326,70 @@ try {
     const otpBoxValue = await card(jobLate).locator(`#job-card-${jobLate}`).count();
     check('no card renders a pre-filled code', otpBoxValue >= 0 && !new RegExp(`value="${realOtp}"`).test(html));
 
+    // ---- The passport: the reliability card beside the rubric ----
+    console.log('\n--- Reliability on the passport ---\n');
+    /*
+      By now the ledger holds exactly two scored events for this worker: ON_TIME
+      from the code check-in above, and LATE from the forced overdue booking.
+      Three of the four requests were answered (quoted) and none expired, so
+      the response rate must read 100%.
+    */
+    await w.goto(`${base}/passport`, { waitUntil: 'networkidle' });
+    await w.bringToFront();
+    await w.waitForSelector('#passport-reliability', { timeout: 20_000 });
+    const rel = w.locator('#passport-reliability');
+    check('the passport shows a reliability card', await rel.isVisible());
+    check('the reliability card sits under the trust rubric, not inside it',
+      (await w.locator('#passport-trust-score #passport-reliability').count()) === 0);
+    check('the passport shows the on-time count', (await w.locator('#passport-reliability-ontime').innerText()).trim() === '1');
+    check('the passport shows the late count', (await w.locator('#passport-reliability-late').innerText()).trim() === '1');
+    check('the passport shows no-shows as zero', (await w.locator('#passport-reliability-noshow').innerText()).trim() === '0');
+    check('with a record, a percentage is shown', /^\d{1,3}%$/.test((await w.locator('#passport-reliability-percent').innerText()).trim()));
+    check('with a record, the no-visits line is absent', (await w.locator('#passport-reliability-empty').count()) === 0);
+    check('the response rate counts answered requests', (await w.locator('#passport-response-rate').innerText()).includes('100%'));
+
+    /*
+      OPT-IN SCREENSHOTS, for reviewing the look rather than the logic. Unset,
+      this does nothing. Set SCREENSHOT_DIR to a folder and the run leaves PNGs
+      of the new passport card and the public-page block behind.
+    */
+    const shots = process.env.SCREENSHOT_DIR;
+    if (shots) {
+      await w.locator('#passport-trust-score').screenshot({ path: `${shots}/passport-trust.png` });
+      await rel.screenshot({ path: `${shots}/passport-reliability.png` });
+      const pub = await context.newPage();
+      await pub.goto(`${base}/p/${handle}`, { waitUntil: 'networkidle' });
+      await pub.locator('#public-reliability').screenshot({ path: `${shots}/public-reliability.png` });
+      await pub.screenshot({ path: `${shots}/public-page.png`, fullPage: true });
+      await pub.close();
+    }
+
+    // The public page a QR code opens: same numbers, no login, no private fields.
+    console.log('\n--- Reliability on the public QR page ---\n');
+    const publicPage = await fetch(`${base}/p/${handle}`);
+    const publicHtml = await publicPage.text();
+    check('the public passport page loads', publicPage.status === 200);
+    check('the public page shows the reliability block', publicHtml.includes('id="public-reliability"'));
+    check('the public page shows the on-time record', publicHtml.includes('On-time record'));
+    check('the public page shows the response rate', publicHtml.includes('Replies to 100% of requests'));
+    check('the public page still leaks no phone number', !publicHtml.includes('9876543210'));
+    // Not /otp/i: the page already says "phone OTP" about login. What must never
+    // appear is the stored hash field or a code value.
+    check('the public page carries no arrival-code hash', !/otphash/i.test(publicHtml));
+
+    // ---- Flag OFF: the card and the block must simply not exist ----
+    console.log('\n--- With the flag off, both disappear ---\n');
+    process.env.BOOKINGS_ENABLED = 'false';
+    await w.goto(`${base}/passport`, { waitUntil: 'networkidle' });
+    await w.bringToFront();
+    await w.waitForSelector('#passport-trust-score', { timeout: 20_000 });
+    check('flag off: the trust rubric still renders', await w.locator('#passport-trust-score').isVisible());
+    check('flag off: no reliability card on the passport', (await w.locator('#passport-reliability').count()) === 0);
+    const publicOff = await (await fetch(`${base}/p/${handle}`)).text();
+    check('flag off: no reliability block on the public page', !publicOff.includes('public-reliability'));
+    check('flag off: the public page still shows the trust rubric', publicOff.includes('Trust evidence'));
+    process.env.BOOKINGS_ENABLED = 'true';
+
     check('the worker rehearsal produced no uncaught page errors', pageErrors.length === 0);
     if (pageErrors.length > 0) console.error('  page errors:', pageErrors);
   }

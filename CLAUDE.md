@@ -327,10 +327,19 @@ rendered from the error CODE into the copy tables, never the server's English
 message. Panels close AFTER the transition and the trust-score refresh, so a
 browser check must wait for `state: 'hidden'`, not assert instantly.
 
+NO RELIABILITY PERCENTAGE WITHOUT A RECORD. A worker with no history sits at
+the 0.8 prior and a response rate of 1 — deliberately, so nobody is scored as
+bad for being new — but printed, that reads "80% reliable" about someone never
+booked. `GET /api/workers/:handle/stats` returns `recordedEvents` and
+`requestCount` beside `stats`; the passport card and the `/p/:handle` block show
+a percentage only when the matching count is above zero, and words otherwise.
+Both surfaces render nothing at all with the flag off.
+
 ### Verifying booking changes
     npm test                                   # transitions + scoring, injected clock
     npx tsx scripts/test-booking-routes.ts     # HTTP wiring, flag ON
-    npx tsx scripts/test-booking-ui.ts         # JobsView in Edge, flag ON
+    npx tsx scripts/test-booking-ui.ts         # JobsView + passport in Edge, flag ON
+                                               # SCREENSHOT_DIR=<dir> saves PNGs of the new cards
 Both use uniquely named throwaway databases. Run the existing
 `scripts/test-customer-demo.ts` and `npm run test:regressions` too — with the
 flag off they must pass completely unchanged, and that is the check that the

@@ -303,6 +303,45 @@ try {
   const missing = await call('/api/workers/nobody-here/stats');
   check('an unknown handle is 404', missing.status === 404);
 
+  // The sample sizes that let a screen avoid printing the prior as a result.
+  check('stats report how many scored visits sit behind them', stats.body?.recordedEvents === 1);
+  check('stats report how many requests the rate is based on', stats.body?.requestCount === 1);
+
+  /*
+    A worker with NO history. Reliability is still the 0.8 prior and the
+    response rate is 1 - both deliberate - so the evidence counts must be zero
+    and the public page must say "no visits yet" rather than "80%".
+  */
+  const freshHandle = 'fresh-kaarigar-test';
+  await getDb().collection(PROFILES).insertOne({
+    _id: uuidv7() as never,
+    userId: uuidv7(),
+    passportHandle: freshHandle,
+    name: 'Fresh Worker',
+    trade: 'Plumber',
+    experienceYears: 1,
+    location: 'Mohali',
+    phone: '+919812345678',
+    skills: [],
+    certifications: [],
+    rating: 0,
+    totalJobsCount: 0,
+    totalEarnings: 0,
+    verifiedStatus: 'unverified',
+    joinedDate: new Date().toISOString(),
+  });
+  const fresh = await call(`/api/workers/${freshHandle}/stats`);
+  check('a new worker has stats', fresh.status === 200);
+  check('a new worker has no recorded visits', fresh.body?.recordedEvents === 0);
+  check('a new worker has no requests to rate', fresh.body?.requestCount === 0);
+  check('a new worker sits at the 0.8 prior underneath', Math.abs((fresh.body?.stats?.reliability ?? 0) - 0.8) < 1e-9);
+
+  const freshPage = await fetch(`${base}/p/${freshHandle}`).then((r) => r.text());
+  check('the public page for a new worker shows the reliability block', freshPage.includes('id="public-reliability"'));
+  check('and says there are no visits yet', freshPage.includes('No booked visits recorded yet.'));
+  check('and prints no percentage for them', !freshPage.includes('On-time record'));
+  check('and no response rate either', freshPage.includes('No requests yet.') && !/Replies to \d+%/.test(freshPage));
+
   // =========================================================================
   console.log('\n--- Reschedule and report, over HTTP ---\n');
   // =========================================================================

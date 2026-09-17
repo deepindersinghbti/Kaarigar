@@ -181,6 +181,40 @@ export async function responseCountsFor(
  * directory will need by then.
  */
 export async function statsFor(kaarigarId: string, now = nowMs()): Promise<WorkerStats> {
+  return (await reliabilitySummaryFor(kaarigarId, now)).stats;
+}
+
+/**
+ * WorkerStats plus the two sample sizes a screen needs to render it honestly.
+ *
+ * WHY THE SAMPLE SIZES TRAVEL WITH THE NUMBERS. Both ratios have a deliberate
+ * floor for a worker with no history - reliability starts at the 0.8 prior, and
+ * responseRate is 1 when there is nothing to judge - so that nobody is scored
+ * as bad for being new. But printed as-is, that same floor reads "80% reliable"
+ * and "replies to 100% of requests" about someone who has never been booked,
+ * which is a claim the evidence does not support in the other direction.
+ *
+ * So the passport and the public page show a percentage ONLY when there is a
+ * record behind it, and say "no visits yet" otherwise. The counts are not in
+ * WorkerStats because they describe the sample rather than the worker, and the
+ * contract type should stay a description of the worker.
+ *
+ *   recordedEvents  every scored ledger row (ON_TIME, LATE, NO_SHOW,
+ *                   LATE_CANCEL). EXPIRED is excluded: it carries no weight, so
+ *                   it cannot have moved reliability off the prior.
+ *   requestCount    requests the kaarigar could have answered in the last 90
+ *                   days - the responseRate denominator.
+ */
+export interface ReliabilitySummary {
+  stats: WorkerStats;
+  recordedEvents: number;
+  requestCount: number;
+}
+
+export async function reliabilitySummaryFor(
+  kaarigarId: string,
+  now = nowMs()
+): Promise<ReliabilitySummary> {
   const [events, counts, responses, reviews] = await Promise.all([
     eventsFor(kaarigarId),
     countsFor(kaarigarId),
@@ -188,7 +222,7 @@ export async function statsFor(kaarigarId: string, now = nowMs()): Promise<Worke
     summariseFor(kaarigarId),
   ]);
 
-  return {
+  const stats: WorkerStats = {
     // summariseFor returns null rather than 0 when there are no reviews, on the
     // principle that a 0-star worker and an unrated one are different claims.
     // reviewCount is what the UI branches on; avgStars is not meaningful at 0.
@@ -203,5 +237,11 @@ export async function statsFor(kaarigarId: string, now = nowMs()): Promise<Worke
     late: counts.late,
     noShow: counts.noShow,
     updatedAt: new Date(now).toISOString(),
+  };
+
+  return {
+    stats,
+    recordedEvents: counts.onTime + counts.late + counts.noShow + counts.lateCancel,
+    requestCount: responses.accepted + responses.declined + responses.expiredUnanswered,
   };
 }

@@ -1,6 +1,6 @@
 import { authHeader } from './authToken';
 import type { Area } from './areas';
-import type { Booking, JobItem, JobState, KamaiEntry, RateBand, WorkerProfile } from '../types';
+import type { Booking, JobItem, JobState, KamaiEntry, RateBand, WorkerProfile, WorkerStats } from '../types';
 
 /**
  * The extra fields a job transition may carry, all of them optional and each
@@ -190,6 +190,23 @@ export type CustomerJobItem = JobItem & {
   kaarigar?: { passportHandle: string; name: string; trade: string; phone?: string };
 };
 
+/**
+ * A kaarigar's public reliability figures, as GET /api/workers/:handle/stats
+ * returns them.
+ *
+ * DECLARED HERE, NOT IN types.ts, for the same reason as CustomerJobItem above:
+ * the two counts are part of this one response's envelope, not of the worker.
+ * They say how much evidence sits behind `stats`, which is what lets a screen
+ * print "no visits yet" instead of the 0.8 prior dressed up as "80% reliable".
+ */
+export interface WorkerReliability {
+  stats: WorkerStats;
+  /** Scored ledger rows. Zero means reliability is still just the prior. */
+  recordedEvents: number;
+  /** Answerable requests in the last 90 days. Zero means no response rate. */
+  requestCount: number;
+}
+
 export const api = {
   async getProfile(): Promise<WorkerProfile> {
     const body = await request<{ profile: WorkerProfile }>('/api/passport/me');
@@ -292,6 +309,24 @@ export const api = {
       return byJob;
     } catch (e) {
       if (e instanceof ApiError && e.status === 404) return {};
+      throw e;
+    }
+  },
+
+  /**
+   * Public reliability figures for a passport handle, or null when there are
+   * none to show.
+   *
+   * NULL ON 404, because 404 is what the route answers when BOOKINGS_ENABLED is
+   * off - and "the feature is off" must render as "no reliability section",
+   * never as an error banner on the passport. An unknown handle is 404 too, and
+   * means the same thing to the screen.
+   */
+  async getWorkerReliability(handle: string): Promise<WorkerReliability | null> {
+    try {
+      return await request<WorkerReliability>(`/api/workers/${encodeURIComponent(handle)}/stats`);
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 404) return null;
       throw e;
     }
   },

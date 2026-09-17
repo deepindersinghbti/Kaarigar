@@ -285,6 +285,22 @@ export interface PassportCopy {
   outOf100: string;
   trustRows: string[];
   benefits: Array<{ title: string; description: string }>;
+  /**
+   * The reliability line beside the trust rubric (KAARIGAR_RELIABILITY_FEATURE.md
+   * §9.1 D4). Rendered ONLY when the server has booking stats to give - with
+   * BOOKINGS_ENABLED off the stats route answers 404 and none of this appears.
+   */
+  reliability: {
+    title: string;
+    description: string;
+    /** Shown instead of a percentage when there is no recorded visit to judge. */
+    empty: string;
+    onTime: string;
+    late: string;
+    noShow: string;
+    responseRate: (percent: number) => string;
+    responseEmpty: string;
+  };
 }
 
 export interface ProfileCopy {
@@ -1211,14 +1227,44 @@ const assistantPa: AssistantCopy = {
 
 const passportHi: PassportCopy = {
   governmentAligned: 'सरकार और उद्योग के अनुरूप', subtitle: 'QR-सत्यापित कार्य पहचान पत्र • हर घर के लिए तुरंत भरोसा', addWorkVoice: 'काम जोड़ें (बोलकर)', nationalIdentity: 'राष्ट्रीय कारीगर पहचान', passportTitle: 'डिजिटल कारीगर पासपोर्ट', identityVerified: 'पहचान सत्यापित', verificationPending: 'सत्यापन बाकी', profileNotVerified: 'प्रोफ़ाइल सत्यापित नहीं', experience: 'अनुभव', years: 'साल', jobsDone: 'पूरे काम', rating: 'रेटिंग', skillsListed: 'कारीगर द्वारा बताए हुनर', evidenceBuilds: 'समय के साथ प्रमाण बनते हैं', credentialsListed: 'कारीगर द्वारा बताए प्रमाणपत्र', credentialLink: 'सरकारी प्रमाणपत्र लिंक', credentialStatus: 'स्थिति', notLinked: 'लिंक नहीं है', sandboxDemo: 'सैंडबॉक्स डेमो', credentialNotice: 'केवल डेमो मॉक स्थिति। यहां सरकारी जांच या प्रमाणपत्र सत्यापन नहीं किया जाता।', scanAlt: 'सार्वजनिक पासपोर्ट खोलने के लिए स्कैन करें', scanTitle: 'कार्य इतिहास सत्यापित करने के लिए स्कैन करें', scanDescription: 'बिल्डर, घर-मालिक और कंपनियों के लिए तुरंत डिजिटल प्रमाण।', joined: (date) => `सार्वजनिक पासपोर्ट • जुड़े ${date}`, linkCopied: 'लिंक कॉपी हुआ!', share: 'साझा करें', downloadId: 'आईडी डाउनलोड करें', downloadNotice: 'डिजिटल पासपोर्ट आईडी कार्ड PDF के रूप में डाउनलोड हुआ!', trustEvidence: 'भरोसे के प्रमाण', trustDescription: 'फोन OTP, पूरे किए काम और ग्राहक प्रतिक्रिया पर आधारित स्पष्ट पैमाना। अधिकृत सत्यापन जुड़ने तक हुनर और प्रमाणपत्र कारीगर द्वारा बताए गए हैं।', outOf100: '100 में से', trustRows: ['फोन पहचान', 'हुनर प्रमाणपत्र', 'काम से जुड़ा इतिहास', 'ग्राहक रेटिंग', 'विश्वसनीयता रिकॉर्ड', 'कौशल-प्रशिक्षण भागीदारी'], benefits: [{ title: 'साथ चलने वाला प्रमाण', description: 'पूरे काम और ग्राहक प्रतिक्रिया से एक पोर्टेबल रिकॉर्ड बनता है।' }, { title: 'आवाज़ से दर्ज काम', description: 'काम के बाद बोलकर काम और भुगतान का विवरण दर्ज करें।' }, { title: 'उचित दाम और रिकॉर्ड', description: 'स्पष्ट दाम-सीमा और लेजर भविष्य की वित्तीय मदद करते हैं।' }],
+  reliability: {
+    title: 'भरोसेमंदी',
+    description: 'बुक की गई विज़िट से अपने-आप तय होती है: समय पर पहुँचना, देर से पहुँचना, या न पहुँचना। पुरानी विज़िट कम गिनी जाती हैं।',
+    empty: 'अभी तक कोई बुक की गई विज़िट दर्ज नहीं है।',
+    onTime: 'समय पर',
+    late: 'देर से',
+    noShow: 'नहीं पहुँचे',
+    responseRate: (percent) => `${percent}% अनुरोधों का जवाब दिया`,
+    responseEmpty: 'अभी तक कोई अनुरोध नहीं।',
+  },
 };
 
 const passportEn: PassportCopy = {
   governmentAligned: 'Government & industry aligned', subtitle: 'QR-verified work identity card • Instant trust for every homeowner', addWorkVoice: 'Add work (by voice)', nationalIdentity: 'National Kaarigar identity', passportTitle: 'Digital Kaarigar Passport', identityVerified: 'Identity verified', verificationPending: 'Verification pending', profileNotVerified: 'Profile not verified', experience: 'Experience', years: 'years', jobsDone: 'Jobs done', rating: 'Rating', skillsListed: 'Skills listed by worker', evidenceBuilds: 'Evidence builds over time', credentialsListed: 'Credentials listed by worker', credentialLink: 'Government credential link', credentialStatus: 'Status', notLinked: 'Not linked', sandboxDemo: 'Sandbox demo', credentialNotice: 'Demo-only mock state. No live government lookup or certificate verification is performed here.', scanAlt: 'Scan to open the public passport', scanTitle: 'Scan to verify work history', scanDescription: 'Instant digital proof for builders, homeowners and companies.', joined: (date) => `Public passport • Joined ${date}`, linkCopied: 'Link copied!', share: 'Share', downloadId: 'Download ID', downloadNotice: 'Digital Passport ID card downloaded as PDF!', trustEvidence: 'Trust evidence', trustDescription: 'A transparent rubric from phone OTP, completed jobs and customer feedback. Skills and certificates are worker-entered until authorised verification is linked.', outOf100: 'out of 100', trustRows: ['Phone identity', 'Skill credentials', 'Job-linked work history', 'Customer ratings', 'Reliability record', 'Skilling engagement'], benefits: [{ title: 'Evidence that travels', description: 'Completed jobs and customer feedback build a portable record.' }, { title: 'Voice-logged work', description: 'Speak after a job to record work and payment details.' }, { title: 'Fair rates and records', description: 'Transparent bands and a structured ledger support future finance.' }],
+  reliability: {
+    title: 'Reliability',
+    description: 'Worked out automatically from booked visits: arriving on time, arriving late, or not arriving. Older visits count for less.',
+    empty: 'No booked visits recorded yet.',
+    onTime: 'On time',
+    late: 'Late',
+    noShow: 'Did not arrive',
+    responseRate: (percent) => `Replies to ${percent}% of requests`,
+    responseEmpty: 'No requests yet.',
+  },
 };
 
 const passportPa: PassportCopy = {
   governmentAligned: 'ਸਰਕਾਰ ਅਤੇ ਉਦਯੋਗ ਦੇ ਅਨੁਕੂਲ', subtitle: 'QR ਨਾਲ ਪੁਸ਼ਟੀ ਕੀਤਾ ਕੰਮ ਪਛਾਣ ਪੱਤਰ • ਹਰ ਘਰ ਲਈ ਤੁਰੰਤ ਭਰੋਸਾ', addWorkVoice: 'ਕੰਮ ਜੋੜੋ (ਬੋਲ ਕੇ)', nationalIdentity: 'ਰਾਸ਼ਟਰੀ ਕਾਰੀਗਰ ਪਛਾਣ', passportTitle: 'ਡਿਜ਼ਿਟਲ ਕਾਰੀਗਰ ਪਾਸਪੋਰਟ', identityVerified: 'ਪਛਾਣ ਦੀ ਪੁਸ਼ਟੀ ਹੋ ਗਈ', verificationPending: 'ਪੁਸ਼ਟੀ ਬਾਕੀ ਹੈ', profileNotVerified: 'ਪ੍ਰੋਫਾਈਲ ਦੀ ਪੁਸ਼ਟੀ ਨਹੀਂ ਹੋਈ', experience: 'ਤਜਰਬਾ', years: 'ਸਾਲ', jobsDone: 'ਪੂਰੇ ਕੰਮ', rating: 'ਰੇਟਿੰਗ', skillsListed: 'ਕਾਰੀਗਰ ਵੱਲੋਂ ਦੱਸੇ ਹੁਨਰ', evidenceBuilds: 'ਸਮੇਂ ਨਾਲ ਸਬੂਤ ਬਣਦੇ ਹਨ', credentialsListed: 'ਕਾਰੀਗਰ ਵੱਲੋਂ ਦੱਸੇ ਪ੍ਰਮਾਣਪੱਤਰ', credentialLink: 'ਸਰਕਾਰੀ ਪ੍ਰਮਾਣਪੱਤਰ ਲਿੰਕ', credentialStatus: 'ਸਥਿਤੀ', notLinked: 'ਲਿੰਕ ਨਹੀਂ ਹੈ', sandboxDemo: 'ਸੈਂਡਬਾਕਸ ਡੈਮੋ', credentialNotice: 'ਸਿਰਫ਼ ਡੈਮੋ ਮੌਕ ਸਥਿਤੀ। ਇੱਥੇ ਸਰਕਾਰੀ ਜਾਂਚ ਜਾਂ ਪ੍ਰਮਾਣਪੱਤਰ ਪੁਸ਼ਟੀ ਨਹੀਂ ਕੀਤੀ ਜਾਂਦੀ।', scanAlt: 'ਸਾਰਵਜਨਿਕ ਪਾਸਪੋਰਟ ਖੋਲ੍ਹਣ ਲਈ ਸਕੈਨ ਕਰੋ', scanTitle: 'ਕੰਮ ਦਾ ਇਤਿਹਾਸ ਪੁਸ਼ਟ ਕਰਨ ਲਈ ਸਕੈਨ ਕਰੋ', scanDescription: 'ਬਿਲਡਰਾਂ, ਘਰ ਮਾਲਕਾਂ ਅਤੇ ਕੰਪਨੀਆਂ ਲਈ ਤੁਰੰਤ ਡਿਜ਼ਿਟਲ ਸਬੂਤ।', joined: (date) => `ਸਾਰਵਜਨਿਕ ਪਾਸਪੋਰਟ • ਸ਼ਾਮਲ ਹੋਏ ${date}`, linkCopied: 'ਲਿੰਕ ਕਾਪੀ ਹੋ ਗਿਆ!', share: 'ਸਾਂਝਾ ਕਰੋ', downloadId: 'ਆਈਡੀ ਡਾਊਨਲੋਡ ਕਰੋ', downloadNotice: 'ਡਿਜ਼ਿਟਲ ਪਾਸਪੋਰਟ ਆਈਡੀ ਕਾਰਡ PDF ਵਜੋਂ ਡਾਊਨਲੋਡ ਹੋਇਆ!', trustEvidence: 'ਭਰੋਸੇ ਦੇ ਸਬੂਤ', trustDescription: 'ਫੋਨ OTP, ਪੂਰੇ ਹੋਏ ਕੰਮਾਂ ਅਤੇ ਗਾਹਕ ਫੀਡਬੈਕ ਤੋਂ ਬਣਿਆ ਸਪਸ਼ਟ ਪੈਮਾਨਾ। ਅਧਿਕਾਰਤ ਪੁਸ਼ਟੀ ਜੁੜਨ ਤੱਕ ਹੁਨਰ ਅਤੇ ਸਰਟੀਫਿਕੇਟ ਕਾਰੀਗਰ ਵੱਲੋਂ ਦੱਸੇ ਗਏ ਹਨ।', outOf100: '100 ਵਿੱਚੋਂ', trustRows: ['ਫੋਨ ਪਛਾਣ', 'ਹੁਨਰ ਪ੍ਰਮਾਣਪੱਤਰ', 'ਕੰਮ ਨਾਲ ਜੁੜਿਆ ਇਤਿਹਾਸ', 'ਗਾਹਕ ਰੇਟਿੰਗ', 'ਭਰੋਸੇਯੋਗਤਾ ਰਿਕਾਰਡ', 'ਹੁਨਰ-ਸਿਖਲਾਈ ਭਾਗੀਦਾਰੀ'], benefits: [{ title: 'ਨਾਲ ਚੱਲਣ ਵਾਲਾ ਸਬੂਤ', description: 'ਪੂਰੇ ਕੰਮ ਅਤੇ ਗਾਹਕ ਫੀਡਬੈਕ ਇੱਕ ਪੋਰਟੇਬਲ ਰਿਕਾਰਡ ਬਣਾਉਂਦੇ ਹਨ।' }, { title: 'ਆਵਾਜ਼ ਨਾਲ ਦਰਜ ਕੰਮ', description: 'ਕੰਮ ਤੋਂ ਬਾਅਦ ਬੋਲ ਕੇ ਕੰਮ ਅਤੇ ਭੁਗਤਾਨ ਦਾ ਵੇਰਵਾ ਦਰਜ ਕਰੋ।' }, { title: 'ਸਹੀ ਰੇਟ ਅਤੇ ਰਿਕਾਰਡ', description: 'ਸਪਸ਼ਟ ਰੇਟ-ਬੈਂਡ ਅਤੇ ਲੇਜਰ ਭਵਿੱਖੀ ਵਿੱਤੀ ਮਦਦ ਕਰਦੇ ਹਨ।' }],
+  reliability: {
+    title: 'ਭਰੋਸੇਯੋਗਤਾ',
+    description: 'ਬੁੱਕ ਕੀਤੀਆਂ ਵਿਜ਼ਿਟਾਂ ਤੋਂ ਆਪਣੇ-ਆਪ ਤੈਅ ਹੁੰਦੀ ਹੈ: ਸਮੇਂ ਸਿਰ ਪਹੁੰਚਣਾ, ਦੇਰ ਨਾਲ ਪਹੁੰਚਣਾ, ਜਾਂ ਨਾ ਪਹੁੰਚਣਾ। ਪੁਰਾਣੀਆਂ ਵਿਜ਼ਿਟਾਂ ਘੱਟ ਗਿਣੀਆਂ ਜਾਂਦੀਆਂ ਹਨ।',
+    empty: 'ਹਾਲੇ ਤੱਕ ਕੋਈ ਬੁੱਕ ਕੀਤੀ ਵਿਜ਼ਿਟ ਦਰਜ ਨਹੀਂ ਹੈ।',
+    onTime: 'ਸਮੇਂ ਸਿਰ',
+    late: 'ਦੇਰ ਨਾਲ',
+    noShow: 'ਨਹੀਂ ਪਹੁੰਚੇ',
+    responseRate: (percent) => `${percent}% ਬੇਨਤੀਆਂ ਦਾ ਜਵਾਬ ਦਿੱਤਾ`,
+    responseEmpty: 'ਹਾਲੇ ਤੱਕ ਕੋਈ ਬੇਨਤੀ ਨਹੀਂ।',
+  },
 };
 
 const profileHi: ProfileCopy = {

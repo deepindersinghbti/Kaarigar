@@ -3,7 +3,7 @@ import type { Request, Response } from 'express';
 import { isDbConnected } from '../db';
 import { bookingsEnabled } from '../bookingConfig';
 import { findOwnerIdByHandle } from '../data/profiles';
-import { statsFor } from '../data/reliability';
+import { reliabilitySummaryFor } from '../data/reliability';
 
 /**
  * GET /api/workers/:handle/stats - the public reliability figures.
@@ -61,7 +61,18 @@ workersRouter.get('/:handle/stats', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'kaarigar_not_found', message: `No kaarigar with passport handle "${handle}".` });
     }
 
-    return res.json({ stats: await statsFor(uid) });
+    /**
+     * The sample sizes ride alongside `stats`, in the envelope rather than on
+     * WorkerStats: they describe how much evidence there is, not the worker.
+     * The passport needs them to print "no visits yet" instead of the 80% prior
+     * - see ReliabilitySummary in data/reliability.ts.
+     */
+    const summary = await reliabilitySummaryFor(uid);
+    return res.json({
+      stats: summary.stats,
+      recordedEvents: summary.recordedEvents,
+      requestCount: summary.requestCount,
+    });
   } catch (err) {
     console.error('[workers] GET /:handle/stats failed:', err);
     return res.status(500).json({ error: 'stats_read_failed', message: 'Could not load the reliability record.' });

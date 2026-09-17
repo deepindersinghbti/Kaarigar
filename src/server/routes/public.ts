@@ -10,6 +10,9 @@ import { createReview } from '../data/reviews';
 import type { ReviewSummary } from '../data/reviews';
 import { calculateTrustEvidence } from '../data/trustScore';
 import { gateReviewToken } from './reputation';
+import { bookingsEnabled } from '../bookingConfig';
+import { reliabilitySummaryFor } from '../data/reliability';
+import type { ReliabilitySummary } from '../data/reliability';
 import type { ReviewRatings, TrustScore } from '../../types';
 
 /**
@@ -295,13 +298,64 @@ function renderTrustScore(score?: TrustScore): string {
   </div>`;
 }
 
+/**
+ * The reliability line: on-time record from booked visits (feature §9.1 D4).
+ *
+ * BUILT FROM CLASSES THIS PAGE ALREADY HAS - .trust for the card, .trust-bar for
+ * the meter, .stats for the three counts - so it adds no CSS and cannot restyle
+ * anything above it. The one inline colour is the red on "did not arrive",
+ * which has no existing class. It is the light red (#f87171) rather than a
+ * saturated one because .stats is a dark strip, and it matches the weight of
+ * the green and amber beside it.
+ *
+ * Absent entirely when the feature is off: `summary` is only ever passed when
+ * bookingsEnabled() is true, so a deployment that never turned bookings on
+ * serves this page exactly as it did before.
+ *
+ * NO PERCENTAGE WITHOUT A RECORD. Reliability starts at an 0.8 prior and
+ * response rate at 1 when there is nothing to judge, so that a new worker is
+ * not scored as a bad one. Printed as "80% reliable" to a stranger, that floor
+ * becomes a claim about someone who has never been booked. With no recorded
+ * visit the page says so in words instead. See ReliabilitySummary.
+ */
+function renderReliability(summary?: ReliabilitySummary): string {
+  if (!summary) return '';
+  const { stats, recordedEvents, requestCount } = summary;
+
+  const percent = Math.round(stats.reliability * 100);
+  const hasRecord = recordedEvents > 0;
+  const meter = hasRecord
+    ? `<div class="trust-row">
+      <div><div class="trust-label">On-time record</div><div class="trust-bar"><div class="trust-fill" style="width:${Math.max(0, Math.min(100, percent))}%"></div></div></div>
+      <div class="trust-value">${esc(percent)}%</div>
+    </div>`
+    : '<div class="trust-note">No booked visits recorded yet.</div>';
+
+  const response = requestCount > 0
+    ? `Replies to ${esc(Math.round(stats.responseRate * 100))}% of requests (last 90 days).`
+    : 'No requests yet.';
+
+  return `<div class="trust" id="public-reliability">
+    <div class="trust-head"><div class="trust-title">Reliability</div></div>
+    <div class="trust-note">Worked out automatically from booked visits: arriving on time, arriving late, or not arriving. The customer's arrival code proves the visit. Older visits count for less.</div>
+    ${meter}
+    <div class="stats" style="margin:12px 0 0">
+      <div><span class="k">On time</span><span class="v v-g">${esc(stats.onTime)}</span></div>
+      <div><span class="k">Late</span><span class="v v-a">${esc(stats.late)}</span></div>
+      <div><span class="k">Did not arrive</span><span class="v" style="color:#f87171">${esc(stats.noShow)}</span></div>
+    </div>
+    <div class="trust-note">${response}</div>
+  </div>`;
+}
+
 function renderPassport(
   p: PublicProfile,
   url: string,
   qrSvg: string,
   reviews: ReviewSummary,
   completedJobs: number,
-  trustScore?: TrustScore
+  trustScore?: TrustScore,
+  reliability?: ReliabilitySummary
 ): string {
   const verified = p.verifiedStatus === 'verified';
   const skills = Array.isArray(p.skills) ? p.skills : [];
@@ -361,6 +415,8 @@ function renderPassport(
   ${renderReviews(reviews)}
 
   ${renderTrustScore(trustScore)}
+
+  ${renderReliability(reliability)}
 
   <div class="qrow">
     <div class="qbox">${qrSvg}</div>
@@ -461,6 +517,21 @@ publicRouter.get('/p/:handle', async (req: Request, res: Response) => {
     const completedJobs = evidence?.jobs.completed ?? 0;
     const trustScore = evidence?.score;
 
+    /**
+     * Only read when the feature is on - with it off, nothing here queries the
+     * ledger and the page is byte-for-byte what it was. A failure is swallowed
+     * for the same reason reviews are above: a passport that 500s because one
+     * optional block could not be computed is worse than one without the block.
+     */
+    let reliability: ReliabilitySummary | undefined;
+    if (ownerId && bookingsEnabled()) {
+      try {
+        reliability = await reliabilitySummaryFor(ownerId);
+      } catch (err) {
+        console.error('[public] reliability summary failed for', profile.passportHandle, err);
+      }
+    }
+
     // Error correction level Q (~25%) rather than the M default. This QR is
     // scanned off a phone screen, a printed card, and - per the demo plan - a
     // projector, where contrast is poor and part of the symbol may be washed
@@ -476,7 +547,7 @@ publicRouter.get('/p/:handle', async (req: Request, res: Response) => {
     // Short public cache: a passport changes rarely, but "rarely" is not
     // "never", and a stale trust signal is worse than an extra request.
     res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
-    res.status(200).send(renderPassport(profile, url, qrSvg, reviews, completedJobs, trustScore));
+    res.status(200).send(renderPassport(profile, url, qrSvg, reviews, completedJobs, trustScore, reliability));
   } catch (err) {
     console.error('[public] /p/:handle failed', err);
     res.status(500).send(
