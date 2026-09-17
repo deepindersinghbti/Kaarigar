@@ -378,6 +378,106 @@ try {
   check('with the too_early code', earlyReport.body?.error === 'too_early');
 
   // =========================================================================
+  console.log('\n--- Phase 5: the customer side of a booking ---\n');
+  // =========================================================================
+
+  /** A customer request walked to SCHEDULED, with its booking COMMITTED. */
+  const scheduledJob = async (title: string) => {
+    const made = await call('/api/customer/jobs', customerToken, { kaarigarHandle: handle, title, amount: 300, location: 'Sector 22' });
+    const id: string = made.body?.job?.id ?? '';
+    await call(`/api/jobs/${id}/transition`, workerToken, { state: 'QUOTED', quotedPrice: 350 });
+    await call(`/api/customer/jobs/${id}/accept`, customerToken, {});
+    await call(`/api/jobs/${id}/transition`, workerToken, { state: 'SCHEDULED', ...futureSlot(30) });
+    const row = await getDb().collection('bookings').findOne({ jobId: id });
+    return { jobId: id, bookingId: String(row?._id ?? '') };
+  };
+  /** Move a committed booking's arrival deadline into the past, without reading it. */
+  const makeOverdue = async (bookingId: string) => {
+    await getDb().collection('bookings').updateOne(
+      { _id: bookingId as never },
+      { $set: { slotStart: new Date(Date.now() - 4 * HOUR), slotEnd: new Date(Date.now() - 3 * HOUR), arriveBy: new Date(Date.now() - 2 * HOUR) } }
+    );
+  };
+  const bookingStatusOf = async (bookingId: string) => (await getDb().collection('bookings').findOne({ _id: bookingId as never }))?.status;
+  const eventsFor = async (bookingId: string, type: string) =>
+    getDb().collection('reliability_events').countDocuments({ bookingId, type });
+
+  // --- Urgent requests get the short reply window ---
+  const urgentMade = await call('/api/customer/jobs', customerToken, { kaarigarHandle: handle, title: 'Urgent leak', amount: 200, location: 'Sector 22', urgent: true });
+  const urgentRow = await getDb().collection('bookings').findOne({ jobId: urgentMade.body?.job?.id });
+  const urgentWindowMin = urgentRow ? (urgentRow.acceptBy.getTime() - urgentRow.createdAt.getTime()) / 60_000 : -1;
+  check('an urgent request is marked urgent', urgentRow?.urgent === true);
+  check('an urgent request gets the 30-minute reply window', Math.round(urgentWindowMin) === 30);
+  const normalRow = await getDb().collection('bookings').findOne({ jobId: jobB });
+  check('a normal request gets the 4-hour reply window',
+    normalRow ? Math.round((normalRow.acceptBy.getTime() - normalRow.createdAt.getTime()) / 60_000) === 240 : false);
+
+  // --- "The kaarigar did not arrive", over real HTTP ---
+  /*
+    The route applies overdue rules before handling the report, so by the time
+    arriveBy has passed the booking is already LATE when the report arrives. The
+    first version refused that as wrong_state and could never succeed over HTTP.
+  */
+  const reported = await scheduledJob('Report no-arrival');
+  await makeOverdue(reported.bookingId);
+  const report = await call(`/api/bookings/${reported.bookingId}/report-no-arrival`, customerToken, {});
+  check('report-no-arrival after arriveBy succeeds over HTTP', report.status === 200);
+  check('and the booking is LATE', report.body?.booking?.status === 'LATE');
+  check('with exactly one LATE event', (await eventsFor(reported.bookingId, 'LATE')) === 1);
+  const reportAgain = await call(`/api/bookings/${reported.bookingId}/report-no-arrival`, customerToken, {});
+  check('reporting again is still success', reportAgain.status === 200);
+  check('and writes no second LATE event', (await eventsFor(reported.bookingId, 'LATE')) === 1);
+
+  // --- The late-cancel exception ---
+  const onTime = await scheduledJob('Cancel while on time');
+  const refusedCancel = await call(`/api/customer/jobs/${onTime.jobId}/cancel`, customerToken, {});
+  check('a customer still cannot cancel a SCHEDULED job whose kaarigar is not late', refusedCancel.status === 409);
+  check('with the not_cancellable code', refusedCancel.body?.error === 'not_cancellable');
+  check('and the booking is untouched', (await bookingStatusOf(onTime.bookingId)) === 'COMMITTED');
+
+  const late = await scheduledJob('Cancel while late');
+  await makeOverdue(late.bookingId);
+  const lateCancel = await call(`/api/customer/jobs/${late.jobId}/cancel`, customerToken, {});
+  check('a customer CAN cancel a SCHEDULED job once the kaarigar is late', lateCancel.status === 200);
+  check('the job is CANCELLED', lateCancel.body?.job?.status === 'CANCELLED');
+  check('the booking is NO_SHOW', (await bookingStatusOf(late.bookingId)) === 'NO_SHOW');
+  check('the kaarigar gets exactly one LATE and one NO_SHOW',
+    (await eventsFor(late.bookingId, 'LATE')) === 1 && (await eventsFor(late.bookingId, 'NO_SHOW')) === 1);
+  check('and no LATE_CANCEL', (await eventsFor(late.bookingId, 'LATE_CANCEL')) === 0);
+  const lateCancelHistory = (await getDb().collection('bookings').findOne({ _id: late.bookingId as never }))?.history ?? [];
+  check('the NO_SHOW is attributed to the customer who gave up', lateCancelHistory.some((h: any) => h.to === 'NO_SHOW' && h.by === 'customer'));
+
+  // A customer job with NO booking: the exception needs a booking to prove lateness.
+  process.env.BOOKINGS_ENABLED = 'false';
+  const legacyMade = await call('/api/customer/jobs', customerToken, { kaarigarHandle: handle, title: 'Legacy customer job', amount: 300, location: 'Sector 22' });
+  const legacyCustomerJob: string = legacyMade.body?.job?.id ?? '';
+  process.env.BOOKINGS_ENABLED = 'true';
+  check('a customer job made with the flag off has no booking', (await getDb().collection('bookings').findOne({ jobId: legacyCustomerJob })) === null);
+  await call(`/api/jobs/${legacyCustomerJob}/transition`, workerToken, { state: 'QUOTED', quotedPrice: 350 });
+  await call(`/api/customer/jobs/${legacyCustomerJob}/accept`, customerToken, {});
+  const legacyScheduled = await call(`/api/jobs/${legacyCustomerJob}/transition`, workerToken, { state: 'SCHEDULED' });
+  check('that legacy customer job still schedules with no slot', legacyScheduled.status === 200);
+  const legacyCancel = await call(`/api/customer/jobs/${legacyCustomerJob}/cancel`, customerToken, {});
+  check('and the customer still cannot cancel it once SCHEDULED', legacyCancel.status === 409);
+
+  // The kaarigar cannot use the customer's late-cancel route.
+  const workerTries = await call(`/api/customer/jobs/${onTime.jobId}/cancel`, workerToken, {});
+  check("a kaarigar cannot call the customer's cancel route", workerTries.status === 403);
+
+  // --- Health flags the screens read ---
+  const healthOn = await call('/api/health');
+  check('health reports bookings enabled', healthOn.body?.bookingsEnabled === true);
+  check('health reports demo slots off by default', healthOn.body?.bookingDemoSlots === false);
+  process.env.BOOKING_DEMO_SLOTS = 'true';
+  check('demo slots on when both flags are on', (await call('/api/health')).body?.bookingDemoSlots === true);
+  process.env.BOOKINGS_ENABLED = 'false';
+  const healthOff = await call('/api/health');
+  check('demo slots are off whenever bookings are off', healthOff.body?.bookingDemoSlots === false);
+  check('and health reports bookings disabled', healthOff.body?.bookingsEnabled === false);
+  process.env.BOOKINGS_ENABLED = 'true';
+  delete process.env.BOOKING_DEMO_SLOTS;
+
+  // =========================================================================
   console.log('\n--- The flag turns the surface off ---\n');
   // =========================================================================
 

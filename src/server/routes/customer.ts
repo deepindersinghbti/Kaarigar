@@ -485,6 +485,19 @@ customerRouter.post('/jobs/:id/counter', requireAuth, (req, res) => sendBackToWo
  *
  * CUSTOMER_CANCELLABLE is the single list; the transition table is still
  * consulted per state, so this cannot outlive an edge being removed from it.
+ *
+ * ONE EXCEPTION, AND IT IS NARROW: a SCHEDULED job whose booking is LATE.
+ * The rule exists because past ACCEPTED the kaarigar has committed a slot. A
+ * LATE booking is one where that slot has already been broken - the kaarigar
+ * did not arrive by the time they promised - so the reason for protecting it
+ * is gone, and making the customer wait for the no-show window to expire
+ * while nobody comes is the worse outcome. The booking lands in NO_SHOW and the
+ * kaarigar, not the customer, takes the event (§9.4 correction B).
+ *
+ * It needs a booking to prove the lateness, so it never applies with
+ * BOOKINGS_ENABLED off or to a job created before the flag - those keep the
+ * rule exactly as it was. IN_PROGRESS is never included: once the kaarigar has
+ * checked in with the customer's code, they arrived.
  */
 const CUSTOMER_CANCELLABLE: JobState[] = ['REQUESTED', 'QUOTED', 'ACCEPTED'];
 
@@ -563,7 +576,21 @@ customerRouter.post('/jobs/:id/cancel', requireAuth, async (req: Request, res: R
     const db = getDb();
     const uid = req.user!.uid;
 
-    const job = await db.collection(JOBS).findOne({ _id: req.params.id as never, customerId: uid });
+    const found = await db.collection(JOBS).findOne({ _id: req.params.id as never, customerId: uid });
+    if (!found) {
+      return res.status(404).json({ error: 'job_not_found', message: 'No such request for this customer.' });
+    }
+
+    /**
+     * The booking is read FIRST, and with its overdue rules applied, because it
+     * decides whether the late exception applies - and applying those rules can
+     * itself cancel the job (a no-show that had already run past its window).
+     * So the job is re-read afterwards rather than trusted from the line above.
+     */
+    const booking = await bookingForJob(req.params.id);
+    const job = booking
+      ? await db.collection(JOBS).findOne({ _id: req.params.id as never, customerId: uid })
+      : found;
     if (!job) {
       return res.status(404).json({ error: 'job_not_found', message: 'No such request for this customer.' });
     }
@@ -574,7 +601,9 @@ customerRouter.post('/jobs/:id/cancel', requireAuth, async (req: Request, res: R
       return res.json({ job: await asCustomerJob(job), alreadyCancelled: true });
     }
 
-    if (!CUSTOMER_CANCELLABLE.includes(current) || !JOB_TRANSITIONS[current].includes('CANCELLED')) {
+    const kaarigarIsLate = current === 'SCHEDULED' && booking?.status === 'LATE';
+
+    if (!(CUSTOMER_CANCELLABLE.includes(current) || kaarigarIsLate) || !JOB_TRANSITIONS[current].includes('CANCELLED')) {
       return res.status(409).json({
         error: 'not_cancellable',
         message: `A request can only be cancelled before the kaarigar starts. This one is ${current}. Please call them instead.`,
@@ -602,7 +631,6 @@ customerRouter.post('/jobs/:id/cancel', requireAuth, async (req: Request, res: R
      * takes -3. §9.4: the customer waited, and then stopped waiting, which is
      * the clearest no-show there is.
      */
-    const booking = await bookingForJob(req.params.id);
     if (booking) {
       const closed = await onCustomerCancelled(booking);
       if (!closed.ok) console.warn(`[customer] job ${req.params.id} cancelled but its booking was not:`, closed.refusal.body.error);

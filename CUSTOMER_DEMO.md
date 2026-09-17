@@ -2,6 +2,8 @@
 
 This release exposes customer browse with same-area ranking, request submission, request tracking, a per-request progress timeline, the customer's answers to a quote — accept, decline, or counter with a figure of their own — and their two answers to a completion claim — confirm or dispute — at `/customer`. It is not a completed customer marketplace. Payment verification is not implemented by this release; live updates are opt-in polling rather than push, and matching is same-area-or-not rather than by distance; a counter-offer carries no reason or expiry, and a dispute no reason, evidence or moderation.
 
+With `BOOKINGS_ENABLED` on, each request also carries a **booking**: a reply deadline, a committed time slot, an arrival code the customer gives the kaarigar at the door, and lateness and no-show handling. The two-person script for that, including a five-minute LATE demo, is **`docs/BOOKING_DEMO.md`**. With the flag off, everything below works exactly as written.
+
 ## Configure login
 
 In the Render `kaarigar` service's Environment settings, keep the existing worker configuration and set:

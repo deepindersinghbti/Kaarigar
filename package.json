@@ -13,6 +13,7 @@
     "test": "tsx scripts/test-bookings.ts",
     "test:booking-routes": "tsx scripts/test-booking-routes.ts",
     "test:booking-ui": "tsx scripts/test-booking-ui.ts",
+    "test:customer-booking-ui": "tsx scripts/test-customer-booking-ui.ts",
     "test:sweeper": "tsx scripts/test-sweeper.ts",
     "seed": "tsx scripts/seed.ts",
     "seed:rates": "tsx scripts/seedRateBands.ts",

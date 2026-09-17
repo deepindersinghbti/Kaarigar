@@ -6,6 +6,7 @@ import { uuidv7 } from '../../lib/ids';
 import { useAuth } from '../../auth/AuthProvider';
 import type { SupportedLanguage } from '../../types';
 import { getCustomerCopy, getCustomerTrade } from './customerCopy';
+import { getServerFlags } from '../../lib/serverFlags';
 
 interface CustomerRequestFormProps {
   onSent: () => void;
@@ -39,6 +40,19 @@ export const CustomerRequestForm: React.FC<CustomerRequestFormProps> = ({ onSent
   const [location, setLocation] = useState('');
   const [amount, setAmount] = useState('');
   const [notes, setNotes] = useState('');
+  /**
+   * Only offered when bookings are on. With the flag off "urgent" changes
+   * nothing on the server, and a toggle that promises a faster reply without
+   * delivering one is worse than no toggle.
+   */
+  const [urgent, setUrgent] = useState(false);
+  const [bookingsOn, setBookingsOn] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    void getServerFlags().then((flags) => { if (active) setBookingsOn(flags.bookings); });
+    return () => { active = false; };
+  }, []);
 
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
@@ -84,6 +98,7 @@ export const CustomerRequestForm: React.FC<CustomerRequestFormProps> = ({ onSent
         location: location.trim(),
         amount: Number(amount || 0),
         notes: notes.trim() || undefined,
+        ...(bookingsOn && urgent ? { urgent: true } : {}),
       });
       onSent();
     } catch (err) {
@@ -192,6 +207,22 @@ export const CustomerRequestForm: React.FC<CustomerRequestFormProps> = ({ onSent
             onChange={(e) => setNotes(e.target.value)}
           />
         </div>
+
+        {bookingsOn && (
+          <label htmlFor="req-urgent" className="flex items-start gap-3 rounded-2xl border border-gray-200 bg-white p-4 cursor-pointer">
+            <input
+              id="req-urgent"
+              type="checkbox"
+              checked={urgent}
+              onChange={(e) => setUrgent(e.target.checked)}
+              className="mt-1 h-5 w-5 accent-orange-500 shrink-0"
+            />
+            <span>
+              <span className="block text-sm font-extrabold text-gray-700">{copy.booking.urgentLabel}</span>
+              <span className="block text-xs font-semibold text-gray-500 mt-0.5">{copy.booking.urgentHint}</span>
+            </span>
+          </label>
+        )}
 
         {error && (
           <p className="text-sm font-bold text-red-700 bg-red-50 border border-red-200 rounded-2xl px-3 py-2.5">

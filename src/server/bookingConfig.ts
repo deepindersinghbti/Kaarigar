@@ -72,6 +72,25 @@ export function bookingsEnabled(): boolean {
   return String(process.env.BOOKINGS_ENABLED ?? '').trim().toLowerCase() === 'true';
 }
 
+/**
+ * Offer a "2 minutes from now" slot on the worker's slot picker, for the LATE
+ * demo only. Default OFF, and meaningless unless BOOKINGS_ENABLED is on too.
+ *
+ * WHY IT EXISTS. The real picker offers 2-hour windows at 9, 1 and 5, so the
+ * earliest arrival deadline it can produce is hours away - no amount of
+ * shortening ARRIVAL_GRACE_MIN makes a booking go LATE in front of an audience.
+ * With this on (and ARRIVAL_GRACE_MIN=1), a committed booking goes LATE about
+ * three minutes later, through the ordinary UI and the ordinary rules.
+ *
+ * IT CHANGES WHAT THE PICKER OFFERS, NOT WHAT THE SERVER ACCEPTS. The server
+ * already accepts any future slot up to MAX_SLOT_HOURS; this only adds a
+ * button. Leave it off anywhere real customers are booked.
+ */
+export function bookingDemoSlotsEnabled(): boolean {
+  return bookingsEnabled()
+    && String(process.env.BOOKING_DEMO_SLOTS ?? '').trim().toLowerCase() === 'true';
+}
+
 export interface BookingConfig {
   /** Deadline to make a FIRST RESPONSE to an urgent request, in minutes. */
   acceptWindowUrgentMin: number;

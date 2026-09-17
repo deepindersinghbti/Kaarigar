@@ -86,6 +86,11 @@ without asking. `JobItem` already has `customerId?: string`.
   still cancels later states. `CUSTOMER_CANCELLABLE` in
   `routes/customer.ts` is the authority; the copy in
   `CustomerRequests.tsx` only decides whether to draw the button.
+  ONE EXCEPTION: a `SCHEDULED` job whose booking is `LATE` — the slot the
+  rule protects has already been broken. That cancel lands the booking in
+  `NO_SHOW` against the kaarigar, never the customer. It needs a booking to
+  prove the lateness, so it never applies with the flag off or to a job made
+  before it; `IN_PROGRESS` is never cancellable by the customer.
 - Quoting a customer's request requires a price; quoting the
   worker's own job does not. Requiring it everywhere breaks the
   worker lifecycle walk — 12 regressions, all downstream of one
@@ -338,6 +343,23 @@ to a caller who proved they hold it. Flag off with the right secret is
 `200 {enabled:false}`, not a 404. There is no GitHub Actions workflow for it,
 deliberately — see `docs/SWEEPER.md`.
 
+THE CUSTOMER SCREEN FOLLOWS THE SAME RULES AS THE WORKER'S. `CustomerRequests`
+branches on `bookings[job.id]`; a miss is the untouched legacy request. The
+arrival code is fetched with its request and rendered in the SAME render, and
+`act` reloads whenever the job has a booking, because the job response never
+says what happened to the booking (accepting a price arms `scheduleBy`,
+cancelling a late kaarigar ends it). "The kaarigar did not arrive" is drawn only
+once `arriveBy` has passed on screen. Over HTTP the report usually finds the
+booking already `LATE` — the route applies overdue rules first — and that is
+SUCCESS, not `wrong_state`; the first version refused it and could never work.
+
+`/api/health` exposes two booleans the screens read through `lib/serverFlags.ts`:
+`bookingsEnabled` (the request form offers "urgent" only then) and
+`bookingDemoSlots` (`BOOKING_DEMO_SLOTS` AND the flag: the worker's slot picker
+adds "Demo: in 2 minutes" for the LATE demo). The demo flag changes what the
+picker OFFERS, not what the server accepts. Never leave it on where real
+customers book. The demo script is `docs/BOOKING_DEMO.md`.
+
 NO RELIABILITY PERCENTAGE WITHOUT A RECORD. A worker with no history sits at
 the 0.8 prior and a response rate of 1 — deliberately, so nobody is scored as
 bad for being new — but printed, that reads "80% reliable" about someone never
@@ -350,6 +372,7 @@ Both surfaces render nothing at all with the flag off.
     npm test                                   # transitions + scoring, injected clock
     npx tsx scripts/test-booking-routes.ts     # HTTP wiring, flag ON
     npx tsx scripts/test-sweeper.ts            # /api/internal/sweep over HTTP
+    npx tsx scripts/test-customer-booking-ui.ts # customer booking screens in Edge, flag ON
     npx tsx scripts/test-booking-ui.ts         # JobsView + passport in Edge, flag ON
                                                # SCREENSHOT_DIR=<dir> saves PNGs of the new cards
 Both use uniquely named throwaway databases. Run the existing

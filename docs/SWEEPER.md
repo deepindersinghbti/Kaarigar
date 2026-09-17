@@ -148,8 +148,9 @@ logs one warning saying so.
 
 ## Demonstrating LATE → NO_SHOW without waiting a day
 
-Shorten the windows on the demo instance (see `.env.example`, "Demonstrating
-the LATE state"), walk a booking to a committed time slot, wait two minutes, and
+Shorten the windows on the demo instance (see the booking windows under
+"Optional" in `.env.example`), walk a booking to a committed time slot, wait
+two minutes, and
 call the sweep by hand with `curl`. Say plainly that the windows were
 shortened: the mechanism is real, only the clock was sped up. **Put the windows
 back afterwards**, or every real request expires within two minutes.

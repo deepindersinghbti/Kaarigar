@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { MapPin, IndianRupee, Calendar, RefreshCw, ChevronDown, ChevronUp, Check, Phone } from 'lucide-react';
+import { MapPin, IndianRupee, Calendar, RefreshCw, ChevronDown, ChevronUp, Check, Phone, Clock, KeyRound } from 'lucide-react';
 import { api, ApiError, type CustomerJobItem } from '../../lib/api';
 import { useAuth } from '../../auth/AuthProvider';
-import { JOB_BADGE, type JobState, type SupportedLanguage } from '../../types';
+import { JOB_BADGE, type Booking, type JobState, type SupportedLanguage } from '../../types';
+import { formatMoment, formatSlot } from '../../lib/bookingFormat';
 import { JOB_BADGE_PRESENTATION } from '../JobsView';
 import { getScreenCopy } from '../../data/uiCopy';
 import { getCustomerCopy, getCustomerTrade } from './customerCopy';
@@ -57,6 +58,36 @@ export const CustomerRequests: React.FC<CustomerRequestsProps> = ({ currentLangu
   const [counteringId, setCounteringId] = useState<string | null>(null);
   const [counterDraft, setCounterDraft] = useState('');
 
+  /**
+   * The appointment behind each request, keyed by JOB id. Empty with
+   * BOOKINGS_ENABLED off (the route answers 404 and the client reads that as
+   * "no appointments"), and a request is simply absent from it when it was made
+   * before the flag went on. A miss always means "render the request exactly as
+   * before".
+   */
+  const [bookings, setBookings] = useState<Record<string, Booking>>({});
+  /**
+   * Arrival codes by BOOKING id. `null` means the server has none to give (not
+   * committed yet, or moved past needing one); 'error' means the fetch failed,
+   * which is worth saying on screen - a customer with no code cannot let the
+   * kaarigar check in.
+   */
+  const [codes, setCodes] = useState<Record<string, string | null | 'error'>>({});
+  const [bookingPending, setBookingPending] = useState<{ id: string; action: 'report' | 'approve' | 'reject' } | null>(null);
+
+  /**
+   * A 30-second tick so the two controls that depend on the clock appear when
+   * they should without a reload: "the kaarigar did not arrive" once arriveBy
+   * passes, and the end of a proposed new time at the original slot.
+   * PRESENTATION ONLY - the server decides both, and refuses either if the
+   * device clock is wrong.
+   */
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = window.setInterval(() => setTick((n) => n + 1), 30_000);
+    return () => window.clearInterval(id);
+  }, []);
+
   const { user } = useAuth();
   const stateLabel = getScreenCopy(currentLanguage).jobs.state;
   const copy = getCustomerCopy(currentLanguage);
@@ -64,7 +95,35 @@ export const CustomerRequests: React.FC<CustomerRequestsProps> = ({ currentLangu
   const load = useCallback(async () => {
     setRefreshing(true);
     try {
-      setJobs(await api.listCustomerJobs());
+      /**
+       * Jobs and bookings together, in that order: listing jobs applies the
+       * overdue rules for this customer on the server, so the bookings read
+       * straight after it already reflect any deadline that has passed.
+       */
+      const nextJobs = await api.listCustomerJobs();
+      const nextBookings = await api.listBookingsByJob().catch(() => ({} as Record<string, Booking>));
+
+      /**
+       * The arrival code is fetched only for bookings that have one - a time
+       * agreed, and the kaarigar not yet checked in. One request each; a
+       * customer has a handful of live bookings, not hundreds.
+       */
+      const withCodes = Object.values(nextBookings).filter((b) => b.status === 'COMMITTED' || b.status === 'LATE');
+      const fetched = await Promise.all(withCodes.map(async (b) => {
+        try {
+          return [b.id, await api.getArrivalCode(b.id)] as const;
+        } catch {
+          return [b.id, 'error'] as const;
+        }
+      }));
+      /**
+       * All three land in ONE render. Setting jobs first and codes a round trip
+       * later drew a committed booking without its arrival code for a moment -
+       * the one card a customer at their door must not see flicker.
+       */
+      setJobs(nextJobs);
+      setBookings(nextBookings);
+      setCodes(Object.fromEntries(fetched));
       setError('');
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) return;
@@ -84,7 +143,7 @@ export const CustomerRequests: React.FC<CustomerRequestsProps> = ({ currentLangu
    */
   const live = useLivePolling({
     onTick: load,
-    paused: pending !== null || counteringId !== null,
+    paused: pending !== null || counteringId !== null || bookingPending !== null,
     storageKey: 'kaarigar_live_customer_requests',
   });
 
@@ -129,6 +188,13 @@ export const CustomerRequests: React.FC<CustomerRequestsProps> = ({ currentLangu
       setJobs((prev) => (prev ?? []).map((j) => (j.id === updated.id ? updated : j)));
       setCounteringId(null);
       setCounterDraft('');
+      /**
+       * The returned job is authoritative for the JOB, but most answers also move
+       * its booking - accepting a price starts the schedule clock, cancelling a
+       * late kaarigar ends the booking as a no-show. The job response says
+       * nothing about either, so a request that has a booking is reloaded.
+       */
+      if (bookings[jobId]) void load();
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) return;
       /**
@@ -193,6 +259,58 @@ export const CustomerRequests: React.FC<CustomerRequestsProps> = ({ currentLangu
     if (!window.confirm(copy.requestList.disputeConfirm)) return;
     void act(jobId, 'dispute');
   };
+
+  /**
+   * The customer's three booking answers: report that nobody came, and accept
+   * or reject a proposed new time.
+   *
+   * Refusals are rendered from the error CODE into the copy table, never the
+   * server's English message. A 409 means the booking moved on without this
+   * screen noticing - most often the new-time proposal closing itself at the
+   * original slot - so the list is reloaded and the customer told it changed.
+   */
+  const bookingAct = async (booking: Booking, action: 'report' | 'approve' | 'reject') => {
+    const b = copy.booking;
+    setBookingPending({ id: booking.id, action });
+    setError('');
+    try {
+      if (action === 'report') {
+        await api.reportNoArrival(booking.id);
+      } else {
+        await api.respondToReschedule(booking.id, action === 'approve');
+      }
+      await load();
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 401) return;
+      if (e instanceof ApiError && e.code === 'too_early') {
+        setError(b.tooEarly);
+      } else if (e instanceof ApiError && (e.status === 409 || e.status === 404)) {
+        setError(b.conflict);
+        void load();
+      } else {
+        setError(b.actionError);
+      }
+    } finally {
+      setBookingPending(null);
+    }
+  };
+
+  const confirmReport = (booking: Booking) => {
+    if (!window.confirm(copy.booking.didntArriveConfirm)) return;
+    void bookingAct(booking, 'report');
+  };
+
+  /**
+   * Giving up on a LATE kaarigar. It is the ordinary cancel route - the server
+   * allows a SCHEDULED job only while its booking is LATE - so it goes through
+   * `act` like every other cancel, and asks first for the same reason.
+   */
+  const confirmLateCancel = (jobId: string) => {
+    if (!window.confirm(copy.booking.cancelLateConfirm)) return;
+    void act(jobId, 'cancel');
+  };
+
+  const isPast = (iso: string | undefined) => Boolean(iso) && new Date(iso as string).getTime() <= Date.now();
 
   if (jobs === null && !error) {
     return (
@@ -299,6 +417,197 @@ export const CustomerRequests: React.FC<CustomerRequestsProps> = ({ currentLangu
           </div>
 
           {job.notes && <p className="mt-2 text-sm text-gray-600">{job.notes}</p>}
+
+          {/*
+            THE APPOINTMENT. Renders nothing for a request with no booking,
+            which keeps every pre-feature request, and every request with the
+            flag off, exactly as it was.
+          */}
+          {(() => {
+            const booking = bookings[job.id];
+            if (!booking) return null;
+            const b = copy.booking;
+            const busy = bookingPending?.id === booking.id;
+            const code = codes[booking.id];
+            const findAnother = (
+              <Link
+                to="/customer"
+                id={`request-another-${job.id}`}
+                className="inline-flex min-h-12 px-4 items-center rounded-2xl bg-orange-500 text-white font-extrabold text-sm active:scale-[0.98] transition"
+              >
+                {b.requestAnother}
+              </Link>
+            );
+
+            return (
+              <div id={`booking-${job.id}`} className="mt-3 space-y-2">
+                {booking.status === 'REQUESTED' && !isPast(booking.acceptBy) && (
+                  <p className="flex items-center gap-1.5 text-xs font-bold text-gray-600">
+                    <Clock className="w-3.5 h-3.5 shrink-0" />
+                    {b.replyBy(formatMoment(booking.acceptBy, currentLanguage))}
+                  </p>
+                )}
+
+                {booking.status === 'RESPONDED' && booking.scheduleBy && job.status === 'ACCEPTED' && (
+                  <p className="flex items-center gap-1.5 text-xs font-bold text-gray-600">
+                    <Clock className="w-3.5 h-3.5 shrink-0" />
+                    {b.scheduleBy(formatMoment(booking.scheduleBy, currentLanguage))}
+                  </p>
+                )}
+
+                {booking.slotStart && (booking.status === 'COMMITTED' || booking.status === 'LATE' || booking.status === 'ARRIVED') && (
+                  <p id={`booking-slot-${job.id}`} className="text-sm font-extrabold text-gray-800 bg-gray-50 border border-gray-200 rounded-2xl px-3 py-2">
+                    {b.slot(formatSlot(booking.slotStart, booking.slotEnd, currentLanguage))}
+                  </p>
+                )}
+
+                {booking.status === 'LATE' && (
+                  <p id={`booking-late-${job.id}`} role="alert" className="text-sm font-extrabold text-red-800 bg-red-50 border-2 border-red-300 rounded-2xl px-3 py-2.5">
+                    {b.late}
+                  </p>
+                )}
+
+                {/*
+                  THE ARRIVAL CODE, big enough to read out across a doorway.
+                  Only while there is an arrival to prove. The hint says when to
+                  hand it over, because giving it early lets a kaarigar check in
+                  from anywhere.
+                */}
+                {(booking.status === 'COMMITTED' || booking.status === 'LATE') && (
+                  typeof code === 'string' && code !== 'error' ? (
+                    <div id={`arrival-code-${job.id}`} className="rounded-2xl border-2 border-orange-300 bg-orange-50 p-4 text-center">
+                      <p className="flex items-center justify-center gap-1.5 text-xs font-extrabold uppercase text-orange-800">
+                        <KeyRound className="w-4 h-4" />
+                        {b.codeTitle}
+                      </p>
+                      <p id={`arrival-code-digits-${job.id}`} className="mt-1 text-4xl font-black tracking-[0.35em] text-gray-900">{code}</p>
+                      <p className="mt-1 text-xs font-semibold text-orange-900">{b.codeHint}</p>
+                    </div>
+                  ) : code === 'error' ? (
+                    <p className="text-xs font-bold text-red-700">{b.codeUnavailable}</p>
+                  ) : null
+                )}
+
+                {booking.status === 'COMMITTED' && booking.arriveBy && !isPast(booking.arriveBy) && (
+                  <p className="flex items-center gap-1.5 text-xs font-bold text-gray-600">
+                    <Clock className="w-3.5 h-3.5 shrink-0" />
+                    {b.arriveBy(formatMoment(booking.arriveBy, currentLanguage))}
+                  </p>
+                )}
+
+                {/*
+                  "Nobody came" appears only once arriveBy has passed. The
+                  server would refuse it earlier (too_early); drawing it early
+                  would only produce that refusal.
+                */}
+                {booking.status === 'COMMITTED' && isPast(booking.arriveBy) && (
+                  <button
+                    type="button"
+                    id={`didnt-arrive-${job.id}`}
+                    onClick={() => confirmReport(booking)}
+                    disabled={busy}
+                    className="w-full min-h-12 rounded-2xl border border-red-300 bg-white text-red-700 font-extrabold disabled:opacity-50 active:scale-[0.98] transition"
+                  >
+                    {busy ? b.sending : b.didntArrive}
+                  </button>
+                )}
+
+                {/*
+                  Giving up on a late kaarigar. The one cancel allowed past
+                  ACCEPTED, and only while the booking is LATE - see
+                  CUSTOMER_CANCELLABLE on the server.
+                */}
+                {booking.status === 'LATE' && job.status === 'SCHEDULED' && (
+                  <button
+                    type="button"
+                    id={`cancel-late-${job.id}`}
+                    onClick={() => confirmLateCancel(job.id)}
+                    disabled={pending?.id === job.id}
+                    className="w-full min-h-12 rounded-2xl bg-red-600 text-white font-extrabold disabled:opacity-50 active:scale-[0.98] transition"
+                  >
+                    {pending?.id === job.id && pending.action === 'cancel' ? copy.requestList.cancelling : b.cancelLate}
+                  </button>
+                )}
+
+                {/*
+                  A proposed new time. Answerable only until the ORIGINAL slot
+                  starts; after that the server closes it and the original time
+                  stands, so the buttons give way to saying so.
+                */}
+                {booking.status === 'COMMITTED' && booking.pendingReschedule && (
+                  <div id={`reschedule-${job.id}`} className="rounded-2xl border border-sky-200 bg-sky-50 p-3 space-y-2">
+                    <p className="text-sm font-bold text-sky-900">
+                      {b.rescheduleAsk(formatSlot(booking.pendingReschedule.slotStart, booking.pendingReschedule.slotEnd, currentLanguage))}
+                    </p>
+                    {booking.pendingReschedule.reason && (
+                      <p className="text-xs font-semibold text-sky-800">{b.rescheduleReason(booking.pendingReschedule.reason)}</p>
+                    )}
+                    {isPast(booking.slotStart) ? (
+                      <p className="text-xs font-bold text-sky-900">{b.rescheduleClosed}</p>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          id={`reschedule-approve-${job.id}`}
+                          onClick={() => void bookingAct(booking, 'approve')}
+                          disabled={busy}
+                          className="w-full min-h-12 rounded-2xl bg-orange-500 text-white font-extrabold disabled:opacity-50 active:scale-[0.98] transition"
+                        >
+                          {busy && bookingPending?.action === 'approve' ? b.sending : b.rescheduleApprove}
+                        </button>
+                        <button
+                          type="button"
+                          id={`reschedule-reject-${job.id}`}
+                          onClick={() => void bookingAct(booking, 'reject')}
+                          disabled={busy}
+                          className="w-full min-h-12 rounded-2xl border border-sky-300 bg-white text-sky-900 font-extrabold disabled:opacity-50 active:scale-[0.98] transition"
+                        >
+                          {busy && bookingPending?.action === 'reject' ? b.sending : b.rescheduleReject}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {booking.status === 'ARRIVED' && (
+                  <p className="text-sm font-bold text-green-800 bg-green-50 border border-green-200 rounded-2xl px-3 py-2">{b.arrived}</p>
+                )}
+
+                {/*
+                  The endings where the customer still needs a kaarigar. Each
+                  says what happened and offers the next step, so a request that
+                  went nowhere is never a dead end on screen.
+                */}
+                {booking.status === 'NO_SHOW' && (
+                  <div id={`booking-ended-${job.id}`} className="rounded-2xl border border-red-200 bg-red-50 p-3 space-y-2">
+                    <p className="text-sm font-bold text-red-800">{b.noShow}</p>
+                    {findAnother}
+                  </div>
+                )}
+                {booking.status === 'EXPIRED' && (
+                  <div id={`booking-ended-${job.id}`} className="rounded-2xl border border-gray-200 bg-gray-50 p-3 space-y-2">
+                    <p className="text-sm font-bold text-gray-700">
+                      {/* Answered, then never scheduled - versus never answered at all. */}
+                      {booking.history.some((h) => h.to === 'RESPONDED') ? b.expiredSchedule : b.expiredReply}
+                    </p>
+                    {findAnother}
+                  </div>
+                )}
+                {booking.status === 'DECLINED' && (
+                  <div id={`booking-ended-${job.id}`} className="rounded-2xl border border-gray-200 bg-gray-50 p-3 space-y-2">
+                    <p className="text-sm font-bold text-gray-700">{b.declined}</p>
+                    {findAnother}
+                  </div>
+                )}
+                {booking.status === 'CANCELLED_BY_KAARIGAR' && (
+                  <div id={`booking-ended-${job.id}`} className="rounded-2xl border border-gray-200 bg-gray-50 p-3 space-y-2">
+                    <p className="text-sm font-bold text-gray-700">{b.cancelledByKaarigar}</p>
+                    {findAnother}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {/*
             The quote and its Accept button. Only a QUOTED request offers this;

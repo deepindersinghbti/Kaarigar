@@ -558,6 +558,28 @@ trade string — a different mechanism, and not one this feature adds to.)
   `scheduleExpired` and `rescheduleAutoRejected` separately. They are different
   failures writing different events, so folding them together would hide which.
 
+**D12 — A customer may cancel a SCHEDULED job while its booking is LATE.**
+Correction B (cancel out of `LATE` → `NO_SHOW`) was unreachable for customers:
+the customer cancel route refuses anything past `ACCEPTED`, because the
+kaarigar has committed a slot. A `LATE` booking is one where that slot has
+already been broken, so that one state is allowed. The booking becomes
+`NO_SHOW` against the kaarigar; the customer gets no event. It requires a
+booking to prove the lateness, so the flag-off and pre-flag rules are unchanged,
+and `IN_PROGRESS` stays refused.
+
+**D13 — A demo-only slot, behind `BOOKING_DEMO_SLOTS`.** The slot picker's
+2-hour windows cannot produce an arrival deadline minutes away, so the LATE
+state could not be shown live however short the env windows were. With the
+flag (and `BOOKINGS_ENABLED`) on, `/api/health` reports `bookingDemoSlots` and
+the picker adds "Demo: in 2 minutes" (a one-minute slot). It changes what is
+offered, not what the server accepts. Default off.
+
+**D14 — Reporting a kaarigar who did not arrive succeeds when the booking is
+already LATE.** The route applies overdue rules before handling the report, so
+once `arriveBy` has passed, the read has usually already recorded `LATE`. The
+Phase 2c version refused that as `wrong_state`, so the endpoint could never
+succeed over HTTP. It now returns success with no second event.
+
 ### 9.3 Accepted corrections to §0–§8
 
 Each of these replaces the corresponding statement in the brief.
