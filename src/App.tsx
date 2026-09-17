@@ -16,7 +16,7 @@ import { VoiceAssistantModal } from './components/VoiceAssistantModal';
 import { LanguageSelectorModal } from './components/LanguageSelectorModal';
 import { LoginScreen } from './components/LoginScreen';
 import { useAuth } from './auth/AuthProvider';
-import { api, ApiError } from './lib/api';
+import { api, ApiError, type TransitionOptions } from './lib/api';
 import { useApiForDomain, anyDomainOnApi } from './lib/dataSource';
 import { installAudioUnlock } from './utils/audioUnlock';
 import { enqueue } from './lib/outbox';
@@ -27,6 +27,7 @@ import { SyncSummary } from './components/SyncBadge';
 import { todayIso } from './utils/date';
 
 import {
+  Booking,
   WorkerProfile,
   JobItem,
   KamaiEntry,
@@ -166,6 +167,20 @@ export default function App() {
    * their data, and they cannot tell. An empty ledger and an unloaded ledger
    * look identical on screen and mean opposite things.
    */
+  /**
+   * The appointment behind each job, keyed by JOB id rather than booking id.
+   *
+   * Keyed that way because every consumer starts from a job: JobsView renders a
+   * job card and needs to know whether it carries a commitment. A booking-id map
+   * would make every card do its own lookup.
+   *
+   * EMPTY IS THE NORMAL LEGACY STATE, not a failure. It is empty when
+   * BOOKINGS_ENABLED is off (the route 404s and the client reads that as "no
+   * appointments"), and a job is simply absent from it when it has no booking -
+   * a worker's own job, or anything created before the flag went on. Those keep
+   * the one-tap path, so nothing here may treat a miss as an error.
+   */
+  const [bookingsByJob, setBookingsByJob] = useState<Record<string, Booking>>({});
   const [dataStatus, setDataStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>(
     anyDomainOnApi() ? 'loading' : 'idle'
   );
@@ -189,12 +204,17 @@ export default function App() {
          * jobs and ledger reads parallel for the remaining two network trips.
          */
         const p = profileOnApi ? await api.getProfile() : null;
-        const [j, k] = await Promise.all([
+        const [j, k, b] = await Promise.all([
           jobsOnApi ? api.listJobs() : Promise.resolve(null),
           kamaiOnApi ? api.listEntries() : Promise.resolve(null),
+          // Never fatal. listBookingsByJob swallows the 404 the route returns
+          // when the feature is off; anything else degrades to the legacy path
+          // rather than failing a load that otherwise succeeded.
+          jobsOnApi ? api.listBookingsByJob().catch(() => ({})) : Promise.resolve(null),
         ]);
         if (cancelled) return;
         if (p) setProfile(p);
+        if (b) setBookingsByJob(b);
         // Merged for the same reason refreshJobs merges: a job queued in the
         // outbox is not on the server yet, and a restored session that replaced
         // the list would blank it until the next flush.
@@ -308,8 +328,23 @@ export default function App() {
    */
   const refreshJobs = useCallback(async () => {
     if (!jobsOnApi) return;
-    const server = await api.listJobs();
+    /**
+     * Both lists in one tick. A poll that refreshed jobs without their bookings
+     * would show a SCHEDULED job whose countdown and arrival code came from the
+     * previous minute - and the server applies overdue rules on the jobs read
+     * itself, so the two answers are generated against the same clock and must
+     * be adopted together.
+     *
+     * Jobs are still MERGED, never replaced (see mergeServerJobs). Bookings are
+     * replaced outright: unlike a job, a booking only ever exists server-side -
+     * there is no offline booking in the outbox that a replace could discard.
+     */
+    const [server, bookings] = await Promise.all([
+      api.listJobs(),
+      api.listBookingsByJob().catch(() => ({})),
+    ]);
     setJobs((prev) => mergeServerJobs(server, prev, outbox.stateOf));
+    setBookingsByJob(bookings);
   }, [jobsOnApi, outbox.stateOf]);
 
   const handleSaveJob = (newJob: JobItem) => {
@@ -336,15 +371,29 @@ export default function App() {
    * State changes are never simulated locally. The server validates each edge
    * against JOB_TRANSITIONS and returns the authoritative updated history.
    */
-  const handleTransitionJob = async (jobId: string, state: JobState, quotedPrice?: number): Promise<void> => {
+  const handleTransitionJob = async (
+    jobId: string,
+    state: JobState,
+    options: TransitionOptions = {}
+  ): Promise<void> => {
     if (!jobsOnApi) {
       throw new Error('Job lifecycle controls require API demo mode.');
     }
 
     setDataError('');
     try {
-      const updated = await api.transitionJob(jobId, state, quotedPrice);
+      const updated = await api.transitionJob(jobId, state, options);
       setJobs((prev) => prev.map((job) => (job.id === updated.id ? updated : job)));
+
+      /**
+       * Re-read the appointment after every transition, because most of them
+       * move it: quoting answers the response deadline, scheduling mints the
+       * arrival code and starts the lateness clock, checking in closes it. The
+       * job's own response says nothing about any of that, so a screen left
+       * with the previous booking would offer the button for the step just
+       * taken.
+       */
+      setBookingsByJob(await api.listBookingsByJob().catch(() => ({})));
 
       // Completed-work evidence affects the server-derived trust breakdown.
       // Refresh it after the authoritative transition so the passport does not
@@ -361,6 +410,31 @@ export default function App() {
     } catch (e) {
       if (!(e instanceof ApiError && e.status === 401)) {
         setDataError(e instanceof Error ? e.message : 'Could not update the job.');
+      }
+      throw e;
+    }
+  };
+
+  /**
+   * Propose a new slot for a job already committed to one.
+   *
+   * Goes to the BOOKING, not the job: the job is still SCHEDULED throughout and
+   * nothing about the price changes. The customer has to accept the new time
+   * before it takes effect, so this only ever sets a pending proposal.
+   */
+  const handleRescheduleBooking = async (
+    bookingId: string,
+    slotStart: string,
+    slotEnd: string,
+    reason?: string
+  ): Promise<void> => {
+    setDataError('');
+    try {
+      await api.rescheduleBooking(bookingId, slotStart, slotEnd, reason);
+      setBookingsByJob(await api.listBookingsByJob().catch(() => ({})));
+    } catch (e) {
+      if (!(e instanceof ApiError && e.status === 401)) {
+        setDataError(e instanceof Error ? e.message : 'Could not ask for a new time.');
       }
       throw e;
     }
@@ -556,6 +630,8 @@ export default function App() {
                 onOpenQuote={() => goToTab('quote')}
                 onTransitionJob={jobsOnApi ? handleTransitionJob : undefined}
                 onRefreshJobs={jobsOnApi ? refreshJobs : undefined}
+                bookingsByJob={bookingsByJob}
+                onRescheduleBooking={jobsOnApi ? handleRescheduleBooking : undefined}
               />
             }
           />

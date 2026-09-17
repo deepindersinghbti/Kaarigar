@@ -9,6 +9,10 @@ import { listPublicProfiles, findOwnerIdByHandle, findAssignedKaarigars } from '
 import { optionalQueryString, queryString } from '../lib/query';
 import { isArea } from '../../lib/areas';
 import { DEMO_CUSTOMER_PHONE, DEMO_CUSTOMER_NAME } from '../auth/demoCustomer';
+import { createBooking } from '../data/bookings';
+import { applyOverdue } from '../bookings/transitions';
+import { bookingForJob, onCustomerAcceptedPrice, onCustomerCancelled } from '../bookings/jobHooks';
+import { bookingsEnabled } from '../bookingConfig';
 
 /**
  * The customer side of the marketplace: browse kaarigars, request a job, watch
@@ -145,6 +149,34 @@ customerRouter.post('/jobs', requireAuth, async (req: Request, res: Response) =>
     if (outcome.status === 'duplicate') {
       return res.status(200).json({ job: outcome.job, idempotentReplay: true });
     }
+
+    /**
+     * ONE REQUEST FLOW, TWO RECORDS (§9.1 D1). The job is created exactly as it
+     * always was; the booking beside it carries the time commitment the job has
+     * no fields for, and starts the first-response clock.
+     *
+     * AFTER the job, and non-fatal. The customer's request is already safely
+     * recorded by this point, and failing their request because the appointment
+     * record could not be written would trade a real loss for a bookkeeping one.
+     * A missing booking degrades to the legacy path - no slot or code required -
+     * which is exactly the behaviour with the flag off.
+     */
+    if (bookingsEnabled()) {
+      try {
+        await createBooking({
+          jobId: outcome.job.id,
+          customerId: uid,
+          kaarigarId: kaarigarUid,
+          jobTitle: outcome.job.title,
+          ...(typeof req.body?.notes === 'string' ? { description: req.body.notes } : {}),
+          ...(outcome.job.location ? { address: outcome.job.location } : {}),
+          urgent: req.body?.urgent === true,
+        });
+      } catch (bookingErr) {
+        console.error(`[customer] job ${outcome.job.id} created but its booking was not:`, bookingErr);
+      }
+    }
+
     return res.status(201).json({ job: outcome.job });
   } catch (err) {
     console.error('[customer] POST /jobs failed:', err);
@@ -238,6 +270,21 @@ customerRouter.post('/jobs/:id/accept', requireAuth, async (req: Request, res: R
         error: 'concurrent_transition',
         message: 'The request changed while you were accepting it. Reload and try again.',
       });
+    }
+
+    /**
+     * The price is agreed, so the SLOT clock starts (§9.4). Until this moment no
+     * deadline has been running since the quote - the ball was in the customer's
+     * court, and it would be perverse to penalise the kaarigar for that wait.
+     *
+     * Non-fatal: the acceptance is already committed above and is the thing the
+     * customer cares about. A missing deadline means one fewer clock, never a
+     * lost agreement.
+     */
+    const booking = await bookingForJob(req.params.id);
+    if (booking) {
+      const armed = await onCustomerAcceptedPrice(booking);
+      if (!armed.ok) console.warn(`[customer] could not arm the schedule deadline for job ${req.params.id}:`, armed.refusal.body.error);
     }
 
     return res.json({ job: await asCustomerJob(updated) });
@@ -549,6 +596,18 @@ customerRouter.post('/jobs/:id/cancel', requireAuth, async (req: Request, res: R
       });
     }
 
+    /**
+     * The customer's cancel NEVER writes an event against them (§2) - but if the
+     * kaarigar was already LATE, the booking lands in NO_SHOW and the KAARIGAR
+     * takes -3. §9.4: the customer waited, and then stopped waiting, which is
+     * the clearest no-show there is.
+     */
+    const booking = await bookingForJob(req.params.id);
+    if (booking) {
+      const closed = await onCustomerCancelled(booking);
+      if (!closed.ok) console.warn(`[customer] job ${req.params.id} cancelled but its booking was not:`, closed.refusal.body.error);
+    }
+
     return res.json({ job: await asCustomerJob(updated) });
   } catch (err) {
     console.error('[customer] POST /jobs/:id/cancel failed:', err);
@@ -639,6 +698,12 @@ customerRouter.get('/jobs', requireAuth, async (req: Request, res: Response) => 
 
   try {
     await ensureJobIndexes();
+
+    // CHECK ON READ (§0.4a), scoped to this customer's own bookings. The other
+    // half of the deadline machinery is the external sweeper; nothing fires on
+    // a timer, because a free-tier container asleep has no timers running.
+    if (bookingsEnabled()) await applyOverdue({ customerId: req.user!.uid });
+
     const docs = await getDb()
       .collection(JOBS)
       .find({ customerId: req.user!.uid })

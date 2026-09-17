@@ -636,9 +636,12 @@ try {
     check('browser: the new request has its own card', await card.count() === 1);
     check('browser: the card starts without a quote', !(await card.innerText()).includes('₹1777'));
 
+    // Foregrounded for the same reason as the worker's: a hidden page skips
+    // every poll by design, so a backgrounded one would wait forever.
+    await p2.bringToFront();
     await p2.getByRole('button', { name: 'Live', exact: true }).click();
     await call(`/api/jobs/${rehearsalJob.id}/transition`, wt, { state: 'QUOTED', quotedPrice: 1777 });
-    await card.getByText('₹1777').waitFor({ timeout: 30000 });
+    await card.getByText('₹1777').waitFor({ timeout: 60000 });
     check('browser: live polling delivers a change nobody clicked for', true);
     await p2.getByRole('button', { name: 'Live', exact: true }).click();
 
@@ -687,6 +690,190 @@ try {
 
     check(`browser: the rehearsal produced no uncaught page errors${demoErrors.length ? ` — got: ${demoErrors.join(' | ')}` : ''}`, demoErrors.length === 0);
     await demo.close();
+
+    /**
+     * THE WORKER REHEARSAL.
+     *
+     * The customer pass above covers half the product. The worker screens are
+     * the older half and the one nobody has automated, and they carry the other
+     * side of every trust boundary this project has: the states a worker may
+     * NOT take on a customer's job are enforced server-side and then have to be
+     * reflected on screen, or the worker taps a button that only ever answers
+     * 403.
+     *
+     * Wider viewport than Neha's: the worker screens are used on a phone too,
+     * but the quote row and the lifecycle controls lay out side by side above
+     * the small breakpoint and that is where the interesting controls sit.
+     */
+    const workerDemo = await browser.newContext({ viewport: { width: 900, height: 900 } });
+    await workerDemo.addInitScript(([session, lang]: [string, string]) => {
+      localStorage.setItem('kaarigar_lang', lang);
+      localStorage.setItem('kaarigar_auth_v1', session);
+    }, [JSON.stringify({
+      accessToken: worker.accessToken,
+      refreshToken: worker.refreshToken,
+      expiresAt: Date.now() + 15 * 60 * 1000,
+      user: worker.user,
+    }), 'en']);
+    const w = await workerDemo.newPage();
+    const workerErrors: string[] = [];
+    w.on('pageerror', (e: Error) => workerErrors.push(e.message));
+
+    /**
+     * Four jobs in known states, because the assertions below are about what a
+     * worker may DO in each one and a shared job would couple them.
+     */
+    const mk = async (id: string, title: string) => {
+      await call('/api/customer/jobs', ct, { ...input, id, title });
+      return id;
+    };
+    const wCountered = await mk('worker-rehearsal-countered', 'Worker rehearsal countered');
+    await call(`/api/jobs/${wCountered}/transition`, wt, { state: 'QUOTED', quotedPrice: 2100 });
+    await call(`/api/customer/jobs/${wCountered}/counter`, ct, { counterPrice: 1650 }, 'POST');
+    const wQuoted = await mk('worker-rehearsal-quoted', 'Worker rehearsal quoted');
+    await call(`/api/jobs/${wQuoted}/transition`, wt, { state: 'QUOTED', quotedPrice: 2200 });
+    const wDone = await mk('worker-rehearsal-completed', 'Worker rehearsal completed');
+    for (const [state, extra] of [['QUOTED', { quotedPrice: 2300 }], ['SCHEDULED', {}], ['IN_PROGRESS', {}], ['COMPLETED', {}]] as const) {
+      if (state === 'QUOTED') await call(`/api/jobs/${wDone}/transition`, wt, { state, ...extra });
+      else if (state === 'SCHEDULED') { await call(`/api/customer/jobs/${wDone}/accept`, ct, undefined, 'POST'); await call(`/api/jobs/${wDone}/transition`, wt, { state }); }
+      else await call(`/api/jobs/${wDone}/transition`, wt, { state });
+    }
+    const wOwn = (await call('/api/jobs', wt, { title: 'Worker rehearsal own job', amount: 500 })).body.job.id;
+
+    await w.goto(base + '/jobs');
+    await w.locator('#jobs-view-container').waitFor();
+    check('browser: a stored worker session lands on the jobs screen', true);
+
+    const wcard = (id: string) => w.locator(`#job-card-${id}`);
+    await wcard(wCountered).waitFor();
+
+    /**
+     * Phase 3's worker half, never seen in a browser until now: the customer's
+     * counter-offer has to reach the person who has to answer it.
+     */
+    check('browser: the customer counter-offer reaches the worker card',
+      (await wcard(wCountered).innerText()).includes('The customer asked for ₹1650'));
+    check('browser: a countered request still offers the price box, not a one-tap',
+      await wcard(wCountered).locator(`#quote-${wCountered}`).count() === 1
+      && await wcard(wCountered).getByRole('button', { name: 'Send price', exact: true }).count() === 1);
+    // The worker is NOT obliged to match the ask - the box starts empty.
+    check('browser: the price box is not prefilled with the customer figure',
+      await wcard(wCountered).locator(`#quote-${wCountered}`).inputValue() === '');
+
+    /**
+     * The visible half of the trust boundary. A QUOTED customer job is the
+     * customer's to answer, so the worker screen must say so rather than offer
+     * a button whose only possible outcome is 403.
+     */
+    const quotedText = await wcard(wQuoted).innerText();
+    check('browser: a quoted customer job says it is waiting on the customer',
+      quotedText.includes('Waiting for the customer to accept') && quotedText.includes('₹2200'));
+    check('browser: and offers the worker no way to accept it themselves',
+      await wcard(wQuoted).getByRole('button', { name: 'Customer accepted', exact: true }).count() === 0);
+
+    /** Phase 2's UI side: COMPLETED is a claim, and settling is not the worker's. */
+    const doneText = await wcard(wDone).innerText();
+    check('browser: a completed customer job offers the worker no one-tap settle',
+      await wcard(wDone).getByRole('button', { name: 'Mark payment received', exact: true }).count() === 0);
+    check('browser: and says what it is waiting for instead of showing nothing',
+      doneText.includes('Waiting for the customer to confirm'));
+
+    /** The asymmetry: the worker's own job keeps the one-tap path throughout. */
+    await wcard(wOwn).waitFor();
+    check('browser: the worker own job offers a one-tap advance',
+      await wcard(wOwn).getByRole('button', { name: 'Mark quote sent', exact: true }).count() === 1);
+    await wcard(wOwn).getByRole('button', { name: 'Mark quote sent', exact: true }).click();
+    await wcard(wOwn).getByRole('button', { name: 'Customer accepted', exact: true }).waitFor();
+    check('browser: a one-tap advance moves the worker own job', true);
+    check('browser: and the server agrees it moved',
+      (await call('/api/jobs', wt)).body.jobs.find((x: any) => x.id === wOwn).status === 'QUOTED');
+
+    /** Pure client logic, never covered: the filters and the search box. */
+    const visibleCards = async () => w.locator('[id^="job-card-"]').count();
+    const allCount = await visibleCards();
+    await w.locator('#search-jobs-input').fill('Worker rehearsal own');
+    await w.waitForFunction(
+      (n: number) => document.querySelectorAll('[id^="job-card-"]').length < n, allCount);
+    check('browser: search narrows the job list', await visibleCards() < allCount);
+    check('browser: search matches on the job title', await wcard(wOwn).count() === 1);
+    await w.locator('#search-jobs-input').fill('zzz-no-such-job');
+    await w.waitForFunction(() => document.querySelectorAll('[id^="job-card-"]').length === 0);
+    check('browser: a search matching nothing shows no cards, not everything', await visibleCards() === 0);
+    await w.locator('#search-jobs-input').fill('');
+    await w.waitForFunction((n: number) => document.querySelectorAll('[id^="job-card-"]').length === n, allCount);
+    check('browser: clearing the search restores every job', await visibleCards() === allCount);
+    await w.locator('#job-filter-today').click();
+    check('browser: the today filter narrows to today', await visibleCards() <= allCount);
+    await w.locator('#job-filter-all').click();
+    await w.waitForFunction((n: number) => document.querySelectorAll('[id^="job-card-"]').length === n, allCount);
+    check('browser: the all filter restores every job', await visibleCards() === allCount);
+
+    /**
+     * Phase 4's worker half. "Workers see new customer requests only on reload"
+     * was the gap that phase closed, and until now only the customer side of it
+     * had been watched actually working.
+     */
+    /**
+     * bringToFront() before the wait, deliberately: useLivePolling SKIPS a tick
+     * while document.hidden, which is correct for a real user and a free-tier
+     * request budget, but means a backgrounded Playwright page can sit there
+     * never polling. This check timed out once for exactly that reason after
+     * passing the run before - a flaky gate on a demo is worse than no gate.
+     *
+     * The timeout is several intervals wide for the same reason; a single
+     * missed tick behind a slow dev-server compile should not read as breakage.
+     */
+    await w.bringToFront();
+    await w.getByRole('button', { name: 'Live', exact: true }).click();
+    const wLive = await mk('worker-rehearsal-live', 'Worker rehearsal live arrival');
+    await wcard(wLive).waitFor({ timeout: 60000 });
+    check('browser: a new customer request arrives on the worker screen unprompted', true);
+    await w.getByRole('button', { name: 'Live', exact: true }).click();
+
+    /** The earnings ledger: a manual entry through the form it is added with. */
+    await w.goto(base + '/kamai');
+    await w.locator('#kamai-view-container').waitFor();
+    await w.locator('#kamai-view-manual-add-btn').click();
+    await w.locator('#kamai-manual-entry-form').waitFor();
+    await w.locator('#kamai-manual-amount').fill('777');
+    await w.locator('#kamai-manual-description').fill('Worker rehearsal entry');
+    await w.locator('#kamai-manual-entry-form').locator('button[type=submit]').click();
+    await w.getByText('Worker rehearsal entry', { exact: true }).waitFor();
+    check('browser: a manual kamai entry appears in the ledger', true);
+    /**
+     * POLLED, because a kamai entry is QUEUED rather than posted - see
+     * handleAddKamaiManual, which writes syncState: 'pending' and lets the
+     * outbox flush it. Asserting against the server immediately was testing the
+     * wrong thing and would have failed on correct behaviour.
+     *
+     * Waiting for it therefore verifies the outbox actually drains, which
+     * nothing else covers end to end.
+     */
+    const reachedServer = async () => {
+      for (let i = 0; i < 20; i += 1) {
+        try {
+          const entries = (await call('/api/ledger/entries', wt)).body.entries ?? [];
+          if (entries.some((e: any) => e.description === 'Worker rehearsal entry')) return true;
+        } catch {
+          // A single ECONNRESET against 127.0.0.1 is not the outbox failing,
+          // and a poll that cannot survive one is a flaky test by construction.
+          // Keep trying; only running out of attempts is a real answer.
+        }
+        await new Promise((r) => setTimeout(r, 500));
+      }
+      return false;
+    };
+    check('browser: and the outbox flushes it to the server', await reachedServer());
+
+    /** The passport is the product's public face; it must at least render. */
+    await w.goto(base + '/passport');
+    await w.locator('#digital-passport-container').waitFor();
+    check('browser: the passport renders with its trust score and share control',
+      await w.locator('#passport-trust-score').count() === 1
+      && await w.locator('#share-passport-btn').count() === 1);
+
+    check(`browser: the worker rehearsal produced no uncaught page errors${workerErrors.length ? ` — got: ${workerErrors.join(' | ')}` : ''}`, workerErrors.length === 0);
+    await workerDemo.close();
   }
   console.log(`Completed ${checks} customer-demo checks.`);
   if (process.env.RUN_WORKER_REGRESSIONS === 'true') {

@@ -21,6 +21,7 @@ import { WorkerProfile, SupportedLanguage } from '../types';
 import { TRANSLATIONS } from '../data/translations';
 import { getScreenCopy, localizeDisplayValue, localizeWorkerName } from '../data/uiCopy';
 import { passportUrl } from '../lib/passportLink';
+import { api, type WorkerReliability } from '../lib/api';
 import QRCode from 'qrcode';
 
 interface DigitalPassportProps {
@@ -40,6 +41,13 @@ export const DigitalPassport: React.FC<DigitalPassportProps> = ({
   const [isFlipped, setIsFlipped] = useState(false);
   const [copied, setCopied] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState('');
+  /**
+   * The booked-visit record beside the rubric (§9.1 D4). Null is NORMAL: it is
+   * what comes back when BOOKINGS_ENABLED is off, when the passport is not on
+   * the API, or when the request fails - and in every one of those cases the
+   * right screen is the one without this card, not one with an error on it.
+   */
+  const [reliability, setReliability] = useState<WorkerReliability | null>(null);
 
   const publicPassportUrl = passportUrl(profile.passportHandle);
   const verificationLabel =
@@ -77,6 +85,25 @@ export const DigitalPassport: React.FC<DigitalPassportProps> = ({
     });
     return () => { active = false; };
   }, [publicPassportUrl]);
+
+  /**
+   * Re-read whenever the trust score is recomputed. App refreshes the profile
+   * after every job transition, and a check-in or a no-show moves both numbers
+   * at once - keying on computedAt keeps this card from showing yesterday's
+   * record under today's score.
+   */
+  const trustComputedAt = profile.trustScore?.computedAt;
+  useEffect(() => {
+    let active = true;
+    if (!profile.passportHandle) {
+      setReliability(null);
+      return;
+    }
+    api.getWorkerReliability(profile.passportHandle)
+      .then((result) => { if (active) setReliability(result); })
+      .catch(() => { if (active) setReliability(null); });
+    return () => { active = false; };
+  }, [profile.passportHandle, trustComputedAt]);
 
   /**
    * Share the PUBLIC passport page.
@@ -381,6 +408,65 @@ export const DigitalPassport: React.FC<DigitalPassportProps> = ({
           </div>
         </div>
       )}
+
+      {/*
+        RELIABILITY. Sits under the rubric it feeds, as its own card rather than a
+        seventh rubric row: the rubric is points out of 100, this is a record of
+        visits, and mixing the two units in one list invites reading one as the
+        other.
+
+        NO PERCENTAGE WITHOUT A RECORD. A worker with no booked visit is still at
+        the 0.8 prior, and printing that as "80%" would state something the
+        evidence does not show - in either direction. `recordedEvents` is what
+        tells the two apart.
+      */}
+      {reliability && (() => {
+        const rc = copy.reliability;
+        const hasRecord = reliability.recordedEvents > 0;
+        const percent = Math.max(0, Math.min(100, Math.round(reliability.stats.reliability * 100)));
+        const responsePercent = Math.round(reliability.stats.responseRate * 100);
+        const tiles = [
+          { id: 'ontime', label: rc.onTime, value: reliability.stats.onTime, className: 'text-green-600' },
+          { id: 'late', label: rc.late, value: reliability.stats.late, className: 'text-amber-600' },
+          { id: 'noshow', label: rc.noShow, value: reliability.stats.noShow, className: 'text-red-600' },
+        ];
+        return (
+          <div id="passport-reliability" className="bg-white p-5 sm:p-6 rounded-3xl border border-gray-200 shadow-sm">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="font-extrabold text-gray-900">{rc.title}</h3>
+                <p className="text-xs text-gray-500 mt-1 max-w-xl">{rc.description}</p>
+              </div>
+              {hasRecord && (
+                <div className="text-right shrink-0">
+                  <div id="passport-reliability-percent" className="text-3xl font-black text-orange-500">{percent}%</div>
+                </div>
+              )}
+            </div>
+
+            {hasRecord ? (
+              <div className="h-1.5 mt-4 bg-gray-100 rounded-full overflow-hidden">
+                <div className="h-full rounded-full bg-orange-400" style={{ width: `${percent}%` }} />
+              </div>
+            ) : (
+              <p id="passport-reliability-empty" className="mt-4 text-xs font-bold text-gray-500">{rc.empty}</p>
+            )}
+
+            <div className="mt-4 grid grid-cols-3 gap-2">
+              {tiles.map((tile) => (
+                <div key={tile.id} className="bg-gray-50 border border-gray-100 rounded-2xl p-3 text-center">
+                  <div id={`passport-reliability-${tile.id}`} className={`text-lg font-black ${tile.className}`}>{tile.value}</div>
+                  <div className="text-[10px] font-bold uppercase tracking-wide text-gray-400 mt-0.5">{tile.label}</div>
+                </div>
+              ))}
+            </div>
+
+            <p id="passport-response-rate" className="mt-3 text-xs font-bold text-gray-600">
+              {reliability.requestCount > 0 ? rc.responseRate(responsePercent) : rc.responseEmpty}
+            </p>
+          </div>
+        );
+      })()}
 
       {/* Trust Guarantee & Benefits for Blue Collar Workers */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">

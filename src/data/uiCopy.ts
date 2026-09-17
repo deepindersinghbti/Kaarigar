@@ -1,4 +1,4 @@
-import type { JobState, SupportedLanguage } from '../types';
+import type { BookingStatus, JobState, SupportedLanguage } from '../types';
 
 /**
  * Copy for the screens that were added after the original translation table.
@@ -92,6 +92,8 @@ export interface JobsCopy {
   quoteSend: string;
   quoteInvalid: string;
   quotedAwaiting: string;
+  /** A customer job the worker has marked done, awaiting their answer. */
+  completedAwaiting: string;
   /** The customer has named a figure of their own on a re-quote. */
   counterAsk: (price: number) => string;
   /** The opt-in live-updates switch on the jobs list. */
@@ -99,6 +101,81 @@ export interface JobsCopy {
   liveOn: string;
   liveOff: string;
   updateError: string;
+  /**
+   * Booking commitments (KAARIGAR_RELIABILITY_FEATURE.md §9.4).
+   *
+   * Every one of these renders ONLY on a job that has a booking. A worker's own
+   * jobs, and everything from before BOOKINGS_ENABLED was turned on, never reach
+   * this copy at all - they keep the one-tap wording above.
+   */
+  booking: {
+    /** Time left to answer a new request, and what happens when it runs out. */
+    respondBy: (left: string) => string;
+    respondOverdue: string;
+    declineCta: string;
+    declineConfirm: string;
+    declineYes: string;
+    declineNo: string;
+    /** Time left to name a slot once the customer has agreed the price. */
+    scheduleBy: (left: string) => string;
+    scheduleOverdue: string;
+    scheduleCta: string;
+    /** The slot picker. */
+    slotTitle: string;
+    slotDate: string;
+    slotWindow: string;
+    slotMorning: string;
+    slotAfternoon: string;
+    slotEvening: string;
+    slotConfirm: string;
+    slotCancel: string;
+    slotAgreed: (when: string) => string;
+    /** Arrival. */
+    arriveBy: (left: string) => string;
+    arriveOverdue: string;
+    arrivedCta: string;
+    otpTitle: string;
+    otpHint: string;
+    otpPlaceholder: string;
+    otpSubmit: string;
+    otpCancel: string;
+    /** Refusals from the check-in route. */
+    otpWrong: string;
+    otpLocked: string;
+    otpNeeded: string;
+    /** Standing banners. */
+    lateBanner: string;
+    noShowNotice: string;
+    expiredNotice: string;
+    declinedNotice: string;
+    cancelledNotice: string;
+    /** Reschedule, and the three reasons it may be unavailable. */
+    rescheduleCta: string;
+    reschedulePending: string;
+    rescheduleUsed: string;
+    rescheduleTooLate: string;
+    rescheduleTitle: string;
+    rescheduleReason: string;
+    rescheduleSend: string;
+    /** Cancelling, and the warning that it will cost the worker. */
+    cancelCta: string;
+    lateCancelWarning: string;
+    lateCancelConfirm: string;
+    lateCancelKeep: string;
+    cancelConfirm: string;
+    /** Slot validation, mirrored from the server so the wording is local. */
+    slotRequired: string;
+    slotInPast: string;
+    slotOrder: string;
+    slotTooLong: string;
+    slotTooFar: string;
+    /** A state the screen and the server disagree about. */
+    conflict: string;
+    /** Relative durations: "2h 15m", "45m". */
+    duration: (hours: number, minutes: number) => string;
+    /** The booking's own status, for the small grey label. */
+    state: Record<BookingStatus, string>;
+  };
   state: Record<JobState, string>;
   action: Partial<Record<JobState, string>>;
   payment: Record<'upi' | 'cash' | 'pending' | 'settled', string>;
@@ -208,6 +285,22 @@ export interface PassportCopy {
   outOf100: string;
   trustRows: string[];
   benefits: Array<{ title: string; description: string }>;
+  /**
+   * The reliability line beside the trust rubric (KAARIGAR_RELIABILITY_FEATURE.md
+   * §9.1 D4). Rendered ONLY when the server has booking stats to give - with
+   * BOOKINGS_ENABLED off the stats route answers 404 and none of this appears.
+   */
+  reliability: {
+    title: string;
+    description: string;
+    /** Shown instead of a percentage when there is no recorded visit to judge. */
+    empty: string;
+    onTime: string;
+    late: string;
+    noShow: string;
+    responseRate: (percent: number) => string;
+    responseEmpty: string;
+  };
 }
 
 export interface ProfileCopy {
@@ -624,11 +717,73 @@ const jobsHi: JobsCopy = {
   quoteSend: 'दाम भेजें',
   quoteInvalid: 'दाम शून्य से बड़ा होना चाहिए।',
   quotedAwaiting: 'ग्राहक की मंज़ूरी का इंतज़ार है।',
+  completedAwaiting: 'ग्राहक की पुष्टि का इंतज़ार है।',
   counterAsk: (price) => `ग्राहक ने ₹${price} माँगा है`,
   live: 'लाइव',
   liveOn: 'नए अनुरोध अपने आप दिखते हैं। रोकने के लिए दबाएँ।',
   liveOff: 'नए अनुरोध अपने आप पाने के लिए दबाएँ।',
   updateError: 'काम अपडेट नहीं हो सका।',
+  booking: {
+    respondBy: (left) => `${left} में जवाब दें`,
+    respondOverdue: 'इस अनुरोध का जवाब देने का समय बीत चुका है।',
+    declineCta: 'मना करें',
+    declineConfirm: 'इस काम के लिए मना करें? ग्राहक को बता दिया जाएगा।',
+    declineYes: 'हाँ, मना करें',
+    declineNo: 'रहने दें',
+    scheduleBy: (left) => `${left} में समय चुनें`,
+    scheduleOverdue: 'समय चुनने की अवधि बीत चुकी है।',
+    scheduleCta: 'समय चुनें',
+    slotTitle: 'आप कब जाएँगे?',
+    slotDate: 'दिन',
+    slotWindow: 'समय',
+    slotMorning: 'सुबह 9 - 11',
+    slotAfternoon: 'दोपहर 1 - 3',
+    slotEvening: 'शाम 5 - 7',
+    slotConfirm: 'यही समय पक्का करें',
+    slotCancel: 'वापस',
+    slotAgreed: (when) => `तय समय: ${when}`,
+    arriveBy: (left) => `${left} में पहुँचें`,
+    arriveOverdue: 'तय समय निकल चुका है।',
+    arrivedCta: 'मैं पहुँच गया - कोड डालें',
+    otpTitle: 'पहुँचने का कोड',
+    otpHint: 'ग्राहक की स्क्रीन पर दिख रहा 4 अंकों का कोड पूछें।',
+    otpPlaceholder: '0000',
+    otpSubmit: 'पहुँचना दर्ज करें',
+    otpCancel: 'वापस',
+    otpWrong: 'यह कोड सही नहीं है। ग्राहक से चारों अंक दोबारा पूछें।',
+    otpLocked: 'बहुत बार गलत कोड डाला गया। कुछ मिनट बाद कोशिश करें।',
+    otpNeeded: 'ग्राहक से मिला 4 अंकों का कोड डालें।',
+    lateBanner: 'आपको देर हो रही है। ग्राहक के पास पहुँचें और उनका कोड डालें।',
+    noShowNotice: 'दर्ज हुआ कि आप नहीं पहुँचे। इससे आपकी भरोसे की रेटिंग घटी है।',
+    expiredNotice: 'जवाब देने से पहले ही यह अनुरोध खत्म हो गया।',
+    declinedNotice: 'आपने इस अनुरोध के लिए मना कर दिया था।',
+    cancelledNotice: 'यह काम रद्द हो गया।',
+    rescheduleCta: 'समय बदलें',
+    reschedulePending: 'ग्राहक के नया समय मानने का इंतज़ार है।',
+    rescheduleUsed: 'आप एक बार समय बदल चुके हैं।',
+    rescheduleTooLate: 'अब समय नहीं बदला जा सकता - तय समय बहुत पास है।',
+    rescheduleTitle: 'नया समय माँगें',
+    rescheduleReason: 'वजह (ग्राहक को दिखेगी)',
+    rescheduleSend: 'नया समय भेजें',
+    cancelCta: 'काम रद्द करें',
+    lateCancelWarning: 'अभी रद्द करने से आपकी भरोसे की रेटिंग घटेगी।',
+    lateCancelConfirm: 'फिर भी रद्द करें',
+    lateCancelKeep: 'काम रहने दें',
+    cancelConfirm: 'यह काम रद्द करें?',
+    slotRequired: 'पहले दिन और समय चुनें।',
+    slotInPast: 'यह समय बीत चुका है। आगे का समय चुनें।',
+    slotOrder: 'खत्म होने का समय शुरू होने के बाद होना चाहिए।',
+    slotTooLong: 'एक स्लॉट 12 घंटे से लंबा नहीं हो सकता।',
+    slotTooFar: 'अगले 14 दिनों के अंदर का समय चुनें।',
+    conflict: 'यह काम बदल गया है। रिफ्रेश करके दोबारा कोशिश करें।',
+    duration: (hours, minutes) => (hours > 0 ? `${hours} घं ${minutes} मि` : `${minutes} मि`),
+    state: {
+      REQUESTED: 'आपके जवाब का इंतज़ार', RESPONDED: 'दाम भेजा', COMMITTED: 'समय तय',
+      ARRIVED: 'आप पहुँचे', COMPLETED: 'काम पूरा', LATE: 'देर', NO_SHOW: 'नहीं पहुँचे',
+      EXPIRED: 'खत्म', DECLINED: 'मना किया',
+      CANCELLED_BY_CUSTOMER: 'ग्राहक ने रद्द किया', CANCELLED_BY_KAARIGAR: 'आपने रद्द किया',
+    },
+  },
   state: {
     REQUESTED: 'अनुरोध किया गया', QUOTED: 'कोट भेजा गया', ACCEPTED: 'स्वीकार किया गया',
     SCHEDULED: 'शेड्यूल किया गया', IN_PROGRESS: 'काम चल रहा है', COMPLETED: 'काम पूरा',
@@ -666,11 +821,73 @@ const jobsEn: JobsCopy = {
   quoteSend: 'Send price',
   quoteInvalid: 'The price must be greater than zero.',
   quotedAwaiting: 'Waiting for the customer to accept.',
+  completedAwaiting: 'Waiting for the customer to confirm the work is done.',
   counterAsk: (price) => `The customer asked for ₹${price}`,
   live: 'Live',
   liveOn: 'New requests appear on their own. Tap to stop.',
   liveOff: 'Tap to let new requests appear on their own.',
   updateError: 'Could not update the job.',
+  booking: {
+    respondBy: (left) => `Reply within ${left}`,
+    respondOverdue: 'The time to reply to this request has passed.',
+    declineCta: 'Decline',
+    declineConfirm: 'Decline this request? The customer will be told you cannot take it.',
+    declineYes: 'Yes, decline',
+    declineNo: 'Keep it',
+    scheduleBy: (left) => `Pick a time within ${left}`,
+    scheduleOverdue: 'The time to pick a slot has passed.',
+    scheduleCta: 'Pick a time',
+    slotTitle: 'When will you go?',
+    slotDate: 'Day',
+    slotWindow: 'Time',
+    slotMorning: 'Morning 9am - 11am',
+    slotAfternoon: 'Afternoon 1pm - 3pm',
+    slotEvening: 'Evening 5pm - 7pm',
+    slotConfirm: 'Confirm this time',
+    slotCancel: 'Back',
+    slotAgreed: (when) => `Agreed time: ${when}`,
+    arriveBy: (left) => `Reach within ${left}`,
+    arriveOverdue: 'You are past the agreed time.',
+    arrivedCta: 'I have arrived - enter code',
+    otpTitle: 'Arrival code',
+    otpHint: 'Ask the customer for the 4-digit code on their screen.',
+    otpPlaceholder: '0000',
+    otpSubmit: 'Confirm arrival',
+    otpCancel: 'Back',
+    otpWrong: 'That code is not right. Check the 4 digits with the customer.',
+    otpLocked: 'Too many wrong codes. Wait a few minutes and try again.',
+    otpNeeded: 'Enter the 4-digit code from the customer.',
+    lateBanner: 'You are late. Reach the customer and enter their code.',
+    noShowNotice: 'Marked as not arrived. This has lowered your reliability.',
+    expiredNotice: 'This request expired before you replied.',
+    declinedNotice: 'You declined this request.',
+    cancelledNotice: 'This job was cancelled.',
+    rescheduleCta: 'Change the time',
+    reschedulePending: 'Waiting for the customer to accept the new time.',
+    rescheduleUsed: 'You have already changed the time once.',
+    rescheduleTooLate: 'The time can no longer be changed - it is too close to the slot.',
+    rescheduleTitle: 'Ask for a new time',
+    rescheduleReason: 'Reason (the customer will see this)',
+    rescheduleSend: 'Send the new time',
+    cancelCta: 'Cancel job',
+    lateCancelWarning: 'Cancelling now will lower your reliability score.',
+    lateCancelConfirm: 'Cancel anyway',
+    lateCancelKeep: 'Keep the job',
+    cancelConfirm: 'Cancel this job?',
+    slotRequired: 'Pick a day and a time first.',
+    slotInPast: 'That time has already passed. Pick a later one.',
+    slotOrder: 'The end of the slot must be after its start.',
+    slotTooLong: 'A slot cannot be longer than 12 hours.',
+    slotTooFar: 'Pick a time within the next 14 days.',
+    conflict: 'This job changed. Refresh and try again.',
+    duration: (hours, minutes) => (hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`),
+    state: {
+      REQUESTED: 'Awaiting your reply', RESPONDED: 'Price sent', COMMITTED: 'Time agreed',
+      ARRIVED: 'You arrived', COMPLETED: 'Work done', LATE: 'Late', NO_SHOW: 'Did not arrive',
+      EXPIRED: 'Expired', DECLINED: 'Declined',
+      CANCELLED_BY_CUSTOMER: 'Cancelled by customer', CANCELLED_BY_KAARIGAR: 'You cancelled',
+    },
+  },
   state: {
     REQUESTED: 'Requested', QUOTED: 'Quoted', ACCEPTED: 'Accepted', SCHEDULED: 'Scheduled',
     IN_PROGRESS: 'In progress', COMPLETED: 'Completed', SETTLED: 'Payment settled',
@@ -708,11 +925,73 @@ const jobsPa: JobsCopy = {
   quoteSend: 'ਮੁੱਲ ਭੇਜੋ',
   quoteInvalid: 'ਮੁੱਲ ਸਿਫ਼ਰ ਤੋਂ ਵੱਧ ਹੋਣਾ ਚਾਹੀਦਾ ਹੈ।',
   quotedAwaiting: 'ਗਾਹਕ ਦੀ ਮਨਜ਼ੂਰੀ ਦੀ ਉਡੀਕ ਹੈ।',
+  completedAwaiting: 'ਗਾਹਕ ਦੀ ਪੁਸ਼ਟੀ ਦੀ ਉਡੀਕ ਹੈ।',
   counterAsk: (price) => `ਗਾਹਕ ਨੇ ₹${price} ਮੰਗਿਆ ਹੈ`,
   live: 'ਲਾਈਵ',
   liveOn: 'ਨਵੀਆਂ ਬੇਨਤੀਆਂ ਆਪਣੇ ਆਪ ਦਿਖਦੀਆਂ ਹਨ। ਰੋਕਣ ਲਈ ਦਬਾਓ।',
   liveOff: 'ਨਵੀਆਂ ਬੇਨਤੀਆਂ ਆਪਣੇ ਆਪ ਪਾਉਣ ਲਈ ਦਬਾਓ।',
   updateError: 'ਕੰਮ ਅਪਡੇਟ ਨਹੀਂ ਹੋ ਸਕਿਆ।',
+  booking: {
+    respondBy: (left) => `${left} ਵਿੱਚ ਜਵਾਬ ਦਿਓ`,
+    respondOverdue: 'ਇਸ ਬੇਨਤੀ ਦਾ ਜਵਾਬ ਦੇਣ ਦਾ ਸਮਾਂ ਲੰਘ ਚੁੱਕਾ ਹੈ।',
+    declineCta: 'ਨਾਂਹ ਕਰੋ',
+    declineConfirm: 'ਇਸ ਕੰਮ ਲਈ ਨਾਂਹ ਕਰਨੀ ਹੈ? ਗਾਹਕ ਨੂੰ ਦੱਸ ਦਿੱਤਾ ਜਾਵੇਗਾ।',
+    declineYes: 'ਹਾਂ, ਨਾਂਹ ਕਰੋ',
+    declineNo: 'ਰਹਿਣ ਦਿਓ',
+    scheduleBy: (left) => `${left} ਵਿੱਚ ਸਮਾਂ ਚੁਣੋ`,
+    scheduleOverdue: 'ਸਮਾਂ ਚੁਣਨ ਦੀ ਮਿਆਦ ਲੰਘ ਚੁੱਕੀ ਹੈ।',
+    scheduleCta: 'ਸਮਾਂ ਚੁਣੋ',
+    slotTitle: 'ਤੁਸੀਂ ਕਦੋਂ ਜਾਓਗੇ?',
+    slotDate: 'ਦਿਨ',
+    slotWindow: 'ਸਮਾਂ',
+    slotMorning: 'ਸਵੇਰੇ 9 - 11',
+    slotAfternoon: 'ਦੁਪਹਿਰੇ 1 - 3',
+    slotEvening: 'ਸ਼ਾਮੀਂ 5 - 7',
+    slotConfirm: 'ਇਹੀ ਸਮਾਂ ਪੱਕਾ ਕਰੋ',
+    slotCancel: 'ਵਾਪਸ',
+    slotAgreed: (when) => `ਤੈਅ ਸਮਾਂ: ${when}`,
+    arriveBy: (left) => `${left} ਵਿੱਚ ਪਹੁੰਚੋ`,
+    arriveOverdue: 'ਤੈਅ ਸਮਾਂ ਲੰਘ ਚੁੱਕਾ ਹੈ।',
+    arrivedCta: 'ਮੈਂ ਪਹੁੰਚ ਗਿਆ - ਕੋਡ ਪਾਓ',
+    otpTitle: 'ਪਹੁੰਚਣ ਦਾ ਕੋਡ',
+    otpHint: 'ਗਾਹਕ ਦੀ ਸਕਰੀਨ ਉੱਤੇ ਦਿਸਦਾ 4 ਅੰਕਾਂ ਦਾ ਕੋਡ ਪੁੱਛੋ।',
+    otpPlaceholder: '0000',
+    otpSubmit: 'ਪਹੁੰਚਣਾ ਦਰਜ ਕਰੋ',
+    otpCancel: 'ਵਾਪਸ',
+    otpWrong: 'ਇਹ ਕੋਡ ਸਹੀ ਨਹੀਂ ਹੈ। ਗਾਹਕ ਤੋਂ ਚਾਰੇ ਅੰਕ ਦੁਬਾਰਾ ਪੁੱਛੋ।',
+    otpLocked: 'ਕਈ ਵਾਰ ਗਲਤ ਕੋਡ ਪਾਇਆ ਗਿਆ। ਕੁਝ ਮਿੰਟਾਂ ਬਾਅਦ ਕੋਸ਼ਿਸ਼ ਕਰੋ।',
+    otpNeeded: 'ਗਾਹਕ ਤੋਂ ਮਿਲਿਆ 4 ਅੰਕਾਂ ਦਾ ਕੋਡ ਪਾਓ।',
+    lateBanner: 'ਤੁਹਾਨੂੰ ਦੇਰ ਹੋ ਰਹੀ ਹੈ। ਗਾਹਕ ਕੋਲ ਪਹੁੰਚੋ ਅਤੇ ਉਹਨਾਂ ਦਾ ਕੋਡ ਪਾਓ।',
+    noShowNotice: 'ਦਰਜ ਹੋਇਆ ਕਿ ਤੁਸੀਂ ਨਹੀਂ ਪਹੁੰਚੇ। ਇਸ ਨਾਲ ਤੁਹਾਡੀ ਰੇਟਿੰਗ ਘਟੀ ਹੈ।',
+    expiredNotice: 'ਜਵਾਬ ਦੇਣ ਤੋਂ ਪਹਿਲਾਂ ਹੀ ਇਹ ਬੇਨਤੀ ਮੁੱਕ ਗਈ।',
+    declinedNotice: 'ਤੁਸੀਂ ਇਸ ਬੇਨਤੀ ਲਈ ਨਾਂਹ ਕਰ ਦਿੱਤੀ ਸੀ।',
+    cancelledNotice: 'ਇਹ ਕੰਮ ਰੱਦ ਹੋ ਗਿਆ।',
+    rescheduleCta: 'ਸਮਾਂ ਬਦਲੋ',
+    reschedulePending: 'ਗਾਹਕ ਵੱਲੋਂ ਨਵਾਂ ਸਮਾਂ ਮੰਨਣ ਦੀ ਉਡੀਕ ਹੈ।',
+    rescheduleUsed: 'ਤੁਸੀਂ ਇੱਕ ਵਾਰ ਸਮਾਂ ਬਦਲ ਚੁੱਕੇ ਹੋ।',
+    rescheduleTooLate: 'ਹੁਣ ਸਮਾਂ ਨਹੀਂ ਬਦਲ ਸਕਦਾ - ਤੈਅ ਸਮਾਂ ਬਹੁਤ ਨੇੜੇ ਹੈ।',
+    rescheduleTitle: 'ਨਵਾਂ ਸਮਾਂ ਮੰਗੋ',
+    rescheduleReason: 'ਕਾਰਨ (ਗਾਹਕ ਨੂੰ ਦਿਸੇਗਾ)',
+    rescheduleSend: 'ਨਵਾਂ ਸਮਾਂ ਭੇਜੋ',
+    cancelCta: 'ਕੰਮ ਰੱਦ ਕਰੋ',
+    lateCancelWarning: 'ਹੁਣ ਰੱਦ ਕਰਨ ਨਾਲ ਤੁਹਾਡੀ ਭਰੋਸੇ ਦੀ ਰੇਟਿੰਗ ਘਟੇਗੀ।',
+    lateCancelConfirm: 'ਫਿਰ ਵੀ ਰੱਦ ਕਰੋ',
+    lateCancelKeep: 'ਕੰਮ ਰਹਿਣ ਦਿਓ',
+    cancelConfirm: 'ਇਹ ਕੰਮ ਰੱਦ ਕਰਨਾ ਹੈ?',
+    slotRequired: 'ਪਹਿਲਾਂ ਦਿਨ ਅਤੇ ਸਮਾਂ ਚੁਣੋ।',
+    slotInPast: 'ਇਹ ਸਮਾਂ ਲੰਘ ਚੁੱਕਾ ਹੈ। ਅੱਗੇ ਦਾ ਸਮਾਂ ਚੁਣੋ।',
+    slotOrder: 'ਮੁੱਕਣ ਦਾ ਸਮਾਂ ਸ਼ੁਰੂ ਹੋਣ ਤੋਂ ਬਾਅਦ ਹੋਣਾ ਚਾਹੀਦਾ ਹੈ।',
+    slotTooLong: 'ਇੱਕ ਸਲਾਟ 12 ਘੰਟਿਆਂ ਤੋਂ ਲੰਮਾ ਨਹੀਂ ਹੋ ਸਕਦਾ।',
+    slotTooFar: 'ਅਗਲੇ 14 ਦਿਨਾਂ ਦੇ ਅੰਦਰ ਦਾ ਸਮਾਂ ਚੁਣੋ।',
+    conflict: 'ਇਹ ਕੰਮ ਬਦਲ ਗਿਆ ਹੈ। ਰਿਫ੍ਰੈਸ਼ ਕਰਕੇ ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼ ਕਰੋ।',
+    duration: (hours, minutes) => (hours > 0 ? `${hours} ਘੰ ${minutes} ਮਿ` : `${minutes} ਮਿ`),
+    state: {
+      REQUESTED: 'ਤੁਹਾਡੇ ਜਵਾਬ ਦੀ ਉਡੀਕ', RESPONDED: 'ਭਾਅ ਭੇਜਿਆ', COMMITTED: 'ਸਮਾਂ ਤੈਅ',
+      ARRIVED: 'ਤੁਸੀਂ ਪਹੁੰਚੇ', COMPLETED: 'ਕੰਮ ਪੂਰਾ', LATE: 'ਦੇਰ', NO_SHOW: 'ਨਹੀਂ ਪਹੁੰਚੇ',
+      EXPIRED: 'ਮੁੱਕ ਗਈ', DECLINED: 'ਨਾਂਹ ਕੀਤੀ',
+      CANCELLED_BY_CUSTOMER: 'ਗਾਹਕ ਨੇ ਰੱਦ ਕੀਤਾ', CANCELLED_BY_KAARIGAR: 'ਤੁਸੀਂ ਰੱਦ ਕੀਤਾ',
+    },
+  },
   state: {
     REQUESTED: 'ਬੇਨਤੀ ਕੀਤੀ',
     QUOTED: 'ਕੋਟ ਭੇਜਿਆ',
@@ -948,14 +1227,44 @@ const assistantPa: AssistantCopy = {
 
 const passportHi: PassportCopy = {
   governmentAligned: 'सरकार और उद्योग के अनुरूप', subtitle: 'QR-सत्यापित कार्य पहचान पत्र • हर घर के लिए तुरंत भरोसा', addWorkVoice: 'काम जोड़ें (बोलकर)', nationalIdentity: 'राष्ट्रीय कारीगर पहचान', passportTitle: 'डिजिटल कारीगर पासपोर्ट', identityVerified: 'पहचान सत्यापित', verificationPending: 'सत्यापन बाकी', profileNotVerified: 'प्रोफ़ाइल सत्यापित नहीं', experience: 'अनुभव', years: 'साल', jobsDone: 'पूरे काम', rating: 'रेटिंग', skillsListed: 'कारीगर द्वारा बताए हुनर', evidenceBuilds: 'समय के साथ प्रमाण बनते हैं', credentialsListed: 'कारीगर द्वारा बताए प्रमाणपत्र', credentialLink: 'सरकारी प्रमाणपत्र लिंक', credentialStatus: 'स्थिति', notLinked: 'लिंक नहीं है', sandboxDemo: 'सैंडबॉक्स डेमो', credentialNotice: 'केवल डेमो मॉक स्थिति। यहां सरकारी जांच या प्रमाणपत्र सत्यापन नहीं किया जाता।', scanAlt: 'सार्वजनिक पासपोर्ट खोलने के लिए स्कैन करें', scanTitle: 'कार्य इतिहास सत्यापित करने के लिए स्कैन करें', scanDescription: 'बिल्डर, घर-मालिक और कंपनियों के लिए तुरंत डिजिटल प्रमाण।', joined: (date) => `सार्वजनिक पासपोर्ट • जुड़े ${date}`, linkCopied: 'लिंक कॉपी हुआ!', share: 'साझा करें', downloadId: 'आईडी डाउनलोड करें', downloadNotice: 'डिजिटल पासपोर्ट आईडी कार्ड PDF के रूप में डाउनलोड हुआ!', trustEvidence: 'भरोसे के प्रमाण', trustDescription: 'फोन OTP, पूरे किए काम और ग्राहक प्रतिक्रिया पर आधारित स्पष्ट पैमाना। अधिकृत सत्यापन जुड़ने तक हुनर और प्रमाणपत्र कारीगर द्वारा बताए गए हैं।', outOf100: '100 में से', trustRows: ['फोन पहचान', 'हुनर प्रमाणपत्र', 'काम से जुड़ा इतिहास', 'ग्राहक रेटिंग', 'विश्वसनीयता रिकॉर्ड', 'कौशल-प्रशिक्षण भागीदारी'], benefits: [{ title: 'साथ चलने वाला प्रमाण', description: 'पूरे काम और ग्राहक प्रतिक्रिया से एक पोर्टेबल रिकॉर्ड बनता है।' }, { title: 'आवाज़ से दर्ज काम', description: 'काम के बाद बोलकर काम और भुगतान का विवरण दर्ज करें।' }, { title: 'उचित दाम और रिकॉर्ड', description: 'स्पष्ट दाम-सीमा और लेजर भविष्य की वित्तीय मदद करते हैं।' }],
+  reliability: {
+    title: 'भरोसेमंदी',
+    description: 'बुक की गई विज़िट से अपने-आप तय होती है: समय पर पहुँचना, देर से पहुँचना, या न पहुँचना। पुरानी विज़िट कम गिनी जाती हैं।',
+    empty: 'अभी तक कोई बुक की गई विज़िट दर्ज नहीं है।',
+    onTime: 'समय पर',
+    late: 'देर से',
+    noShow: 'नहीं पहुँचे',
+    responseRate: (percent) => `${percent}% अनुरोधों का जवाब दिया`,
+    responseEmpty: 'अभी तक कोई अनुरोध नहीं।',
+  },
 };
 
 const passportEn: PassportCopy = {
   governmentAligned: 'Government & industry aligned', subtitle: 'QR-verified work identity card • Instant trust for every homeowner', addWorkVoice: 'Add work (by voice)', nationalIdentity: 'National Kaarigar identity', passportTitle: 'Digital Kaarigar Passport', identityVerified: 'Identity verified', verificationPending: 'Verification pending', profileNotVerified: 'Profile not verified', experience: 'Experience', years: 'years', jobsDone: 'Jobs done', rating: 'Rating', skillsListed: 'Skills listed by worker', evidenceBuilds: 'Evidence builds over time', credentialsListed: 'Credentials listed by worker', credentialLink: 'Government credential link', credentialStatus: 'Status', notLinked: 'Not linked', sandboxDemo: 'Sandbox demo', credentialNotice: 'Demo-only mock state. No live government lookup or certificate verification is performed here.', scanAlt: 'Scan to open the public passport', scanTitle: 'Scan to verify work history', scanDescription: 'Instant digital proof for builders, homeowners and companies.', joined: (date) => `Public passport • Joined ${date}`, linkCopied: 'Link copied!', share: 'Share', downloadId: 'Download ID', downloadNotice: 'Digital Passport ID card downloaded as PDF!', trustEvidence: 'Trust evidence', trustDescription: 'A transparent rubric from phone OTP, completed jobs and customer feedback. Skills and certificates are worker-entered until authorised verification is linked.', outOf100: 'out of 100', trustRows: ['Phone identity', 'Skill credentials', 'Job-linked work history', 'Customer ratings', 'Reliability record', 'Skilling engagement'], benefits: [{ title: 'Evidence that travels', description: 'Completed jobs and customer feedback build a portable record.' }, { title: 'Voice-logged work', description: 'Speak after a job to record work and payment details.' }, { title: 'Fair rates and records', description: 'Transparent bands and a structured ledger support future finance.' }],
+  reliability: {
+    title: 'Reliability',
+    description: 'Worked out automatically from booked visits: arriving on time, arriving late, or not arriving. Older visits count for less.',
+    empty: 'No booked visits recorded yet.',
+    onTime: 'On time',
+    late: 'Late',
+    noShow: 'Did not arrive',
+    responseRate: (percent) => `Replies to ${percent}% of requests`,
+    responseEmpty: 'No requests yet.',
+  },
 };
 
 const passportPa: PassportCopy = {
   governmentAligned: 'ਸਰਕਾਰ ਅਤੇ ਉਦਯੋਗ ਦੇ ਅਨੁਕੂਲ', subtitle: 'QR ਨਾਲ ਪੁਸ਼ਟੀ ਕੀਤਾ ਕੰਮ ਪਛਾਣ ਪੱਤਰ • ਹਰ ਘਰ ਲਈ ਤੁਰੰਤ ਭਰੋਸਾ', addWorkVoice: 'ਕੰਮ ਜੋੜੋ (ਬੋਲ ਕੇ)', nationalIdentity: 'ਰਾਸ਼ਟਰੀ ਕਾਰੀਗਰ ਪਛਾਣ', passportTitle: 'ਡਿਜ਼ਿਟਲ ਕਾਰੀਗਰ ਪਾਸਪੋਰਟ', identityVerified: 'ਪਛਾਣ ਦੀ ਪੁਸ਼ਟੀ ਹੋ ਗਈ', verificationPending: 'ਪੁਸ਼ਟੀ ਬਾਕੀ ਹੈ', profileNotVerified: 'ਪ੍ਰੋਫਾਈਲ ਦੀ ਪੁਸ਼ਟੀ ਨਹੀਂ ਹੋਈ', experience: 'ਤਜਰਬਾ', years: 'ਸਾਲ', jobsDone: 'ਪੂਰੇ ਕੰਮ', rating: 'ਰੇਟਿੰਗ', skillsListed: 'ਕਾਰੀਗਰ ਵੱਲੋਂ ਦੱਸੇ ਹੁਨਰ', evidenceBuilds: 'ਸਮੇਂ ਨਾਲ ਸਬੂਤ ਬਣਦੇ ਹਨ', credentialsListed: 'ਕਾਰੀਗਰ ਵੱਲੋਂ ਦੱਸੇ ਪ੍ਰਮਾਣਪੱਤਰ', credentialLink: 'ਸਰਕਾਰੀ ਪ੍ਰਮਾਣਪੱਤਰ ਲਿੰਕ', credentialStatus: 'ਸਥਿਤੀ', notLinked: 'ਲਿੰਕ ਨਹੀਂ ਹੈ', sandboxDemo: 'ਸੈਂਡਬਾਕਸ ਡੈਮੋ', credentialNotice: 'ਸਿਰਫ਼ ਡੈਮੋ ਮੌਕ ਸਥਿਤੀ। ਇੱਥੇ ਸਰਕਾਰੀ ਜਾਂਚ ਜਾਂ ਪ੍ਰਮਾਣਪੱਤਰ ਪੁਸ਼ਟੀ ਨਹੀਂ ਕੀਤੀ ਜਾਂਦੀ।', scanAlt: 'ਸਾਰਵਜਨਿਕ ਪਾਸਪੋਰਟ ਖੋਲ੍ਹਣ ਲਈ ਸਕੈਨ ਕਰੋ', scanTitle: 'ਕੰਮ ਦਾ ਇਤਿਹਾਸ ਪੁਸ਼ਟ ਕਰਨ ਲਈ ਸਕੈਨ ਕਰੋ', scanDescription: 'ਬਿਲਡਰਾਂ, ਘਰ ਮਾਲਕਾਂ ਅਤੇ ਕੰਪਨੀਆਂ ਲਈ ਤੁਰੰਤ ਡਿਜ਼ਿਟਲ ਸਬੂਤ।', joined: (date) => `ਸਾਰਵਜਨਿਕ ਪਾਸਪੋਰਟ • ਸ਼ਾਮਲ ਹੋਏ ${date}`, linkCopied: 'ਲਿੰਕ ਕਾਪੀ ਹੋ ਗਿਆ!', share: 'ਸਾਂਝਾ ਕਰੋ', downloadId: 'ਆਈਡੀ ਡਾਊਨਲੋਡ ਕਰੋ', downloadNotice: 'ਡਿਜ਼ਿਟਲ ਪਾਸਪੋਰਟ ਆਈਡੀ ਕਾਰਡ PDF ਵਜੋਂ ਡਾਊਨਲੋਡ ਹੋਇਆ!', trustEvidence: 'ਭਰੋਸੇ ਦੇ ਸਬੂਤ', trustDescription: 'ਫੋਨ OTP, ਪੂਰੇ ਹੋਏ ਕੰਮਾਂ ਅਤੇ ਗਾਹਕ ਫੀਡਬੈਕ ਤੋਂ ਬਣਿਆ ਸਪਸ਼ਟ ਪੈਮਾਨਾ। ਅਧਿਕਾਰਤ ਪੁਸ਼ਟੀ ਜੁੜਨ ਤੱਕ ਹੁਨਰ ਅਤੇ ਸਰਟੀਫਿਕੇਟ ਕਾਰੀਗਰ ਵੱਲੋਂ ਦੱਸੇ ਗਏ ਹਨ।', outOf100: '100 ਵਿੱਚੋਂ', trustRows: ['ਫੋਨ ਪਛਾਣ', 'ਹੁਨਰ ਪ੍ਰਮਾਣਪੱਤਰ', 'ਕੰਮ ਨਾਲ ਜੁੜਿਆ ਇਤਿਹਾਸ', 'ਗਾਹਕ ਰੇਟਿੰਗ', 'ਭਰੋਸੇਯੋਗਤਾ ਰਿਕਾਰਡ', 'ਹੁਨਰ-ਸਿਖਲਾਈ ਭਾਗੀਦਾਰੀ'], benefits: [{ title: 'ਨਾਲ ਚੱਲਣ ਵਾਲਾ ਸਬੂਤ', description: 'ਪੂਰੇ ਕੰਮ ਅਤੇ ਗਾਹਕ ਫੀਡਬੈਕ ਇੱਕ ਪੋਰਟੇਬਲ ਰਿਕਾਰਡ ਬਣਾਉਂਦੇ ਹਨ।' }, { title: 'ਆਵਾਜ਼ ਨਾਲ ਦਰਜ ਕੰਮ', description: 'ਕੰਮ ਤੋਂ ਬਾਅਦ ਬੋਲ ਕੇ ਕੰਮ ਅਤੇ ਭੁਗਤਾਨ ਦਾ ਵੇਰਵਾ ਦਰਜ ਕਰੋ।' }, { title: 'ਸਹੀ ਰੇਟ ਅਤੇ ਰਿਕਾਰਡ', description: 'ਸਪਸ਼ਟ ਰੇਟ-ਬੈਂਡ ਅਤੇ ਲੇਜਰ ਭਵਿੱਖੀ ਵਿੱਤੀ ਮਦਦ ਕਰਦੇ ਹਨ।' }],
+  reliability: {
+    title: 'ਭਰੋਸੇਯੋਗਤਾ',
+    description: 'ਬੁੱਕ ਕੀਤੀਆਂ ਵਿਜ਼ਿਟਾਂ ਤੋਂ ਆਪਣੇ-ਆਪ ਤੈਅ ਹੁੰਦੀ ਹੈ: ਸਮੇਂ ਸਿਰ ਪਹੁੰਚਣਾ, ਦੇਰ ਨਾਲ ਪਹੁੰਚਣਾ, ਜਾਂ ਨਾ ਪਹੁੰਚਣਾ। ਪੁਰਾਣੀਆਂ ਵਿਜ਼ਿਟਾਂ ਘੱਟ ਗਿਣੀਆਂ ਜਾਂਦੀਆਂ ਹਨ।',
+    empty: 'ਹਾਲੇ ਤੱਕ ਕੋਈ ਬੁੱਕ ਕੀਤੀ ਵਿਜ਼ਿਟ ਦਰਜ ਨਹੀਂ ਹੈ।',
+    onTime: 'ਸਮੇਂ ਸਿਰ',
+    late: 'ਦੇਰ ਨਾਲ',
+    noShow: 'ਨਹੀਂ ਪਹੁੰਚੇ',
+    responseRate: (percent) => `${percent}% ਬੇਨਤੀਆਂ ਦਾ ਜਵਾਬ ਦਿੱਤਾ`,
+    responseEmpty: 'ਹਾਲੇ ਤੱਕ ਕੋਈ ਬੇਨਤੀ ਨਹੀਂ।',
+  },
 };
 
 const profileHi: ProfileCopy = {

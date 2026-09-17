@@ -1,6 +1,26 @@
 import { authHeader } from './authToken';
 import type { Area } from './areas';
-import type { JobItem, JobState, KamaiEntry, RateBand, WorkerProfile } from '../types';
+import type { Booking, JobItem, JobState, KamaiEntry, RateBand, WorkerProfile, WorkerStats } from '../types';
+
+/**
+ * The extra fields a job transition may carry, all of them optional and each
+ * legal on exactly one edge.
+ *
+ *   quotedPrice  only on QUOTED  - the worker's proposed price
+ *   slotStart/   only on SCHEDULED - the time commitment, required when the job
+ *   slotEnd        has a booking and refused as slot_required when it does not
+ *   otp          only on IN_PROGRESS - the customer's 4-digit arrival code
+ *
+ * An object rather than positional arguments because there are now four of
+ * them and three are mutually exclusive; `transitionJob(id, s, undefined,
+ * undefined, code)` is a call nobody should have to read.
+ */
+export interface TransitionOptions {
+  quotedPrice?: number;
+  slotStart?: string;
+  slotEnd?: string;
+  otp?: string;
+}
 
 /**
  * A kaarigar as the customer-facing directory sees them.
@@ -170,6 +190,23 @@ export type CustomerJobItem = JobItem & {
   kaarigar?: { passportHandle: string; name: string; trade: string; phone?: string };
 };
 
+/**
+ * A kaarigar's public reliability figures, as GET /api/workers/:handle/stats
+ * returns them.
+ *
+ * DECLARED HERE, NOT IN types.ts, for the same reason as CustomerJobItem above:
+ * the two counts are part of this one response's envelope, not of the worker.
+ * They say how much evidence sits behind `stats`, which is what lets a screen
+ * print "no visits yet" instead of the 0.8 prior dressed up as "80% reliable".
+ */
+export interface WorkerReliability {
+  stats: WorkerStats;
+  /** Scored ledger rows. Zero means reliability is still just the prior. */
+  recordedEvents: number;
+  /** Answerable requests in the last 90 days. Zero means no response rate. */
+  requestCount: number;
+}
+
 export const api = {
   async getProfile(): Promise<WorkerProfile> {
     const body = await request<{ profile: WorkerProfile }>('/api/passport/me');
@@ -232,15 +269,80 @@ export const api = {
    * every other edge, so it is passed through rather than defaulted here - a
    * default would be this client inventing a price.
    */
-  async transitionJob(jobId: string, state: JobState, quotedPrice?: number): Promise<JobItem> {
+  async transitionJob(jobId: string, state: JobState, options: TransitionOptions = {}): Promise<JobItem> {
     const body = await request<{ job: JobItem }>(
       `/api/jobs/${encodeURIComponent(jobId)}/transition`,
       {
         method: 'POST',
-        body: JSON.stringify({ state, ...(quotedPrice !== undefined ? { quotedPrice } : {}) }),
+        body: JSON.stringify({
+          state,
+          ...(options.quotedPrice !== undefined ? { quotedPrice: options.quotedPrice } : {}),
+          ...(options.slotStart !== undefined ? { slotStart: options.slotStart } : {}),
+          ...(options.slotEnd !== undefined ? { slotEnd: options.slotEnd } : {}),
+          ...(options.otp !== undefined ? { otp: options.otp } : {}),
+        }),
       }
     );
     return body.job;
+  },
+
+  /**
+   * The caller's own bookings, keyed by the job they belong to.
+   *
+   * RETURNS AN EMPTY MAP WHEN THE FEATURE IS OFF, rather than throwing. With
+   * BOOKINGS_ENABLED false the route answers 404, which is correct - the
+   * endpoint genuinely is not there - and the screens must read that as "no job
+   * on this list has an appointment", which is exactly the legacy behaviour.
+   * Treating it as an error would put a red banner on a jobs screen that is
+   * working perfectly.
+   *
+   * A 401 still propagates, because that means the session ended and the app
+   * has a handler for it.
+   */
+  async listBookingsByJob(): Promise<Record<string, Booking>> {
+    try {
+      const body = await request<{ bookings: Booking[] }>('/api/bookings');
+      const byJob: Record<string, Booking> = {};
+      for (const booking of body.bookings ?? []) {
+        if (booking.jobId) byJob[booking.jobId] = booking;
+      }
+      return byJob;
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 404) return {};
+      throw e;
+    }
+  },
+
+  /**
+   * Public reliability figures for a passport handle, or null when there are
+   * none to show.
+   *
+   * NULL ON 404, because 404 is what the route answers when BOOKINGS_ENABLED is
+   * off - and "the feature is off" must render as "no reliability section",
+   * never as an error banner on the passport. An unknown handle is 404 too, and
+   * means the same thing to the screen.
+   */
+  async getWorkerReliability(handle: string): Promise<WorkerReliability | null> {
+    try {
+      return await request<WorkerReliability>(`/api/workers/${encodeURIComponent(handle)}/stats`);
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 404) return null;
+      throw e;
+    }
+  },
+
+  /** The kaarigar proposes a new slot. The customer must accept it. */
+  async rescheduleBooking(
+    bookingId: string,
+    slotStart: string,
+    slotEnd: string,
+    reason?: string
+  ): Promise<Booking> {
+    const body = await request<{ booking: Booking }>(
+      `/api/bookings/${encodeURIComponent(bookingId)}/reschedule`,
+      { method: 'POST', body: JSON.stringify({ slotStart, slotEnd, ...(reason ? { reason } : {}) }) }
+    );
+    return body.booking;
   },
 
   /**

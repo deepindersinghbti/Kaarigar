@@ -175,6 +175,61 @@ export async function createJob(
   return { status: 'created', job: { id, ...job } };
 }
 
+/**
+ * The author recorded on a state change nobody pressed a button for.
+ *
+ * A LITERAL STRING WHERE EVERY OTHER ENTRY HOLDS A uid, and safe precisely
+ * because ids here are UUIDv7 - 'system' cannot collide with one. That matters
+ * to more than readability: countCustomerReturns in routes/customer.ts counts
+ * REQUESTED entries authored by a specific customer to enforce the counter cap,
+ * so an expiry written by the sweeper must be attributable to nobody rather
+ * than to one of the two parties.
+ */
+export const SYSTEM_ACTOR = 'system';
+
+/**
+ * Cancel a job because a booking deadline passed - an unanswered request, an
+ * agreed job that was never scheduled, or a no-show.
+ *
+ * WHY THIS LIVES HERE. This module owns the `jobs` collection (Architecture
+ * §5.2), and the booking transition module must not reach into it directly. It
+ * is the one function the reliability feature adds to an existing file, and it
+ * is purely additive: nothing above it changes.
+ *
+ * The legal source states are DERIVED FROM JOB_TRANSITIONS rather than listed,
+ * so this cannot outlive an edit to the table - exactly the reasoning that put
+ * the transition guard in the table in the first place. A job already terminal,
+ * or in a state with no CANCELLED edge, is left alone and reported as false.
+ *
+ * Ownership is deliberately NOT part of the filter. Every other read in this
+ * module is scoped to the owner because the caller is the owner; here the
+ * caller is a deadline, which belongs to neither party. Authorisation is that
+ * the booking whose clock ran out names this job.
+ */
+export async function cancelJobBySystem(jobId: string, note?: string): Promise<boolean> {
+  const cancellable = (Object.keys(JOB_TRANSITIONS) as JobState[])
+    .filter((state) => JOB_TRANSITIONS[state].includes('CANCELLED'));
+
+  const entry: JobStateTransition = {
+    state: 'CANCELLED',
+    at: new Date().toISOString(),
+    by: SYSTEM_ACTOR,
+  };
+
+  const updated = await getDb().collection(JOBS).findOneAndUpdate(
+    // The status is in the FILTER, so a job that moved between the booking
+    // transition and this write is left exactly as the other writer left it.
+    { _id: jobId as never, status: { $in: cancellable } },
+    {
+      $set: { status: 'CANCELLED' as JobState },
+      $push: { stateHistory: { ...entry, ...(note ? { note } : {}) } as never },
+    },
+    { returnDocument: 'after' }
+  );
+
+  return updated !== null;
+}
+
 /** Does this job exist for this owner? Used by sync to validate ledger jobId links. */
 export async function jobExists(kaarigarId: string, jobId: string): Promise<boolean> {
   const doc = await getDb().collection(JOBS).findOne({ _id: jobId as never, kaarigarId }, { projection: { _id: 1 } });

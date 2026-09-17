@@ -6,6 +6,9 @@ import { JOB_TRANSITIONS } from '../../types';
 import type { JobState, JobStateTransition } from '../../types';
 import { JOBS, createJob, isJobState, ensureJobIndexes } from '../data/jobs';
 import { optionalQueryString } from '../lib/query';
+import { applyOverdue } from '../bookings/transitions';
+import { applyWorkerJobEdge, bookingForJob } from '../bookings/jobHooks';
+import { bookingsEnabled } from '../bookingConfig';
 
 /**
  * jobs-svc - job lifecycle state machine.
@@ -35,6 +38,17 @@ jobsRouter.get('/', requireAuth, async (req: Request, res: Response) => {
   try {
     await ensureJobIndexes();
     const db = getDb();
+
+    /**
+     * CHECK ON READ (brief §0.4a). Deadlines are data, not timers - nothing
+     * fires on its own while a free-tier instance is asleep - so a list read is
+     * one of the two places they are applied. The sweeper is the other.
+     *
+     * Scoped to this kaarigar and deliberately not awaited for its counts: a
+     * worker opening their job list must see the truth about their own
+     * bookings, and has no business paying for anyone else's.
+     */
+    if (bookingsEnabled()) await applyOverdue({ kaarigarId: req.user!.uid });
 
     const filter: Record<string, unknown> = { kaarigarId: req.user!.uid };
     const status = optionalQueryString(req.query.status);
@@ -226,6 +240,27 @@ jobsRouter.post('/:id/transition', requireAuth, async (req: Request, res: Respon
         attempted: next,
         allowed,
       });
+    }
+
+    /**
+     * THE BOOKING GATE. §9.4.
+     *
+     * `bookingForJob` returns null - and everything below is skipped - when the
+     * flag is off, OR when this job simply has no booking. That second case is
+     * the LEGACY RULE and is permanent: a worker's own job has no counterparty
+     * to commit a slot to, and every job seeded or created before the flag was
+     * turned on has no booking that could supply an arrival code. Those keep
+     * the one-tap path they have always had.
+     *
+     * When there IS a booking, this is where a slot becomes mandatory on
+     * SCHEDULED and an arrival code becomes mandatory on IN_PROGRESS. The
+     * booking moves first, because it carries the gates - see the ordering note
+     * in jobHooks.ts.
+     */
+    const booking = await bookingForJob(String(job._id));
+    if (booking) {
+      const hook = await applyWorkerJobEdge({ booking, next, body: (req.body ?? {}) as Record<string, unknown> });
+      if (!hook.ok) return res.status(hook.refusal.status).json(hook.refusal.body);
     }
 
     const entry: JobStateTransition = { state: next, at: new Date().toISOString(), by: uid };
