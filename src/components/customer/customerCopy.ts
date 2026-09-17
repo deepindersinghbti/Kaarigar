@@ -49,6 +49,25 @@ export interface CustomerCopy {
     countered: (price: number) => string;
     live: string; liveOn: string; liveOff: string;
   };
+  /**
+   * The appointment side of a request (KAARIGAR_RELIABILITY_FEATURE.md §9.4).
+   * Rendered only for a request that has a booking - with BOOKINGS_ENABLED off,
+   * or on a request made before it was turned on, none of this appears.
+   */
+  booking: {
+    urgentLabel: string; urgentHint: string;
+    replyBy: (when: string) => string; scheduleBy: (when: string) => string;
+    slot: (when: string) => string; arriveBy: (when: string) => string;
+    codeTitle: string; codeHint: string; codeUnavailable: string;
+    arrived: string; late: string;
+    didntArrive: string; didntArriveConfirm: string; tooEarly: string;
+    cancelLate: string; cancelLateConfirm: string;
+    rescheduleAsk: (when: string) => string; rescheduleReason: (reason: string) => string;
+    rescheduleApprove: string; rescheduleReject: string; rescheduleClosed: string;
+    noShow: string; expiredReply: string; expiredSchedule: string;
+    declined: string; cancelledByKaarigar: string; requestAnother: string;
+    sending: string; conflict: string; actionError: string;
+  };
   trades: Record<Trade, string>;
 }
 
@@ -70,6 +89,19 @@ const CUSTOMER_COPY: Record<SupportedLanguage, CustomerCopy> = {
       counterSend: 'Send my price', countering: 'Sending…', counterError: 'Could not send your price.', counterInvalid: 'Enter a price greater than zero.',
       countered: (price) => `You asked for ₹${price}. Waiting for the kaarigar to reply.`,
       live: 'Live', liveOn: 'Updates arrive on their own. Tap to stop.', liveOff: 'Tap to let updates arrive on their own.' },
+    booking: {
+      urgentLabel: 'I need someone urgently', urgentHint: 'The kaarigar gets 30 minutes to reply instead of 4 hours.',
+      replyBy: (when) => `The kaarigar has until ${when} to reply.`, scheduleBy: (when) => `Waiting for the kaarigar to pick a time, by ${when}.`,
+      slot: (when) => `Visit: ${when}`, arriveBy: (when) => `The kaarigar should arrive by ${when}.`,
+      codeTitle: 'Your arrival code', codeHint: 'Give this code to the kaarigar only when they are at your door.', codeUnavailable: 'The arrival code could not be loaded. Tap Refresh.',
+      arrived: 'The kaarigar has arrived.', late: 'The kaarigar is late. You can call them, keep waiting, or cancel.',
+      didntArrive: 'The kaarigar did not arrive', didntArriveConfirm: 'Report that the kaarigar did not arrive?', tooEarly: 'The kaarigar still has time to arrive.',
+      cancelLate: 'Cancel - the kaarigar did not come', cancelLateConfirm: 'Cancel this job? It will be recorded that the kaarigar did not arrive.',
+      rescheduleAsk: (when) => `The kaarigar asked to move the visit to ${when}.`, rescheduleReason: (reason) => `Reason: ${reason}`,
+      rescheduleApprove: 'Accept the new time', rescheduleReject: 'Keep the original time', rescheduleClosed: 'The original time stands.',
+      noShow: 'The kaarigar did not arrive. This has been recorded against them.', expiredReply: 'The kaarigar did not reply in time.', expiredSchedule: 'The kaarigar did not pick a time.',
+      declined: 'The kaarigar cannot take this job.', cancelledByKaarigar: 'The kaarigar cancelled this job.', requestAnother: 'Request another kaarigar',
+      sending: 'Sending…', conflict: 'This request changed. It has been refreshed.', actionError: 'Could not send that. Please try again.' },
     trades: { Electrician: 'Electrician', Plumber: 'Plumber', Carpenter: 'Carpenter', Painter: 'Painter', Mason: 'Mason', 'AC & Appliance Technician': 'AC & Appliance Technician' },
   },
   hi: {
@@ -89,6 +121,19 @@ const CUSTOMER_COPY: Record<SupportedLanguage, CustomerCopy> = {
       counterSend: 'मेरा दाम भेजें', countering: 'भेज रहे हैं…', counterError: 'आपका दाम नहीं भेजा जा सका।', counterInvalid: 'शून्य से बड़ा दाम डालें।',
       countered: (price) => `आपने ₹${price} माँगा है। कारीगर के जवाब का इंतज़ार है।`,
       live: 'लाइव', liveOn: 'अपडेट अपने आप आते हैं। रोकने के लिए दबाएँ।', liveOff: 'अपडेट अपने आप पाने के लिए दबाएँ।' },
+    booking: {
+      urgentLabel: 'मुझे जल्दी किसी की ज़रूरत है', urgentHint: 'कारीगर को जवाब देने के लिए 4 घंटे की जगह 30 मिनट मिलेंगे।',
+      replyBy: (when) => `कारीगर के पास जवाब देने के लिए ${when} तक का समय है।`, scheduleBy: (when) => `कारीगर के समय चुनने का इंतज़ार है, ${when} तक।`,
+      slot: (when) => `आने का समय: ${when}`, arriveBy: (when) => `कारीगर को ${when} तक पहुँच जाना चाहिए।`,
+      codeTitle: 'आपका पहुँचने का कोड', codeHint: 'यह कोड कारीगर को तभी दें जब वे आपके दरवाज़े पर हों।', codeUnavailable: 'कोड लोड नहीं हो सका। ताज़ा करें दबाएँ।',
+      arrived: 'कारीगर पहुँच गए हैं।', late: 'कारीगर देर से हैं। आप उन्हें कॉल कर सकते हैं, इंतज़ार कर सकते हैं, या रद्द कर सकते हैं।',
+      didntArrive: 'कारीगर नहीं पहुँचे', didntArriveConfirm: 'बताएँ कि कारीगर नहीं पहुँचे?', tooEarly: 'कारीगर के पास पहुँचने का अभी समय है।',
+      cancelLate: 'रद्द करें - कारीगर नहीं आए', cancelLateConfirm: 'यह काम रद्द करें? दर्ज होगा कि कारीगर नहीं पहुँचे।',
+      rescheduleAsk: (when) => `कारीगर ने आने का समय ${when} करने को कहा है।`, rescheduleReason: (reason) => `वजह: ${reason}`,
+      rescheduleApprove: 'नया समय मानें', rescheduleReject: 'पुराना समय ही रखें', rescheduleClosed: 'पुराना समय ही तय है।',
+      noShow: 'कारीगर नहीं पहुँचे। यह उनके रिकॉर्ड में दर्ज हो गया है।', expiredReply: 'कारीगर ने समय पर जवाब नहीं दिया।', expiredSchedule: 'कारीगर ने आने का समय नहीं चुना।',
+      declined: 'कारीगर यह काम नहीं ले सकते।', cancelledByKaarigar: 'कारीगर ने यह काम रद्द कर दिया।', requestAnother: 'दूसरे कारीगर से अनुरोध करें',
+      sending: 'भेज रहे हैं…', conflict: 'यह अनुरोध बदल गया है। इसे ताज़ा कर दिया गया है।', actionError: 'यह भेजा नहीं जा सका। फिर से कोशिश करें।' },
     trades: { Electrician: 'इलेक्ट्रीशियन', Plumber: 'प्लंबर', Carpenter: 'बढ़ई', Painter: 'पेंटर', Mason: 'राजमिस्त्री', 'AC & Appliance Technician': 'एसी और उपकरण तकनीशियन' },
   },
   pa: {
@@ -108,6 +153,19 @@ const CUSTOMER_COPY: Record<SupportedLanguage, CustomerCopy> = {
       counterSend: 'ਮੇਰੀ ਕੀਮਤ ਭੇਜੋ', countering: 'ਭੇਜਿਆ ਜਾ ਰਿਹਾ ਹੈ…', counterError: 'ਤੁਹਾਡੀ ਕੀਮਤ ਨਹੀਂ ਭੇਜੀ ਜਾ ਸਕੀ।', counterInvalid: 'ਸ਼ੂਨ ਤੋਂ ਵੱਡੀ ਕੀਮਤ ਪਾਓ।',
       countered: (price) => `ਤੁਸੀਂ ₹${price} ਮੰਗਿਆ ਹੈ। ਕਾਰੀਗਰ ਦੇ ਜਵਾਬ ਦੀ ਉਡੀਕ ਹੈ।`,
       live: 'ਲਾਈਵ', liveOn: 'ਅੱਪਡੇਟ ਆਪਣੇ ਆਪ ਆਉਂਦੇ ਹਨ। ਰੋਕਣ ਲਈ ਦਬਾਓ।', liveOff: 'ਅੱਪਡੇਟ ਆਪਣੇ ਆਪ ਪਾਉਣ ਲਈ ਦਬਾਓ।' },
+    booking: {
+      urgentLabel: 'ਮੈਨੂੰ ਜਲਦੀ ਕਿਸੇ ਦੀ ਲੋੜ ਹੈ', urgentHint: 'ਕਾਰੀਗਰ ਨੂੰ ਜਵਾਬ ਦੇਣ ਲਈ 4 ਘੰਟਿਆਂ ਦੀ ਥਾਂ 30 ਮਿੰਟ ਮਿਲਣਗੇ।',
+      replyBy: (when) => `ਕਾਰੀਗਰ ਕੋਲ ਜਵਾਬ ਦੇਣ ਲਈ ${when} ਤੱਕ ਦਾ ਸਮਾਂ ਹੈ।`, scheduleBy: (when) => `ਕਾਰੀਗਰ ਵੱਲੋਂ ਸਮਾਂ ਚੁਣਨ ਦੀ ਉਡੀਕ ਹੈ, ${when} ਤੱਕ।`,
+      slot: (when) => `ਆਉਣ ਦਾ ਸਮਾਂ: ${when}`, arriveBy: (when) => `ਕਾਰੀਗਰ ਨੂੰ ${when} ਤੱਕ ਪਹੁੰਚ ਜਾਣਾ ਚਾਹੀਦਾ ਹੈ।`,
+      codeTitle: 'ਤੁਹਾਡਾ ਪਹੁੰਚਣ ਦਾ ਕੋਡ', codeHint: 'ਇਹ ਕੋਡ ਕਾਰੀਗਰ ਨੂੰ ਤਾਂ ਹੀ ਦਿਓ ਜਦੋਂ ਉਹ ਤੁਹਾਡੇ ਦਰਵਾਜ਼ੇ ਉੱਤੇ ਹੋਣ।', codeUnavailable: 'ਕੋਡ ਲੋਡ ਨਹੀਂ ਹੋ ਸਕਿਆ। ਤਾਜ਼ਾ ਕਰੋ ਦਬਾਓ।',
+      arrived: 'ਕਾਰੀਗਰ ਪਹੁੰਚ ਗਏ ਹਨ।', late: 'ਕਾਰੀਗਰ ਲੇਟ ਹਨ। ਤੁਸੀਂ ਉਹਨਾਂ ਨੂੰ ਕਾਲ ਕਰ ਸਕਦੇ ਹੋ, ਉਡੀਕ ਕਰ ਸਕਦੇ ਹੋ, ਜਾਂ ਰੱਦ ਕਰ ਸਕਦੇ ਹੋ।',
+      didntArrive: 'ਕਾਰੀਗਰ ਨਹੀਂ ਪਹੁੰਚੇ', didntArriveConfirm: 'ਦੱਸਣਾ ਹੈ ਕਿ ਕਾਰੀਗਰ ਨਹੀਂ ਪਹੁੰਚੇ?', tooEarly: 'ਕਾਰੀਗਰ ਕੋਲ ਪਹੁੰਚਣ ਦਾ ਹਾਲੇ ਸਮਾਂ ਹੈ।',
+      cancelLate: 'ਰੱਦ ਕਰੋ - ਕਾਰੀਗਰ ਨਹੀਂ ਆਏ', cancelLateConfirm: 'ਇਹ ਕੰਮ ਰੱਦ ਕਰਨਾ ਹੈ? ਦਰਜ ਹੋਵੇਗਾ ਕਿ ਕਾਰੀਗਰ ਨਹੀਂ ਪਹੁੰਚੇ।',
+      rescheduleAsk: (when) => `ਕਾਰੀਗਰ ਨੇ ਆਉਣ ਦਾ ਸਮਾਂ ${when} ਕਰਨ ਲਈ ਕਿਹਾ ਹੈ।`, rescheduleReason: (reason) => `ਕਾਰਨ: ${reason}`,
+      rescheduleApprove: 'ਨਵਾਂ ਸਮਾਂ ਮੰਨੋ', rescheduleReject: 'ਪੁਰਾਣਾ ਸਮਾਂ ਹੀ ਰੱਖੋ', rescheduleClosed: 'ਪੁਰਾਣਾ ਸਮਾਂ ਹੀ ਤੈਅ ਹੈ।',
+      noShow: 'ਕਾਰੀਗਰ ਨਹੀਂ ਪਹੁੰਚੇ। ਇਹ ਉਹਨਾਂ ਦੇ ਰਿਕਾਰਡ ਵਿੱਚ ਦਰਜ ਹੋ ਗਿਆ ਹੈ।', expiredReply: 'ਕਾਰੀਗਰ ਨੇ ਸਮੇਂ ਸਿਰ ਜਵਾਬ ਨਹੀਂ ਦਿੱਤਾ।', expiredSchedule: 'ਕਾਰੀਗਰ ਨੇ ਆਉਣ ਦਾ ਸਮਾਂ ਨਹੀਂ ਚੁਣਿਆ।',
+      declined: 'ਕਾਰੀਗਰ ਇਹ ਕੰਮ ਨਹੀਂ ਲੈ ਸਕਦੇ।', cancelledByKaarigar: 'ਕਾਰੀਗਰ ਨੇ ਇਹ ਕੰਮ ਰੱਦ ਕਰ ਦਿੱਤਾ।', requestAnother: 'ਕਿਸੇ ਹੋਰ ਕਾਰੀਗਰ ਨੂੰ ਬੇਨਤੀ ਕਰੋ',
+      sending: 'ਭੇਜਿਆ ਜਾ ਰਿਹਾ ਹੈ…', conflict: 'ਇਹ ਬੇਨਤੀ ਬਦਲ ਗਈ ਹੈ। ਇਸਨੂੰ ਤਾਜ਼ਾ ਕਰ ਦਿੱਤਾ ਗਿਆ ਹੈ।', actionError: 'ਇਹ ਭੇਜਿਆ ਨਹੀਂ ਜਾ ਸਕਿਆ। ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼ ਕਰੋ।' },
     trades: { Electrician: 'ਇਲੈਕਟ੍ਰੀਸ਼ੀਅਨ', Plumber: 'ਪਲੰਬਰ', Carpenter: 'ਤਰਖਾਣ', Painter: 'ਪੇਂਟਰ', Mason: 'ਰਾਜ ਮਿਸਤਰੀ', 'AC & Appliance Technician': 'ਏਸੀ ਤੇ ਉਪਕਰਣ ਤਕਨੀਸ਼ੀਅਨ' },
   },
   kn: {
@@ -127,6 +185,19 @@ const CUSTOMER_COPY: Record<SupportedLanguage, CustomerCopy> = {
       counterSend: 'ನನ್ನ ದರ ಕಳುಹಿಸಿ', countering: 'ಕಳುಹಿಸಲಾಗುತ್ತಿದೆ…', counterError: 'ನಿಮ್ಮ ದರ ಕಳುಹಿಸಲಾಗಲಿಲ್ಲ.', counterInvalid: 'ಸೊನ್ನೆಗಿಂತ ದೊಡ್ಡ ದರ ನಮೂದಿಸಿ.',
       countered: (price) => `ನೀವು ₹${price} ಕೇಳಿದ್ದೀರಿ. ಕಾರಿಗಾರರ ಉತ್ತರಕ್ಕಾಗಿ ಕಾಯಲಾಗುತ್ತಿದೆ.`,
       live: 'ಲೈವ್', liveOn: 'ನವೀಕರಣಗಳು ತಾನಾಗಿಯೇ ಬರುತ್ತವೆ. ನಿಲ್ಲಿಸಲು ಒತ್ತಿ.', liveOff: 'ನವೀಕರಣಗಳು ತಾನಾಗಿಯೇ ಬರಲು ಒತ್ತಿ.' },
+    booking: {
+      urgentLabel: 'ನನಗೆ ತುರ್ತಾಗಿ ಯಾರಾದರೂ ಬೇಕು', urgentHint: 'ಕಾರಿಗಾರರಿಗೆ ಉತ್ತರಿಸಲು 4 ಗಂಟೆಗಳ ಬದಲು 30 ನಿಮಿಷ ಸಿಗುತ್ತದೆ.',
+      replyBy: (when) => `ಕಾರಿಗಾರರು ${when} ರೊಳಗೆ ಉತ್ತರಿಸಬೇಕು.`, scheduleBy: (when) => `ಕಾರಿಗಾರರು ಸಮಯ ಆಯ್ಕೆ ಮಾಡುವುದಕ್ಕಾಗಿ ಕಾಯಲಾಗುತ್ತಿದೆ, ${when} ರೊಳಗೆ.`,
+      slot: (when) => `ಭೇಟಿ: ${when}`, arriveBy: (when) => `ಕಾರಿಗಾರರು ${when} ರೊಳಗೆ ಬರಬೇಕು.`,
+      codeTitle: 'ನಿಮ್ಮ ಆಗಮನ ಕೋಡ್', codeHint: 'ಕಾರಿಗಾರರು ನಿಮ್ಮ ಬಾಗಿಲಿಗೆ ಬಂದಾಗ ಮಾತ್ರ ಈ ಕೋಡ್ ನೀಡಿ.', codeUnavailable: 'ಕೋಡ್ ಲೋಡ್ ಆಗಲಿಲ್ಲ. ರಿಫ್ರೆಶ್ ಒತ್ತಿ.',
+      arrived: 'ಕಾರಿಗಾರರು ಬಂದಿದ್ದಾರೆ.', late: 'ಕಾರಿಗಾರರು ತಡವಾಗಿದ್ದಾರೆ. ನೀವು ಕರೆ ಮಾಡಬಹುದು, ಕಾಯಬಹುದು ಅಥವಾ ರದ್ದುಗೊಳಿಸಬಹುದು.',
+      didntArrive: 'ಕಾರಿಗಾರರು ಬರಲಿಲ್ಲ', didntArriveConfirm: 'ಕಾರಿಗಾರರು ಬರಲಿಲ್ಲ ಎಂದು ತಿಳಿಸಬೇಕೇ?', tooEarly: 'ಕಾರಿಗಾರರಿಗೆ ಬರಲು ಇನ್ನೂ ಸಮಯವಿದೆ.',
+      cancelLate: 'ರದ್ದುಗೊಳಿಸಿ - ಕಾರಿಗಾರರು ಬರಲಿಲ್ಲ', cancelLateConfirm: 'ಈ ಕೆಲಸ ರದ್ದುಗೊಳಿಸಬೇಕೇ? ಕಾರಿಗಾರರು ಬರಲಿಲ್ಲ ಎಂದು ದಾಖಲಾಗುತ್ತದೆ.',
+      rescheduleAsk: (when) => `ಕಾರಿಗಾರರು ಭೇಟಿಯನ್ನು ${when} ಗೆ ಬದಲಿಸಲು ಕೇಳಿದ್ದಾರೆ.`, rescheduleReason: (reason) => `ಕಾರಣ: ${reason}`,
+      rescheduleApprove: 'ಹೊಸ ಸಮಯ ಒಪ್ಪಿಕೊಳ್ಳಿ', rescheduleReject: 'ಹಳೆಯ ಸಮಯವೇ ಇರಲಿ', rescheduleClosed: 'ಹಳೆಯ ಸಮಯವೇ ಉಳಿದಿದೆ.',
+      noShow: 'ಕಾರಿಗಾರರು ಬರಲಿಲ್ಲ. ಇದು ಅವರ ದಾಖಲೆಯಲ್ಲಿ ಸೇರಿದೆ.', expiredReply: 'ಕಾರಿಗಾರರು ಸಮಯಕ್ಕೆ ಉತ್ತರಿಸಲಿಲ್ಲ.', expiredSchedule: 'ಕಾರಿಗಾರರು ಸಮಯ ಆಯ್ಕೆ ಮಾಡಲಿಲ್ಲ.',
+      declined: 'ಕಾರಿಗಾರರು ಈ ಕೆಲಸ ತೆಗೆದುಕೊಳ್ಳಲು ಸಾಧ್ಯವಿಲ್ಲ.', cancelledByKaarigar: 'ಕಾರಿಗಾರರು ಈ ಕೆಲಸ ರದ್ದುಗೊಳಿಸಿದ್ದಾರೆ.', requestAnother: 'ಬೇರೆ ಕಾರಿಗಾರರನ್ನು ವಿನಂತಿಸಿ',
+      sending: 'ಕಳುಹಿಸಲಾಗುತ್ತಿದೆ…', conflict: 'ಈ ವಿನಂತಿ ಬದಲಾಗಿದೆ. ರಿಫ್ರೆಶ್ ಮಾಡಲಾಗಿದೆ.', actionError: 'ಕಳುಹಿಸಲು ಸಾಧ್ಯವಾಗಲಿಲ್ಲ. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.' },
     trades: { Electrician: 'ವಿದ್ಯುತ್ ತಂತ್ರಜ್ಞ', Plumber: 'ಪ್ಲಂಬರ್', Carpenter: 'ಬಡಗಿ', Painter: 'ಪೇಂಟರ್', Mason: 'ಗಾರೆ ಕೆಲಸಗಾರ', 'AC & Appliance Technician': 'ಎಸಿ ಮತ್ತು ಉಪಕರಣ ತಂತ್ರಜ್ಞ' },
   },
   mr: {
@@ -146,6 +217,19 @@ const CUSTOMER_COPY: Record<SupportedLanguage, CustomerCopy> = {
       counterSend: 'माझा दर पाठवा', countering: 'पाठवत आहे…', counterError: 'तुमचा दर पाठवता आला नाही.', counterInvalid: 'शून्यापेक्षा मोठा दर टाका.',
       countered: (price) => `तुम्ही ₹${price} मागितले आहेत. कारागिराच्या उत्तराची वाट पाहत आहोत.`,
       live: 'लाइव्ह', liveOn: 'अपडेट आपोआप येतात. थांबवण्यासाठी दाबा.', liveOff: 'अपडेट आपोआप मिळवण्यासाठी दाबा.' },
+    booking: {
+      urgentLabel: 'मला तातडीने कोणीतरी हवे आहे', urgentHint: 'कारागिराला उत्तर देण्यासाठी 4 तासांऐवजी 30 मिनिटे मिळतील.',
+      replyBy: (when) => `कारागिराला ${when} पर्यंत उत्तर द्यायचे आहे.`, scheduleBy: (when) => `कारागीर वेळ निवडण्याची वाट पाहत आहोत, ${when} पर्यंत.`,
+      slot: (when) => `भेट: ${when}`, arriveBy: (when) => `कारागिराने ${when} पर्यंत पोहोचायला हवे.`,
+      codeTitle: 'तुमचा आगमन कोड', codeHint: 'कारागीर तुमच्या दारात आल्यावरच हा कोड द्या.', codeUnavailable: 'कोड लोड करता आला नाही. रीफ्रेश दाबा.',
+      arrived: 'कारागीर पोहोचले आहेत.', late: 'कारागिराला उशीर झाला आहे. तुम्ही कॉल करू शकता, वाट पाहू शकता किंवा रद्द करू शकता.',
+      didntArrive: 'कारागीर आले नाहीत', didntArriveConfirm: 'कारागीर आले नाहीत असे कळवायचे?', tooEarly: 'कारागिराकडे पोहोचायला अजून वेळ आहे.',
+      cancelLate: 'रद्द करा - कारागीर आले नाहीत', cancelLateConfirm: 'हे काम रद्द करायचे? कारागीर आले नाहीत अशी नोंद होईल.',
+      rescheduleAsk: (when) => `कारागिराने भेटीची वेळ ${when} करण्यास सांगितले आहे.`, rescheduleReason: (reason) => `कारण: ${reason}`,
+      rescheduleApprove: 'नवीन वेळ मान्य करा', rescheduleReject: 'जुनीच वेळ ठेवा', rescheduleClosed: 'जुनीच वेळ कायम आहे.',
+      noShow: 'कारागीर आले नाहीत. याची नोंद त्यांच्या रेकॉर्डमध्ये झाली आहे.', expiredReply: 'कारागिराने वेळेत उत्तर दिले नाही.', expiredSchedule: 'कारागिराने वेळ निवडली नाही.',
+      declined: 'कारागीर हे काम घेऊ शकत नाहीत.', cancelledByKaarigar: 'कारागिराने हे काम रद्द केले.', requestAnother: 'दुसऱ्या कारागिराला विनंती करा',
+      sending: 'पाठवत आहे…', conflict: 'ही विनंती बदलली आहे. ती रीफ्रेश केली आहे.', actionError: 'पाठवता आले नाही. पुन्हा प्रयत्न करा.' },
     trades: { Electrician: 'इलेक्ट्रिशियन', Plumber: 'प्लंबर', Carpenter: 'सुतार', Painter: 'रंगारी', Mason: 'गवंडी', 'AC & Appliance Technician': 'एसी व उपकरण तंत्रज्ञ' },
   },
 };

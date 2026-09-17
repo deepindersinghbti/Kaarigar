@@ -94,6 +94,11 @@ services:
         sync: false
       - key: SWEEP_SECRET
         sync: false
+      # Stage demo only: adds "Demo: in 2 minutes" to the worker's slot picker so
+      # the LATE state can be shown live. Leave unset outside a rehearsal. See
+      # docs/BOOKING_DEMO.md.
+      - key: BOOKING_DEMO_SLOTS
+        sync: false
 
       # Firebase web config. Not secret - these ship in the browser bundle by
       # design - but Vite inlines them at BUILD time, so they must be present

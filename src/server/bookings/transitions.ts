@@ -614,6 +614,25 @@ export async function reportNoArrival(bookingId: string, now = nowMs()): Promise
   await ensureBookingIndexes();
   const doc = await findBookingDoc(bookingId);
   if (!doc) return fail('not_found', 'No such booking.');
+
+  /**
+   * ALREADY LATE IS SUCCESS, not a wrong state.
+   *
+   * The route reaches this through loadParticipantBooking, which applies the
+   * overdue rules first - so by the time arriveBy has passed, the READ has
+   * normally already moved the booking to LATE and written the LATE event. The
+   * customer is reporting a fact the system has just recorded on its own. The
+   * first version refused that as wrong_state, which made this endpoint unable
+   * to succeed over HTTP at all: exactly when the report became true, the check
+   * before it had already made it redundant. The transition tests missed it
+   * because they call this function directly, with no read in front of it.
+   *
+   * No second event: the LATE row already stands, and the unique ledger key
+   * would absorb a duplicate anyway.
+   */
+  if (doc.status === 'LATE') {
+    return { ok: true, booking: shapeBooking(doc) };
+  }
   if (doc.status !== 'COMMITTED') {
     return fail('wrong_state', `This job is ${doc.status}.`, doc.status);
   }

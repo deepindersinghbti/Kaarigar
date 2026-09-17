@@ -660,6 +660,12 @@ try {
     const swept = await applyOverdue({ kaarigarId: s.kaarigarId }, arriveBy + 2 * MIN);
     check('the sweeper does not double-report the same lateness', swept.late === 0);
     check('and there is still exactly one LATE event', (await eventTypes(s.bookingId)).join() === 'LATE');
+
+    // Already LATE is success, not wrong_state: over HTTP the route applies the
+    // overdue rules first, so this is the NORMAL case, not an edge one.
+    const reportedAgain = await reportNoArrival(s.bookingId, arriveBy + 3 * MIN);
+    check('reporting a booking that is already LATE succeeds', reportedAgain.ok && reportedAgain.booking.status === 'LATE');
+    check('and writes no second LATE event', (await eventTypes(s.bookingId)).join() === 'LATE');
   }
 
   // =========================================================================

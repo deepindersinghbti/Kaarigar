@@ -24,6 +24,8 @@ import {
   SyncState,
 } from '../types';
 import { ApiError, type TransitionOptions } from '../lib/api';
+import { formatSlot } from '../lib/bookingFormat';
+import { getServerFlags } from '../lib/serverFlags';
 import { SyncBadge } from './SyncBadge';
 import { SendReviewLink } from './SendReviewLink';
 import { TRANSLATIONS } from '../data/translations';
@@ -69,7 +71,19 @@ const HAPPY_PATH_NEXT: Partial<Record<JobState, JobState>> = {
  * arrives at a minute, and a window the worker can actually keep is worth more
  * than a precise one they cannot.
  */
-type SlotWindowKey = 'morning' | 'afternoon' | 'evening';
+type SlotWindowKey = 'morning' | 'afternoon' | 'evening' | 'demo';
+
+/**
+ * The DEMO window: starts two minutes from the tap and lasts one minute.
+ *
+ * Offered only when the server reports bookingDemoSlots (BOOKING_DEMO_SLOTS and
+ * BOOKINGS_ENABLED both on). It exists so the LATE state can be shown on stage
+ * in minutes rather than hours - see bookingDemoSlotsEnabled() on the server.
+ * It needs no day: it is always "now", which is also why it is labelled as a
+ * demo on screen rather than passed off as a normal slot.
+ */
+const DEMO_SLOT_LEAD_MS = 2 * 60_000;
+const DEMO_SLOT_LENGTH_MS = 60_000;
 
 const SLOT_WINDOWS: Array<{ key: SlotWindowKey; startHour: number; endHour: number }> = [
   { key: 'morning', startHour: 9, endHour: 11 },
@@ -82,21 +96,6 @@ const BOOKING_TERMINAL: BookingStatus[] = [
   'COMPLETED', 'NO_SHOW', 'EXPIRED', 'DECLINED', 'CANCELLED_BY_CUSTOMER', 'CANCELLED_BY_KAARIGAR',
 ];
 
-const LOCALES: Record<SupportedLanguage, string> = {
-  hi: 'hi-IN', pa: 'pa-IN', en: 'en-IN', kn: 'kn-IN', mr: 'mr-IN',
-};
-
-/** A slot, as a line a worker can read at a glance. */
-function formatSlot(startIso: string | undefined, endIso: string | undefined, language: SupportedLanguage): string {
-  if (!startIso) return '';
-  const locale = LOCALES[language] ?? 'en-IN';
-  const start = new Date(startIso);
-  const day = start.toLocaleDateString(locale, { weekday: 'short', day: 'numeric', month: 'short' });
-  const from = start.toLocaleTimeString(locale, { hour: 'numeric', minute: '2-digit' });
-  if (!endIso) return `${day}, ${from}`;
-  const to = new Date(endIso).toLocaleTimeString(locale, { hour: 'numeric', minute: '2-digit' });
-  return `${day}, ${from} - ${to}`;
-}
 
 /** YYYY-MM-DD in LOCAL time, for the date input's min. Never toISOString: that shifts to UTC. */
 function localDateValue(d: Date): string {
@@ -114,6 +113,10 @@ function localDateValue(d: Date): string {
  * for half the country.
  */
 function slotInstants(dateValue: string, window: SlotWindowKey): { start: Date; end: Date } | null {
+  if (window === 'demo') {
+    const start = new Date(Date.now() + DEMO_SLOT_LEAD_MS);
+    return { start, end: new Date(start.getTime() + DEMO_SLOT_LENGTH_MS) };
+  }
   const [year, month, day] = dateValue.split('-').map(Number);
   const preset = SLOT_WINDOWS.find((w) => w.key === window);
   if (!preset || !year || !month || !day) return null;
@@ -222,6 +225,14 @@ export const JobsView: React.FC<JobsViewProps> = ({
    * A minute is enough: every window here is measured in hours, and a
    * per-second tick on a cheap phone would cost battery to show nothing new.
    */
+  /** Whether to offer the demo-only slot. Off until the server says otherwise. */
+  const [demoSlots, setDemoSlots] = useState(false);
+  React.useEffect(() => {
+    let active = true;
+    void getServerFlags().then((flags) => { if (active) setDemoSlots(flags.bookingDemoSlots); });
+    return () => { active = false; };
+  }, []);
+
   const [, setTick] = useState(0);
   React.useEffect(() => {
     const id = window.setInterval(() => setTick((n) => n + 1), 60_000);
@@ -357,7 +368,7 @@ export const JobsView: React.FC<JobsViewProps> = ({
 
   /** Commit to a slot, or propose a new one - the picker is the same either way. */
   const submitSlot = async (job: JobItem, booking: Booking | undefined) => {
-    if (!slotDate || !slotWindow) {
+    if (!slotWindow || (slotWindow !== 'demo' && !slotDate)) {
       setBookingError((prev) => ({ ...prev, [job.id]: copy.booking.slotRequired }));
       return;
     }
@@ -877,6 +888,25 @@ export const JobsView: React.FC<JobsViewProps> = ({
                       <div>
                         <span className="block text-[10px] font-bold uppercase text-gray-400 mb-1">{bk.slotWindow}</span>
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                          {/*
+                            Demo-only, and labelled as such. Rendered first and
+                            full-width so it cannot be mistaken for one of the
+                            three real windows during a rehearsal.
+                          */}
+                          {demoSlots && slotMode === 'commit' && (
+                            <button
+                              id={`slot-window-demo-${job.id}`}
+                              type="button"
+                              onClick={() => setSlotWindow('demo')}
+                              className={`sm:col-span-3 min-h-11 px-3 py-2 rounded-xl text-xs font-extrabold border border-dashed transition-colors ${
+                                slotWindow === 'demo'
+                                  ? 'bg-gray-900 text-white border-gray-900'
+                                  : 'bg-white text-gray-700 border-gray-400 hover:bg-gray-100'
+                              }`}
+                            >
+                              {bk.slotDemo}
+                            </button>
+                          )}
                           {SLOT_WINDOWS.map((w) => (
                             <button
                               key={w.key}
@@ -916,7 +946,7 @@ export const JobsView: React.FC<JobsViewProps> = ({
                           id={`slot-confirm-${job.id}`}
                           type="button"
                           onClick={() => void submitSlot(job, booking)}
-                          disabled={!canAct || !slotDate || !slotWindow}
+                          disabled={!canAct || !slotWindow || (slotWindow !== 'demo' && !slotDate)}
                           className="flex-1 min-h-11 px-4 py-2 rounded-full bg-gray-900 text-white text-xs font-extrabold disabled:opacity-45 disabled:cursor-not-allowed active:scale-[0.98] transition"
                         >
                           {isTransitioning ? copy.updating : slotMode === 'reschedule' ? bk.rescheduleSend : bk.slotConfirm}

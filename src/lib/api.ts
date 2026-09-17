@@ -58,6 +58,12 @@ export interface JobRequestInput {
   location: string;
   amount: number;
   notes?: string;
+  /**
+   * Needs someone soon. Selects the shorter first-response window (30 minutes
+   * rather than 4 hours) when bookings are on, and does nothing else - it is not
+   * a priority, a surcharge or a promise. Ignored entirely with the flag off.
+   */
+  urgent?: boolean;
 }
 
 export interface PricingBandResult extends Partial<RateBand> {
@@ -329,6 +335,47 @@ export const api = {
       if (e instanceof ApiError && e.status === 404) return null;
       throw e;
     }
+  },
+
+  /**
+   * The customer's 4-digit arrival code, or null when there is none to show.
+   *
+   * CUSTOMER-ONLY BY DESIGN: the route refuses a kaarigar, because a kaarigar who
+   * could read this could check in from anywhere. Null on 409
+   * (otp_not_available - no time agreed yet, or the booking has moved past
+   * needing one) and on 404 (the feature is off), since both mean the same
+   * thing on screen: no code card.
+   */
+  async getArrivalCode(bookingId: string): Promise<string | null> {
+    try {
+      const body = await request<{ otp: string }>(`/api/bookings/${encodeURIComponent(bookingId)}/otp`);
+      return typeof body.otp === 'string' && /^\d{4}$/.test(body.otp) ? body.otp : null;
+    } catch (e) {
+      if (e instanceof ApiError && (e.status === 409 || e.status === 404)) return null;
+      throw e;
+    }
+  },
+
+  /**
+   * The customer's answer to a proposed new time. `approve` is sent as a real
+   * boolean; the route refuses anything else rather than reading a missing
+   * value as "no".
+   */
+  async respondToReschedule(bookingId: string, approve: boolean): Promise<Booking> {
+    const body = await request<{ booking: Booking }>(
+      `/api/bookings/${encodeURIComponent(bookingId)}/reschedule/respond`,
+      { method: 'POST', body: JSON.stringify({ approve }) }
+    );
+    return body.booking;
+  },
+
+  /** The customer reports that the agreed time passed and nobody came. Sends nothing else. */
+  async reportNoArrival(bookingId: string): Promise<Booking> {
+    const body = await request<{ booking: Booking }>(
+      `/api/bookings/${encodeURIComponent(bookingId)}/report-no-arrival`,
+      { method: 'POST', body: JSON.stringify({}) }
+    );
+    return body.booking;
   },
 
   /** The kaarigar proposes a new slot. The customer must accept it. */

@@ -3,6 +3,7 @@ import type { Request, Response } from 'express';
 import { isDbConnected, getDbErrorCategory } from '../db';
 import { resolveOrigin } from '../lib/origin';
 import { demoCustomerEnabled } from '../auth/demoCustomer';
+import { bookingDemoSlotsEnabled, bookingsEnabled } from '../bookingConfig';
 
 /**
  * health - liveness and dependency state.
@@ -40,6 +41,12 @@ healthRouter.get('/', (req: Request, res: Response) => {
     hasGeminiKey: !!process.env.GEMINI_API_KEY,
     hasTtsKey: !!process.env.SARVAM_API_KEY,
     customerDemoEnabled: demoCustomerEnabled(),
+    // Whether the worker's slot picker should offer the demo-only "2 minutes"
+    // window. A boolean about UI, not a secret - see bookingDemoSlotsEnabled().
+    // Whether booking commitments are on, so the customer's request form only
+    // offers "urgent" when it changes anything. A boolean, not configuration.
+    bookingsEnabled: bookingsEnabled(),
+    bookingDemoSlots: bookingDemoSlotsEnabled(),
     db: {
       connected: isDbConnected(),
       // A category, not the driver string. This endpoint is unauthenticated and

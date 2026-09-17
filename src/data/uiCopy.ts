@@ -127,6 +127,8 @@ export interface JobsCopy {
     slotMorning: string;
     slotAfternoon: string;
     slotEvening: string;
+    /** The demo-only "2 minutes from now" window. Shown only with BOOKING_DEMO_SLOTS on. */
+    slotDemo: string;
     slotConfirm: string;
     slotCancel: string;
     slotAgreed: (when: string) => string;
@@ -739,6 +741,7 @@ const jobsHi: JobsCopy = {
     slotMorning: 'सुबह 9 - 11',
     slotAfternoon: 'दोपहर 1 - 3',
     slotEvening: 'शाम 5 - 7',
+    slotDemo: 'डेमो: 2 मिनट में',
     slotConfirm: 'यही समय पक्का करें',
     slotCancel: 'वापस',
     slotAgreed: (when) => `तय समय: ${when}`,
@@ -843,6 +846,7 @@ const jobsEn: JobsCopy = {
     slotMorning: 'Morning 9am - 11am',
     slotAfternoon: 'Afternoon 1pm - 3pm',
     slotEvening: 'Evening 5pm - 7pm',
+    slotDemo: 'Demo: in 2 minutes',
     slotConfirm: 'Confirm this time',
     slotCancel: 'Back',
     slotAgreed: (when) => `Agreed time: ${when}`,
@@ -947,6 +951,7 @@ const jobsPa: JobsCopy = {
     slotMorning: 'ਸਵੇਰੇ 9 - 11',
     slotAfternoon: 'ਦੁਪਹਿਰੇ 1 - 3',
     slotEvening: 'ਸ਼ਾਮੀਂ 5 - 7',
+    slotDemo: 'ਡੈਮੋ: 2 ਮਿੰਟ ਵਿੱਚ',
     slotConfirm: 'ਇਹੀ ਸਮਾਂ ਪੱਕਾ ਕਰੋ',
     slotCancel: 'ਵਾਪਸ',
     slotAgreed: (when) => `ਤੈਅ ਸਮਾਂ: ${when}`,
