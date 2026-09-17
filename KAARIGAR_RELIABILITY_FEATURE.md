@@ -544,6 +544,20 @@ translation is a compile error**, not a silent English fallback. (The silent
 fallback CLAUDE.md warns about is `getCustomerTrade`, which looks up a *dynamic*
 trade string — a different mechanism, and not one this feature adds to.)
 
+**D11 — Sweeper responses, settled in Phase 3.**
+- A wrong or missing secret, or a `SWEEP_SECRET` under 32 characters, falls
+  through to the ordinary `/api` JSON 404, byte-identical to an unbuilt path,
+  rather than a 404 written by the handler.
+- The secret is checked **before** the database, so the cold-start `503` is only
+  ever seen by a caller who proved they hold it.
+- With `BOOKINGS_ENABLED` off, the right secret gets `200 {"enabled": false}` and
+  nothing is swept. The operator has already proven who they are, and a cron
+  job left running while the feature is paused should read green with a reason
+  rather than as a 404 that looks misconfigured.
+- The body keeps the brief's `{ expired, late, noShow }` and adds
+  `scheduleExpired` and `rescheduleAutoRejected` separately. They are different
+  failures writing different events, so folding them together would hide which.
+
 ### 9.3 Accepted corrections to §0–§8
 
 Each of these replaces the corresponding statement in the brief.

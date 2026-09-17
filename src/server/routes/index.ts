@@ -14,6 +14,7 @@ import { publicRouter } from './public';
 import { kaarigarsRouter, customerRouter } from './customer';
 import { bookingsRouter } from './bookings';
 import { workersRouter } from './workers';
+import { internalRouter } from './internal';
 import { requireAuth, requireRole } from '../middleware/auth';
 
 /**
@@ -88,6 +89,16 @@ export function registerRoutes(app: Express): void {
    * and ratios only - never a field from PUBLIC_PROJECTION's exclusion list.
    */
   app.use('/api/workers', workersRouter);       // A - public reliability stats
+
+  /**
+   * NO requireAuth, and that is the design: the caller is an external cron job.
+   * The gate is SWEEP_SECRET, checked inside the handler - and on a wrong or
+   * missing secret the handler calls next(), so the request lands on the /api
+   * JSON 404 directly below and gets exactly the response a path that was never
+   * built would get. That only works while this mount sits ABOVE the 404. Do
+   * not move it under, or give this prefix a role gate that would answer first.
+   */
+  app.use('/api/internal', internalRouter);     // A - booking deadline sweeper
 
   // Any /api/* path that reached here matched no router above. Answer it
   // honestly with JSON.

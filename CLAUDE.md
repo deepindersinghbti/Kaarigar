@@ -327,6 +327,17 @@ rendered from the error CODE into the copy tables, never the server's English
 message. Panels close AFTER the transition and the trust-score refresh, so a
 browser check must wait for `state: 'hidden'`, not assert instantly.
 
+THE SWEEPER'S GATE IS A SECRET, AND A WRONG ONE MUST LOOK LIKE NOTHING.
+`POST /api/internal/sweep` has no `requireAuth` — its caller is cron-job.org.
+On a missing or wrong `x-sweep-secret`, or a `SWEEP_SECRET` under 32
+characters, the handler calls `next()` and the request lands on the ordinary
+`/api` JSON 404, so the refusal is byte-identical to a path that was never
+built. That only works while `/api/internal` is mounted ABOVE that 404. The
+secret is checked before the database, so the cold-start 503 is only ever shown
+to a caller who proved they hold it. Flag off with the right secret is
+`200 {enabled:false}`, not a 404. There is no GitHub Actions workflow for it,
+deliberately — see `docs/SWEEPER.md`.
+
 NO RELIABILITY PERCENTAGE WITHOUT A RECORD. A worker with no history sits at
 the 0.8 prior and a response rate of 1 — deliberately, so nobody is scored as
 bad for being new — but printed, that reads "80% reliable" about someone never
@@ -338,6 +349,7 @@ Both surfaces render nothing at all with the flag off.
 ### Verifying booking changes
     npm test                                   # transitions + scoring, injected clock
     npx tsx scripts/test-booking-routes.ts     # HTTP wiring, flag ON
+    npx tsx scripts/test-sweeper.ts            # /api/internal/sweep over HTTP
     npx tsx scripts/test-booking-ui.ts         # JobsView + passport in Edge, flag ON
                                                # SCREENSHOT_DIR=<dir> saves PNGs of the new cards
 Both use uniquely named throwaway databases. Run the existing
