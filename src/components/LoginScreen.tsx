@@ -217,7 +217,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                   inputMode="numeric"
                   autoComplete="tel-national"
                   autoFocus
-                  placeholder="9876543210"
+                  placeholder={customerDemo ? '0123456789' : '9876543210'}
                   aria-describedby="login-phone-hint"
                   value={digits}
                   onChange={(e) => setDigits(e.target.value.replace(/\D/g, '').slice(0, 10))}
